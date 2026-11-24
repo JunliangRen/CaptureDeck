@@ -6,6 +6,7 @@
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
   <ItemGroup>
+    <ProjectReference Include="../../Capture/CaptureDeck.Core/CaptureDeck.Core.csproj" />
     <ProjectReference Include="../CaptureDeck.QualityControl/CaptureDeck.QualityControl.csproj" />
     <InternalsVisibleTo Include="CaptureDeck.DirectShow" />
     <InternalsVisibleTo Include="CaptureDeck.UT" />

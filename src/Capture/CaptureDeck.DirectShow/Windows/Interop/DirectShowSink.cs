@@ -1,17 +1,18 @@
 using System.Runtime.InteropServices;
 using System.Runtime.InteropServices.Marshalling;
-using CaptureDeck.DirectShow.Windows.Interop;
-using CaptureDeck.Recording.TransportStream;
+using CaptureDeck.Core;
 using static CaptureDeck.DirectShow.Windows.Interop.DirectShowInterop;
 
-namespace CaptureDeck.DirectShow.Windows.FireWire.MsTape;
+namespace CaptureDeck.DirectShow.Windows.Interop;
 
 [GeneratedComClass]
 internal sealed unsafe partial class DirectShowSink :
     IDirectShowFilter, IDirectShowPin, IDirectShowMemInputPin, IDirectShowFilterFlags, IDisposable
 {
     private static readonly Guid ClassId = new("4A4FC139-7958-4EB7-B49A-660E2D93228A");
-    private readonly TsRecording recording;
+    private const int NoStopTime = 0x00040270; // VFW_S_NO_STOP_TIME
+    private readonly CaptureSampleHandler receive;
+    private readonly Action<string> reportFailure;
     private readonly object gate = new();
     private DirectShowMediaType expected;
     private DirectShowMediaType connectedType;
@@ -19,15 +20,16 @@ internal sealed unsafe partial class DirectShowSink :
     private nint peer;
     private nint clock;
     private nint allocator;
-    private string name = "CaptureDeck managed FireWire sink";
+    private string name = "CaptureDeck managed sink";
     private int state;
     private bool flushing;
     private bool ended;
     private bool disposed;
 
-    internal DirectShowSink(DirectShowMediaType* media, TsRecording recording)
+    internal DirectShowSink(DirectShowMediaType* media, CaptureSampleHandler receive, Action<string> reportFailure)
     {
-        this.recording = recording;
+        this.receive = receive;
+        this.reportFailure = reportFailure;
         expected = media->Clone();
     }
 
@@ -362,8 +364,14 @@ internal sealed unsafe partial class DirectShowSink :
             var discontinuity = NoArgs(sample, 15); // IsDiscontinuity
             if (discontinuity < 0)
                 return SampleError(discontinuity, "Cannot read capture discontinuity flag");
-            return recording.TryReceive(new ReadOnlySpan<byte>((void*)bytes, length), discontinuity == Ok)
-                ? Ok : Fail;
+            long start = 0;
+            long end = 0;
+            var timeStatus = ((delegate* unmanaged[Stdcall]<nint, long*, long*, int>)Method(sample, 5))(
+                sample, &start, &end); // IMediaSample::GetTime
+            var data = new CaptureSample(new ReadOnlySpan<byte>((void*)bytes, length), discontinuity == Ok,
+                timeStatus is Ok or NoStopTime ? TimeSpan.FromTicks(start) : null,
+                timeStatus == Ok ? TimeSpan.FromTicks(end) : null);
+            return receive(data) ? Ok : Fail;
         }
         catch (Exception ex)
         {
@@ -390,7 +398,7 @@ internal sealed unsafe partial class DirectShowSink :
 
     private int SampleError(int hr, string message)
     {
-        recording.Fail(6, $"{message} (0x{hr:X8}).");
+        reportFailure($"{message} (0x{hr:X8}).");
         return hr;
     }
 

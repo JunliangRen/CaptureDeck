@@ -1,5 +1,6 @@
 using System.Runtime.InteropServices;
 using System.Runtime.InteropServices.Marshalling;
+using CaptureDeck.Core;
 using CaptureDeck.DirectShow.Windows.FireWire.MsTape;
 using CaptureDeck.DirectShow.Windows.Interop;
 using CaptureDeck.QualityControl;
@@ -57,7 +58,15 @@ public sealed unsafe class FireWireTests
                 FixedSizeSamples = 1, SampleSize = (uint)(stride * 256),
                 FormatSize = stride == 192 ? 12u : 0, Format = stride == 192 ? (byte*)format : null
             };
-            using var sink = new DirectShowSink(&type, writer);
+            var timestamps = new List<(TimeSpan? Start, TimeSpan? End)>();
+            bool Receive(CaptureSample sample)
+            {
+                timestamps.Add((sample.StartTime, sample.EndTime));
+                return writer.TryReceive(sample);
+            }
+            void ReportFailure(string message) => writer.Fail(6, message);
+
+            using var sink = new DirectShowSink(&type, Receive, ReportFailure);
             using var source = new TestTsSource(sink);
             using var filter = new ComReference(Export(source, BaseFilter));
             if (stride == 188)
@@ -79,13 +88,14 @@ public sealed unsafe class FireWireTests
                     var delivery = new Thread(() => deliveryError = Record.Exception(() =>
                     {
                         using var callbackApartment = new ComApartment();
-                        Assert.Equal(Ok, source.Send(bytes.AsSpan(0, 31), discontinuity: true));
-                        Assert.Equal(Ok, source.Send(bytes.AsSpan(31), discontinuity: false));
+                        Assert.Equal(Ok, source.Send(bytes.AsSpan(0, 31), discontinuity: true, start: 0, end: 100));
+                        Assert.Equal(Ok, source.Send(bytes.AsSpan(31, 29), discontinuity: false, start: 100));
+                        Assert.Equal(Ok, source.Send(bytes.AsSpan(60), discontinuity: false));
                     })) { IsBackground = true };
                     delivery.Start();
                     Assert.True(delivery.Join(TimeSpan.FromSeconds(5)), "Synthetic delivery did not return.");
                     Assert.Null(deliveryError);
-                    Assert.False(graph.ReadEvents(writer));
+                    Assert.False(graph.ReadEvents(ReportFailure));
                     using var input = new ComReference(Export(sink, Pin));
                     Assert.Equal(Ok, NoArgs(input.Value, 15)); // IPin::BeginFlush
                     Assert.Equal(False, source.Send(bytes, discontinuity: false));
@@ -94,7 +104,7 @@ public sealed unsafe class FireWireTests
                     Assert.True(sink.Ended);
                     Assert.Equal(RejectedEos, source.Send(bytes, discontinuity: false));
                 }
-                finally { graph.Stop(sink, writer); }
+                finally { graph.Stop(sink, ReportFailure); }
                 Assert.Equal(WrongState, source.Send(bytes, discontinuity: false));
             }
             writer.Complete();
@@ -106,7 +116,13 @@ public sealed unsafe class FireWireTests
             Assert.Equal(8, writer.Analysis.Packets);
             Assert.Equal(1, writer.DiscontinuitySamples);
             Assert.True(writer.InitialDiscontinuity);
-            Assert.Equal(5, sink.ReceiveCalls);
+            Assert.Equal(new (TimeSpan?, TimeSpan?)[]
+            {
+                (TimeSpan.Zero, TimeSpan.FromTicks(100)),
+                (TimeSpan.FromTicks(100), null),
+                (null, null)
+            }, timestamps);
+            Assert.Equal(6, sink.ReceiveCalls);
             Assert.Equal(3, sink.RejectedSamples);
         }
         finally { directory.Delete(recursive: true); }
@@ -121,11 +137,41 @@ public sealed unsafe class FireWireTests
             var path = Path.Combine(directory.FullName, "incomplete.ts192");
             using var writer = new TsRecording(path, TsLayout.Ts192);
             var bytes = MakePackets(TsLayout.Ts192)[..^1];
-            Assert.True(writer.TryReceive(bytes, discontinuity: false));
+            Assert.True(writer.TryReceive(new CaptureSample(bytes, discontinuity: false)));
             writer.Complete();
             Assert.Equal(4, writer.Failure?.Code);
             Assert.False(File.Exists(path));
             Assert.Equal(bytes, File.ReadAllBytes(writer.PartialPath));
+        }
+        finally { directory.Delete(recursive: true); }
+    }
+
+    [Theory]
+    [InlineData(188)]
+    [InlineData(192)]
+    public void FileReplayUsesTheSameSampleContract(int stride)
+    {
+        var layout = stride == 188 ? TsLayout.Ts188 : TsLayout.Ts192;
+        var bytes = MakePackets(layout);
+        var directory = Directory.CreateTempSubdirectory("capturedeck-ts-replay-");
+        try
+        {
+            var inputPath = Path.Combine(directory.FullName, "input.ts");
+            var outputPath = Path.Combine(directory.FullName, "output.ts");
+            File.WriteAllBytes(inputPath, bytes);
+            using var input = File.OpenRead(inputPath);
+            using var writer = new TsRecording(outputPath, layout);
+            CaptureSampleHandler receive = writer.TryReceive;
+            Span<byte> buffer = stackalloc byte[37];
+            int read;
+            while ((read = input.Read(buffer)) != 0)
+                Assert.True(receive(new CaptureSample(buffer[..read], discontinuity: false)));
+
+            writer.Complete();
+            Assert.True(writer.Finalized, writer.Failure?.Message);
+            Assert.Equal(bytes, File.ReadAllBytes(outputPath));
+            Assert.Equal(8, writer.Analysis.Packets);
+            Assert.Equal(0, writer.DiscontinuitySamples);
         }
         finally { directory.Delete(recursive: true); }
     }
@@ -211,12 +257,16 @@ internal sealed unsafe partial class TestTsSource(DirectShowSink typeSource) : I
     private nint exportedPin;
     private nint ExportOutput() => exportedPin != 0 ? exportedPin : exportedPin = Export(this, Pin);
 
-    public int Send(ReadOnlySpan<byte> bytes, bool discontinuity)
+    public int Send(ReadOnlySpan<byte> bytes, bool discontinuity, long? start = null, long? end = null)
     {
         nint sample = 0;
         Check(((delegate* unmanaged[Stdcall]<nint, nint*, nint, nint, uint, int>)Method(allocator, 7))(
             allocator, &sample, 0, 0, 0), "Get synthetic media sample");
         using var sampleRef = new ComReference(sample);
+        var startTicks = start.GetValueOrDefault();
+        var endTicks = end.GetValueOrDefault();
+        Check(((delegate* unmanaged[Stdcall]<nint, long*, long*, int>)Method(sample, 6))(
+            sample, start.HasValue ? &startTicks : null, end.HasValue ? &endTicks : null), "Set synthetic sample times");
         nint data = 0;
         Check(PointerOut(sample, 3, &data), "Read synthetic sample buffer");
         bytes.CopyTo(new Span<byte>((void*)data, bytes.Length));

@@ -1,6 +1,7 @@
 using System.Buffers;
 using System.Diagnostics;
 using System.Threading.Channels;
+using CaptureDeck.Core;
 using CaptureDeck.QualityControl;
 using CaptureDeck.Recording.Windows;
 
@@ -66,8 +67,9 @@ internal sealed class TsRecording : IDisposable
             failure ??= (code, message);
     }
 
-    public bool TryReceive(ReadOnlySpan<byte> bytes, bool discontinuity)
+    public bool TryReceive(CaptureSample sample)
     {
+        var bytes = sample.Bytes;
         lock (gate)
         {
             if (closed)
@@ -76,12 +78,12 @@ internal sealed class TsRecording : IDisposable
             if (receivedSamples == 0)
             {
                 Interlocked.Exchange(ref firstSample, now);
-                InitialDiscontinuity = discontinuity;
+                InitialDiscontinuity = sample.Discontinuity;
             }
             Interlocked.Exchange(ref lastSample, now);
             Interlocked.Add(ref receivedBytes, bytes.Length);
             Interlocked.Increment(ref receivedSamples);
-            if (discontinuity)
+            if (sample.Discontinuity)
                 Interlocked.Increment(ref discontinuitySamples);
 
             if (failure is not null || bytes.Length > QueueCapacity - queued)

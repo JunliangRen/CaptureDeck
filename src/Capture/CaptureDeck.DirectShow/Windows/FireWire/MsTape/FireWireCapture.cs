@@ -126,7 +126,8 @@ public static unsafe class FireWireCapture
             using var selected = MsTapeDevices.SelectOutput(source.Value);
             outputFormat = selected.Layout.Format;
             recording = new TsRecording(path, selected.Layout);
-            using var sink = new DirectShowSink(selected.MediaType, recording);
+            Action<string> reportFailure = message => recording.Fail(6, message);
+            using var sink = new DirectShowSink(selected.MediaType, recording.TryReceive, reportFailure);
             using var graph = new FireWireGraph();
             try
             {
@@ -140,12 +141,12 @@ public static unsafe class FireWireCapture
                     graph.Start();
                     streamStarted = true;
                     started?.Invoke();
-                    endReason = Monitor(graph, sink, recording, request, progress, cancellationToken);
+                    endReason = Monitor(graph, sink, recording, request, progress, reportFailure, cancellationToken);
                 }
             }
             finally
             {
-                graph.Stop(sink, recording);
+                graph.Stop(sink, reportFailure);
                 diagnostics = (sink.ReceiveCalls, sink.ZeroLengthSamples, sink.RejectedSamples);
             }
         }
@@ -219,7 +220,7 @@ public static unsafe class FireWireCapture
     }
 
     private static string Monitor(FireWireGraph graph, DirectShowSink sink, TsRecording recording,
-        FireWireRequest request, Action<FireWireProgress>? progress, CancellationToken cancellationToken)
+        FireWireRequest request, Action<FireWireProgress>? progress, Action<string> reportFailure, CancellationToken cancellationToken)
     {
         var startup = recording.Elapsed;
         var nextProgress = startup;
@@ -227,7 +228,7 @@ public static unsafe class FireWireCapture
         {
             if (cancellationToken.IsCancellationRequested)
                 return "ctrl_c";
-            var complete = graph.ReadEvents(recording);
+            var complete = graph.ReadEvents(reportFailure);
             if (recording.Failure is not null)
                 break;
             var now = recording.Elapsed;
@@ -297,7 +298,7 @@ internal sealed unsafe class FireWireGraph : IDisposable
 
     internal void Start() => Check(NoArgs(control!.Value, 7), "Run DirectShow graph"); // IMediaControl::Run
 
-    internal bool ReadEvents(TsRecording recording)
+    internal bool ReadEvents(Action<string> reportFailure)
     {
         var source = events!.Value;
         var get = (delegate* unmanaged[Stdcall]<nint, int*, nint*, nint*, int, int>)Method(source, 8);
@@ -315,10 +316,10 @@ internal sealed unsafe class FireWireGraph : IDisposable
                         complete = true;
                         break;
                     case 3: // EC_ERRORABORT
-                        recording.Fail(6, $"DirectShow error (0x{unchecked((uint)first):X8}).");
+                        reportFailure($"DirectShow error (0x{unchecked((uint)first):X8}).");
                         break;
                     case 0x1f when second == 0: // EC_DEVICE_LOST
-                        recording.Fail(6, "Capture device disconnected.");
+                        reportFailure("Capture device disconnected.");
                         break;
                 }
             }
@@ -327,13 +328,13 @@ internal sealed unsafe class FireWireGraph : IDisposable
         return complete;
     }
 
-    internal void Stop(DirectShowSink sink, TsRecording recording)
+    internal void Stop(DirectShowSink sink, Action<string> reportFailure)
     {
         if (control is not null)
         {
             var hr = NoArgs(control.Value, 9); // IMediaControl::Stop
             if (hr < 0)
-                recording.Fail(6, $"Stop DirectShow graph failed (0x{hr:X8}).");
+                reportFailure($"Stop DirectShow graph failed (0x{hr:X8}).");
         }
         sink.Stop(); // Serializes the state change with in-flight Receive calls.
     }

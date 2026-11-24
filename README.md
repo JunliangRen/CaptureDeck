@@ -45,6 +45,8 @@ Capture backends discover devices, negotiate formats, and receive samples. Downs
 
 The shared recording project currently contains the Windows TS writer. Future sources that deliver TS can use it with their own packet layout. DV handling, shared frame and PCM processing, and CVBS/RF preview decoding can be added as separate paths when their sources are connected.
 
+Capture and recording share the `CaptureSampleHandler` callback in `CaptureDeck.Core`. DirectShow delivers bytes in the format negotiated at session start, with an optional stream timestamp and a discontinuity flag. Sample bytes are borrowed for the duration of the callback. A consumer that queues data copies it into its own buffer. The TS writer uses this callback for both MSTape and file replay in tests and retains its bounded queue and byte-preserving output. Other backends can adopt the contract with their own format negotiation.
+
 **Available today.** DeckLink is the registered desktop capture backend. The desktop app uses DeckLink for live monitoring and MOV recording. The command-line probe also captures FireWire MPEG-TS on Windows x64. The probe enumerates devices and checks input, and both entry points can run post-recording QC. Existing flat settings load as a DeckLink profile and move to the nested format on the next save.
 
 **Possible future integrations.**

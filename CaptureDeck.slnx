@@ -3,8 +3,8 @@
   <Project Path="src/CaptureDeck.Probe/CaptureDeck.Probe.csproj" />
   <Project Path="src/CaptureDeck.QualityControl/CaptureDeck.QualityControl.csproj" />
   <Project Path="src/CaptureDeck.DeviceControl/CaptureDeck.DeviceControl.csproj" />
-  <Project Path="UT/CaptureDeck.UT/CaptureDeck.UT.csproj" />
-  <Project Path="UT/CaptureDeck.QualityControl.UT/CaptureDeck.QualityControl.UT.csproj" />
+  <Project Path="test/CaptureDeck.UT/CaptureDeck.UT.csproj" />
+  <Project Path="test/CaptureDeck.QualityControl.UT/CaptureDeck.QualityControl.UT.csproj" />
   <Folder Name="/Capture/">
     <Project Path="src/Capture/CaptureDeck.DeckLink/CaptureDeck.DeckLink.csproj" />
     <Project Path="src/Capture/CaptureDeck.Core/CaptureDeck.Core.csproj" />

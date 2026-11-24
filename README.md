@@ -29,7 +29,7 @@ CaptureDeck/
 |   |-- CaptureDeck.Probe            # Command-line device probe and QC
 |   |-- CaptureDeck.DeviceControl    # Independent tape-transport contracts
 |   `-- CaptureDeck.QualityControl   # Post-recording validation and reports
-`-- UT/
+`-- test/
     |-- CaptureDeck.UT               # Windows capture and settings tests
     `-- CaptureDeck.QualityControl.UT # Cross-platform TS analysis tests
 ```
@@ -50,8 +50,8 @@ Within the capture projects, SignalCapture keeps device-specific rules in `Devic
 Run the unit tests from the repository root.
 
 ```powershell
-dotnet test UT/CaptureDeck.UT/CaptureDeck.UT.csproj -c Release
-dotnet test UT/CaptureDeck.QualityControl.UT/CaptureDeck.QualityControl.UT.csproj -c Release
+dotnet test test/CaptureDeck.UT/CaptureDeck.UT.csproj -c Release
+dotnet test test/CaptureDeck.QualityControl.UT/CaptureDeck.QualityControl.UT.csproj -c Release
 ```
 
 ## Windows builds

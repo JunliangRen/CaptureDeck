@@ -1,4 +1,5 @@
 using System.Runtime.InteropServices;
+using CaptureDeck.QualityControl;
 using static CaptureDeck.FireWire.DirectShow;
 
 namespace CaptureDeck.FireWire;

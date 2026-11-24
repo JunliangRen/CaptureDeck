@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Text.Json;
 using CaptureDeck.FireWire;
+using CaptureDeck.QualityControl;
 
 namespace CaptureDeck.Probe;
 
@@ -122,16 +123,13 @@ internal static class FireWireCommand
 
     private static int Analyze(Dictionary<string, string> options, bool json)
     {
-        var input = Path.GetFullPath(Required(options, "--input"));
-        var (layout, analysis) = TsFile.Analyze(input, Format(options));
-        var success = analysis.Packets > 0 && analysis.SyncErrors == 0 &&
-            analysis.MalformedPackets == 0 && analysis.TrailingBytes == 0;
-        var exitCode = success ? 0 : 4;
+        var report = TsFile.Analyze(Required(options, "--input"), Format(options));
+        var analysis = report.Analysis;
         if (json)
-            WriteJson(new { schema_version = 1, type = "analysis_result", success, exit_code = exitCode, input_path = input, format = layout.Format, analysis });
+            Console.WriteLine(report.ToJson());
         else
-            Console.WriteLine($"format={layout.Format} input={analysis.InputBytes} packets={analysis.Packets} sync_errors={analysis.SyncErrors} malformed={analysis.MalformedPackets} TEI={analysis.Tei} continuity_errors={analysis.ContinuityErrors} pcr_backwards={analysis.PcrBackwards} trailing={analysis.TrailingBytes}");
-        return exitCode;
+            Console.WriteLine($"format={report.Format} input={analysis.InputBytes} packets={analysis.Packets} sync_errors={analysis.SyncErrors} malformed={analysis.MalformedPackets} TEI={analysis.Tei} continuity_errors={analysis.ContinuityErrors} pcr_backwards={analysis.PcrBackwards} trailing={analysis.TrailingBytes}");
+        return report.ExitCode;
     }
 
     internal static void WriteJson(object value) => Console.WriteLine(JsonSerializer.Serialize(value, ReportJson));

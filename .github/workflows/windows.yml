@@ -36,6 +36,8 @@ jobs:
           architecture: ${{ matrix.arch }}
       - name: Run .NET unit tests
         run: dotnet test UT/CaptureDeck.UT/CaptureDeck.UT.csproj -c Release
+      - name: Run offline TS QC tests
+        run: dotnet test UT/CaptureDeck.QualityControl.UT/CaptureDeck.QualityControl.UT.csproj -c Release
       - name: Publish App and Probe
         run: |
           $PSNativeCommandUseErrorActionPreference = $true

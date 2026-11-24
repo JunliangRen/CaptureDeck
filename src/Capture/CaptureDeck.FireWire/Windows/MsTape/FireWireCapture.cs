@@ -1,5 +1,6 @@
 using System.Runtime.InteropServices;
 using System.Text.Json;
+using CaptureDeck.QualityControl;
 using static CaptureDeck.FireWire.DirectShow;
 
 namespace CaptureDeck.FireWire;
@@ -42,8 +43,7 @@ public sealed record FireWireResult
     public bool AnalysisComplete { get; init; }
     public bool StructuralValidationOk => Analysis.StructuralValidationOk;
     public bool QualityWarning => Analysis.SyncErrors != 0 || Analysis.MalformedPackets != 0 ||
-        Analysis.TrailingBytes != 0 || Analysis.Tei != 0 || Analysis.ContinuityErrors != 0 ||
-        Analysis.PcrBackwards != 0 || SampleDiscontinuitiesAfterFirst != 0;
+        Analysis.TrailingBytes != 0 || Analysis.HasTransportWarnings || SampleDiscontinuitiesAfterFirst != 0;
     public required TsStatistics Analysis { get; init; }
 }
 

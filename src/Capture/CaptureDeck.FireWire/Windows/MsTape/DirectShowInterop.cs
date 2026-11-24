@@ -1,5 +1,6 @@
 using System.Runtime.InteropServices;
 using System.Runtime.InteropServices.Marshalling;
+using CaptureDeck.QualityControl;
 
 namespace CaptureDeck.FireWire;
 

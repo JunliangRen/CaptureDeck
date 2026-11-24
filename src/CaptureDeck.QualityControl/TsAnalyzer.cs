@@ -1,4 +1,6 @@
-namespace CaptureDeck.FireWire;
+using System.Text.Json.Serialization;
+
+namespace CaptureDeck.QualityControl;
 
 public readonly record struct TsLayout(int Offset, int Stride)
 {
@@ -37,7 +39,11 @@ public sealed class TsStatistics
     public IEnumerable<TsPidStatistics> Pids => ByPid.Values;
 
     internal SortedDictionary<int, TsPidStatistics> ByPid { get; } = new();
-    internal bool StructuralValidationOk => Packets != 0 && SyncErrors == 0 && MalformedPackets == 0 && TrailingBytes == 0;
+    [JsonIgnore]
+    public bool StructuralValidationOk => Packets != 0 && SyncErrors == 0 && MalformedPackets == 0 && TrailingBytes == 0;
+
+    [JsonIgnore]
+    public bool HasTransportWarnings => Tei != 0 || ContinuityErrors != 0 || PcrBackwards != 0;
 }
 
 public sealed class TsPidStatistics(int pid)

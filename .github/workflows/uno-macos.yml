@@ -6,6 +6,7 @@ on:
     paths:
       - 'src/CaptureDeck.Uno/**'
       - 'src/CaptureDeck.QualityControl/**'
+      - 'UT/CaptureDeck.QualityControl.UT/**'
       - 'global.json'
       - '.github/workflows/uno-macos.yml'
   workflow_dispatch:
@@ -25,6 +26,8 @@ jobs:
         with:
           global-json-file: global.json
           architecture: arm64
+      - name: Run offline TS QC tests
+        run: dotnet test UT/CaptureDeck.QualityControl.UT/CaptureDeck.QualityControl.UT.csproj -c Release
       - name: Publish Apple Silicon app bundle
         run: dotnet publish src/CaptureDeck.Uno/CaptureDeck.Uno.csproj -c Release -f net11.0-desktop -r osx-arm64 --self-contained -p:PackageFormat=app
       - name: Verify and archive app bundle

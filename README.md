@@ -1,6 +1,6 @@
 # CaptureDeck
 
-CaptureDeck is a .NET 11 video capture and preservation tool. The Windows desktop app uses native WinUI 3 and captures directly from the Blackmagic DeckLink API. The separate Uno Desktop prototype runs offline MOV quality control on Windows and Apple Silicon Macs using the same QC engine.
+CaptureDeck is a .NET 11 video capture and preservation tool. The Windows desktop app uses native WinUI 3 and captures directly from the Blackmagic DeckLink API. The separate Uno Desktop prototype runs offline MOV and TS quality control on Windows and Apple Silicon Macs using the same QC engine.
 
 ## Builds
 
@@ -8,7 +8,7 @@ CaptureDeck is a .NET 11 video capture and preservation tool. The Windows deskto
 | --- | --- | --- |
 | Windows x64 | [Native WinUI 3](../../actions/workflows/windows.yml?query=branch%3Amain+is%3Asuccess) | DeckLink preview, recording, and offline QC. FireWire TS capture from the command line. |
 | Windows ARM64 | [Native WinUI 3](../../actions/workflows/windows.yml?query=branch%3Amain+is%3Asuccess) | Offline QC. DeckLink capture is unavailable. |
-| macOS ARM64 | [Uno Desktop prototype](../../actions/workflows/uno-macos.yml?query=branch%3Amain+is%3Asuccess) | Offline MOV QC and report viewing |
+| macOS ARM64 | [Uno Desktop prototype](../../actions/workflows/uno-macos.yml?query=branch%3Amain+is%3Asuccess) | Offline MOV and TS QC, report viewing, and TS JSON export |
 
 Open a successful run and download the matching package from **Artifacts**. The Windows artifacts contain the app and managed command-line probe. Run `Probe/CaptureDeck.Probe.exe firewire` to access the FireWire commands. The macOS artifact contains the Apple Silicon test app.
 
@@ -30,7 +30,8 @@ CaptureDeck/
 |   |-- CaptureDeck.DeviceControl    # Independent tape-transport contracts
 |   `-- CaptureDeck.QualityControl   # Post-recording validation and reports
 `-- UT/
-    `-- CaptureDeck.UT               # Hardware-independent .NET tests
+    |-- CaptureDeck.UT               # Windows capture and settings tests
+    `-- CaptureDeck.QualityControl.UT # Cross-platform TS analysis tests
 ```
 
 Within the capture projects, RF keeps device-specific rules in `Devices/Domesday/` and Windows USB transport in `Windows/`. FireWire uses `Windows/MsTape/` for DirectShow capture and `Recording/` for packet writing. DeckLink groups SDK bindings, capture, monitoring, and recording into `Interop/`, `Capture/`, `Monitoring/`, and `Recording/`.
@@ -50,6 +51,7 @@ Run the unit tests from the repository root.
 
 ```powershell
 dotnet test UT/CaptureDeck.UT/CaptureDeck.UT.csproj -c Release
+dotnet test UT/CaptureDeck.QualityControl.UT/CaptureDeck.QualityControl.UT.csproj -c Release
 ```
 
 ## Windows builds
@@ -126,7 +128,10 @@ The standalone project in `src/CaptureDeck.Uno/` uses Uno Skia Desktop and the s
 dotnet run --project src/CaptureDeck.Uno/CaptureDeck.Uno.csproj -c Release
 ```
 
-Select **Open MOV…** and choose an uncompressed CaptureDeck recording. The prototype saves the QC log, FrameMD5 and QCTools report beside the MOV. Use **View QC log** to read the result in the app or **Open report folder** to see the generated files. Install FFmpeg with `cropdetect`. The app checks its own directory and PATH, plus the standard Homebrew binary directories on macOS.
+Select **Open file…** and choose a recording.
+
+- **MOV** runs the existing decode checks and saves the QC log, FrameMD5, and QCTools report beside the source. Use **View QC log** or **Open report folder** to inspect the files. MOV checks require FFmpeg with `cropdetect`. The app checks its own directory and PATH, plus the standard Homebrew binary directories on macOS.
+- **TS, TS192, and M2T** run the same transport checks as `CaptureDeck.Probe firewire analyze`. The app shows the packet layout, transport errors, timestamp counts, and first affected packet indexes. Use **Save JSON report…** to export full per-PID statistics. TS checks require no FFmpeg or capture device. Use a separate decode check to assess audio and video quality.
 
 For a local Apple Silicon build, run this command on macOS with the .NET 11 SDK and Xcode installed.
 

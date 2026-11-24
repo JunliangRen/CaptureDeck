@@ -35,8 +35,6 @@ public static unsafe class RtlSdrProbe
         {
             var path = Environment.GetEnvironmentVariable("CAPTURERACK_RTLSDR_LIBRARY");
             if (string.IsNullOrWhiteSpace(path))
-                path = Environment.GetEnvironmentVariable("CAPTUREDECK_RTLSDR_LIBRARY");
-            if (string.IsNullOrWhiteSpace(path))
             {
                 path = new[] { "rtlsdr.dll", "librtlsdr.dll" }
                     .Select(name => Path.Combine(AppContext.BaseDirectory, name)).FirstOrDefault(File.Exists);

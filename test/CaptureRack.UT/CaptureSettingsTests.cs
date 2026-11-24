@@ -1,6 +1,6 @@
 using System.Text;
+using System.Text.Json;
 using CaptureRack.App;
-using CaptureRack.DeckLink;
 using CaptureRack.DeviceControl;
 using Xunit;
 
@@ -25,40 +25,11 @@ public sealed class CaptureSettingsTests
         Assert.Equal(expected, SettingsLanguage.Resolve(restored.LanguageOverride, "fr-FR"));
     }
 
-    [Fact]
-    public void LoadsLegacyDeckLinkSettingsAndPreservesAutoMode()
-    {
-        var settings = Read("""
-            {
-              "DeviceId": 300,
-              "DeviceName": "DeckLink Studio 4K",
-              "VideoSource": 4,
-              "AudioSource": 2,
-              "ModeSelected": true,
-              "ModeId": null,
-              "VideoFormat": 1983000880,
-              "AudioFormat": 32,
-              "OutputFolder": "D:/Captures",
-              "LanguageOverride": "zh-Hant"
-            }
-            """);
-
-        Assert.Equal(DeckLinkBackend.BackendId, settings.CaptureBackendId);
-        Assert.Null(settings.ControlDevice);
-        Assert.Equal(new DeckLinkSettings
-        {
-            DeviceId = 300,
-            DeviceName = "DeckLink Studio 4K",
-            VideoSource = 4,
-            AudioSource = 2,
-            ModeSelected = true,
-            VideoFormat = 1983000880,
-            AudioFormat = 32
-        }, settings.DeckLink);
-        Assert.Equal("D:/Captures", settings.OutputFolder);
-        Assert.Equal("zh-Hant", settings.LanguageOverride);
-        Assert.Equal(settings, Read(CaptureSettingsStore.Serialize(settings)));
-    }
+    [Theory]
+    [InlineData("{\"ModeSelected\":true,\"ModeId\":null}")]
+    [InlineData("{\"DeckLink\":null}")]
+    public void RejectsSettingsWithoutDeckLinkOptions(string json) =>
+        Assert.Throws<JsonException>(() => Read(json));
 
     [Fact]
     public void RoundTripPreservesIndependentCaptureAndControlSelection()
@@ -71,30 +42,6 @@ public sealed class CaptureSettingsTests
         };
 
         Assert.Equal(settings, Read(CaptureSettingsStore.Serialize(settings)));
-    }
-
-    [Fact]
-    public void UsesOldProductSettingsOnlyWhenNewFileIsMissing()
-    {
-        var directory = Directory.CreateTempSubdirectory("capturerack-settings-");
-        var previousPath = Path.Combine(directory.FullName, "settings-old.json");
-        var currentPath = Path.Combine(directory.FullName, "settings.json");
-        try
-        {
-            File.WriteAllText(previousPath, """{"LanguageOverride":"ja","OutputFolder":"D:/Captures"}""");
-            var restored = CaptureSettingsStore.Load(currentPath, previousPath);
-            Assert.Equal("ja", restored.LanguageOverride);
-            Assert.Equal("D:/Captures", restored.OutputFolder);
-
-            File.WriteAllText(currentPath, CaptureSettingsStore.Serialize(restored with { LanguageOverride = "en" }));
-            Assert.Equal("en", CaptureSettingsStore.Load(currentPath, previousPath).LanguageOverride);
-        }
-        finally
-        {
-            File.Delete(currentPath);
-            File.Delete(previousPath);
-            directory.Delete();
-        }
     }
 
     private static CaptureSettings Read(string json)

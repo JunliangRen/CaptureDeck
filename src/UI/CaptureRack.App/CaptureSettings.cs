@@ -30,31 +30,23 @@ internal static class CaptureSettingsStore
 {
     private static readonly JsonSerializerOptions JsonOptions = new() { WriteIndented = true };
 
-    internal static string FilePath { get; } = SettingsPath("CaptureRack");
-    private static string LegacyFilePath { get; } = SettingsPath("CaptureDeck");
+    internal static string FilePath { get; } = Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "CaptureRack", "settings.json");
 
-    private static string SettingsPath(string product) => Path.Combine(
-        Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), product, "settings.json");
-
-    public static CaptureSettings Load() => Load(FilePath, LegacyFilePath);
-
-    internal static CaptureSettings Load(string path, string legacyPath) =>
-        ReadIfPresent(path) ?? ReadIfPresent(legacyPath) ?? new();
-
-    private static CaptureSettings? ReadIfPresent(string path)
+    public static CaptureSettings Load()
     {
         try
         {
-            using var stream = File.OpenRead(path);
+            using var stream = File.OpenRead(FilePath);
             return Read(stream);
         }
         catch (FileNotFoundException)
         {
-            return null;
+            return new();
         }
         catch (DirectoryNotFoundException)
         {
-            return null;
+            return new();
         }
     }
 
@@ -62,11 +54,12 @@ internal static class CaptureSettingsStore
     {
         using var document = JsonDocument.Parse(stream);
         var root = document.RootElement;
-        var settings = root.Deserialize<CaptureSettings>() ?? throw new JsonException("Empty settings.");
-        if (!root.TryGetProperty(nameof(CaptureSettings.DeckLink), out _))
-            return settings with { DeckLink = root.Deserialize<DeckLinkSettings>()! };
+        if (root.ValueKind != JsonValueKind.Object ||
+            !root.TryGetProperty(nameof(CaptureSettings.DeckLink), out var deckLink) ||
+            deckLink.ValueKind != JsonValueKind.Object)
+            throw new JsonException("Missing or invalid DeckLink settings.");
 
-        return settings.DeckLink is not null ? settings : throw new JsonException("Missing DeckLink settings.");
+        return root.Deserialize<CaptureSettings>() ?? throw new JsonException("Empty settings.");
     }
 
     internal static string Serialize(CaptureSettings settings) =>

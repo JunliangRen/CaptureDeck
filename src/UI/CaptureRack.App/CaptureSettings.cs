@@ -12,6 +12,16 @@ internal sealed record CaptureSettings
     public ControlDeviceAddress? ControlDevice { get; init; }
     public string OutputFolder { get; init; } = "";
     public string? LanguageOverride { get; init; }
+    public string Theme { get; init; } = "System";
+    public string WorkspaceLayout { get; init; } = "Split";
+    public bool InspectorPinned { get; init; } = true;
+    public bool ShowSafeArea { get; init; }
+    public bool ShowNtsc480Guide { get; init; }
+    public string PreviewDeinterlace { get; init; } = "BobWeave";
+    public string PreviewAspectRatio { get; init; } = "Auto";
+    public string PreviewColorMatrix { get; init; } = "Auto";
+    public bool AudioMonitorEnabled { get; init; }
+    public double AudioMonitorVolume { get; init; } = 0.8;
 }
 
 internal sealed record DeckLinkSettings
@@ -24,6 +34,13 @@ internal sealed record DeckLinkSettings
     public uint? ModeId { get; init; }
     public uint? VideoFormat { get; init; }
     public uint? AudioFormat { get; init; }
+    public string AnalogNtscIre { get; init; } = "Driver";
+    public string AnalogComponentLevel { get; init; } = "Driver";
+    public string AnalogAudioLevel { get; init; } = "Driver";
+    public bool AnalogAudioGainOverride { get; init; }
+    public double AnalogAudioGainLeftDb { get; init; }
+    public double AnalogAudioGainRightDb { get; init; }
+    public bool AnalogAudioGainLinked { get; init; } = true;
 }
 
 internal static class CaptureSettingsStore
@@ -85,12 +102,15 @@ internal static class CaptureSettingsStore
     private static extern bool GetDiskFreeSpaceEx(string directory, out ulong availableBytes,
         out ulong totalBytes, out ulong freeBytes);
 
-    public static ulong? AvailableBytes(string directory)
+    public static ulong? AvailableBytes(string directory) =>
+        DiskSpace(directory)?.AvailableBytes;
+
+    public static (ulong AvailableBytes, ulong TotalBytes)? DiskSpace(string directory)
     {
         if (!Path.IsPathFullyQualified(directory) || !Directory.Exists(directory))
             return null;
 
         var path = Path.EndsInDirectorySeparator(directory) ? directory : directory + Path.DirectorySeparatorChar;
-        return GetDiskFreeSpaceEx(path, out var bytes, out _, out _) ? bytes : null;
+        return GetDiskFreeSpaceEx(path, out var available, out var total, out _) ? (available, total) : null;
     }
 }

@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 using Microsoft.UI.Dispatching;
+using Microsoft.UI.Xaml.Controls;
 
 namespace CaptureRack.App;
 
@@ -14,6 +15,7 @@ public sealed partial class MainWindow
     private int rawWheelDelta;
     private double rawWheelInitialOffset;
     private WindowPoint rawWheelPoint;
+    private ScrollView? rawWheelTarget;
 
     private void StartSettingsWheelFallback()
     {
@@ -32,6 +34,7 @@ public sealed partial class MainWindow
     private void StopSettingsWheelFallback()
     {
         settingsWheelFallbackTimer?.Stop();
+        rawWheelTarget = null;
         if (!settingsRawMouseRegistered)
             return;
 
@@ -60,7 +63,7 @@ public sealed partial class MainWindow
 
     private void QueueSettingsRawWheel(int delta, WindowPoint point)
     {
-        if (delta == 0 || IsWheelModified() || !CanScrollSettingsAt(point))
+        if (delta == 0 || IsWheelModified() || ResolveScrollTargetAt(point) is not { } target)
             return;
 
         var now = Stopwatch.GetTimestamp();
@@ -76,14 +79,15 @@ public sealed partial class MainWindow
             settingsWheelFallbackTimer.Tick += FlushSettingsRawWheel;
         }
 
-        if (settingsWheelFallbackTimer.IsRunning)
+        if (settingsWheelFallbackTimer.IsRunning && ReferenceEquals(rawWheelTarget, target))
         {
             rawWheelDelta += delta;
             return;
         }
 
         rawWheelBatchStarted = now;
-        rawWheelInitialOffset = SettingsScroller.VerticalOffset;
+        rawWheelTarget = target;
+        rawWheelInitialOffset = target.VerticalOffset;
         rawWheelPoint = point;
         rawWheelDelta = delta;
         settingsWheelFallbackTimer.Start();
@@ -92,10 +96,12 @@ public sealed partial class MainWindow
     private void FlushSettingsRawWheel(DispatcherQueueTimer sender, object args)
     {
         // The same detent can also arrive through Win32 or the native ScrollView.
-        if (rawWheelDelta != 0 && lastSettingsWheelMessage < rawWheelBatchStarted &&
-            Math.Abs(SettingsScroller.VerticalOffset - rawWheelInitialOffset) < 0.5 &&
-            CanScrollSettingsAt(rawWheelPoint))
-            ScrollSettingsByWheel(rawWheelDelta);
+        if (rawWheelDelta != 0 && rawWheelTarget is { } target &&
+            lastSettingsWheelMessage < rawWheelBatchStarted &&
+            Math.Abs(target.VerticalOffset - rawWheelInitialOffset) < 0.5 &&
+            ReferenceEquals(ResolveScrollTargetAt(rawWheelPoint), target))
+            ScrollTargetByWheel(target, rawWheelDelta);
+        rawWheelTarget = null;
     }
 
     [StructLayout(LayoutKind.Sequential)]

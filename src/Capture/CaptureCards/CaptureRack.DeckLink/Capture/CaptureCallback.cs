@@ -5,7 +5,8 @@ namespace CaptureRack.DeckLink;
 [ComVisible(true)]
 [ClassInterface(ClassInterfaceType.None)]
 internal sealed class CaptureCallback(PreviewFeed? preview, CapturePixelFormat pixelFormat,
-    CaptureAudioFormat audioFormat, VideoMode mode, MovRecording? recording, bool automaticMode) : IDeckLinkInputCallback
+    CaptureAudioFormat audioFormat, VideoMode mode, MovRecording? recording, bool automaticMode,
+    LocalAudioMonitor? localAudioMonitor = null) : IDeckLinkInputCallback
 {
     private const uint NoInput = 1u << 31;
     private const uint BufferRead = 1;
@@ -301,7 +302,7 @@ internal sealed class CaptureCallback(PreviewFeed? preview, CapturePixelFormat p
                 recordingTimeline?.Observe(time, noInput);
                 ObserveRecordingTimestamp(ref recordingVideoTime, time);
             }
-            preview?.Offer(bytes, width, height, rowBytes, length, noInput, pixelFormat);
+            preview?.Offer(bytes, width, height, rowBytes, length, noInput, pixelFormat, mode.FieldDominance);
             if (!describe)
                 return null;
 
@@ -341,9 +342,17 @@ internal sealed class CaptureCallback(PreviewFeed? preview, CapturePixelFormat p
         }
         var sampleCount = checked(sampleFrames * (int)CaptureAudio.Channels);
         if (inputAudioFormat == CaptureAudioFormat.Pcm32)
-            ReadAudioSamples(new ReadOnlySpan<int>((void*)bytes, sampleCount));
+        {
+            var span = new ReadOnlySpan<int>((void*)bytes, sampleCount);
+            ReadAudioSamples(span);
+            localAudioMonitor?.SubmitPcm32(span);
+        }
         else
-            ReadAudioSamples(new ReadOnlySpan<short>((void*)bytes, sampleCount));
+        {
+            var span = new ReadOnlySpan<short>((void*)bytes, sampleCount);
+            ReadAudioSamples(span);
+            localAudioMonitor?.SubmitPcm16(span);
+        }
 
         stats.AudioPayload ??= $"{sampleFrames} stereo sample frames in first packet";
     }

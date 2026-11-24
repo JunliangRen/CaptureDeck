@@ -3,6 +3,7 @@ using Microsoft.UI.Input;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
+using Windows.Foundation;
 
 namespace CaptureRack.App;
 
@@ -31,6 +32,17 @@ public sealed partial class MainWindow
         };
     }
 
+    private void UpdateWheelFallbackState()
+    {
+        var needsWheel = SettingsPage.Visibility == Visibility.Visible ||
+            QcCenterPage.Visibility == Visibility.Visible ||
+            (WorkspacePage.Visibility == Visibility.Visible && InspectorPanel.Visibility == Visibility.Visible);
+        if (needsWheel)
+            StartSettingsWheelFallback();
+        else
+            StopSettingsWheelFallback();
+    }
+
     private void RegisterSettingsInputChildren(object sender, RoutedEventArgs args)
     {
         ((FrameworkElement)sender).Loaded -= RegisterSettingsInputChildren;
@@ -40,6 +52,7 @@ public sealed partial class MainWindow
             RegisterSettingsInputWindow(child);
             return true;
         }, 0);
+        UpdateWheelFallbackState();
     }
 
     private void RegisterSettingsInputWindow(nint window)
@@ -80,37 +93,68 @@ public sealed partial class MainWindow
         const uint modifierKeys = 0x000c; // MK_SHIFT | MK_CONTROL
         var modified = isPointerMessage ? IsWheelModified() : (wParam & modifierKeys) != 0;
         var delta = unchecked((short)(wParam >> 16));
-        // Both wheel messages carry a signed delta and signed screen coordinates.
         var point = new WindowPoint { X = unchecked((short)lParam), Y = unchecked((short)(lParam >> 16)) };
-        if (modified || delta == 0 || !CanScrollSettingsAt(point))
+        if (modified || delta == 0 || ResolveScrollTargetAt(point) is not { } target)
             return false;
 
         lastSettingsWheelMessage = System.Diagnostics.Stopwatch.GetTimestamp();
         lastSettingsWheelDelta = delta;
-        ScrollSettingsByWheel(delta);
+        ScrollTargetByWheel(target, delta);
         return true;
     }
 
-    private bool CanScrollSettingsAt(WindowPoint point)
+    private bool AnyDropdownOpen() =>
+        DevicePicker.IsDropDownOpen || VideoInputPicker.IsDropDownOpen || AudioInputPicker.IsDropDownOpen ||
+        ModePicker.IsDropDownOpen || AnalogIrePicker.IsDropDownOpen || AnalogComponentPicker.IsDropDownOpen ||
+        AnalogAudioLevelPicker.IsDropDownOpen || PreviewDeinterlacePicker.IsDropDownOpen ||
+        PreviewAspectPicker.IsDropDownOpen || PreviewMatrixPicker.IsDropDownOpen ||
+        SettingsDeinterlacePicker.IsDropDownOpen || SettingsAspectPicker.IsDropDownOpen ||
+        SettingsMatrixPicker.IsDropDownOpen || ThemePicker.IsDropDownOpen ||
+        DefaultLayoutPicker.IsDropDownOpen || LanguagePicker.IsDropDownOpen;
+
+    private ScrollView? ResolveScrollTargetAt(WindowPoint point)
     {
-        if (SettingsPage.Visibility != Visibility.Visible || SettingsScroller.ScrollableHeight <= 0 ||
-            SettingsPage.XamlRoot is not { } root ||
-            DevicePicker.IsDropDownOpen || VideoInputPicker.IsDropDownOpen || AudioInputPicker.IsDropDownOpen ||
-            ModePicker.IsDropDownOpen || FormatPicker.IsDropDownOpen || AudioFormatPicker.IsDropDownOpen ||
-            LanguagePicker.IsDropDownOpen)
-            return false;
+        if (RootShell.XamlRoot is not { } root || AnyDropdownOpen())
+            return null;
 
         if (!ScreenToClient(WinRT.Interop.WindowNative.GetWindowHandle(this), ref point))
-            return false;
+            return null;
 
         var scale = root.RasterizationScale;
-        var x = point.X / scale;
-        var y = point.Y / scale;
-        return x >= 0 && y >= 0 && x < SettingsPage.ActualWidth && y < SettingsPage.ActualHeight;
+        var dipPoint = new Point(point.X / scale, point.Y / scale);
+
+        if (SettingsPage.Visibility == Visibility.Visible && IsPointInside(SettingsScroller, dipPoint))
+            return SettingsScroller;
+
+        if (QcCenterPage.Visibility == Visibility.Visible && IsPointInside(QcCenterScroller, dipPoint))
+            return QcCenterScroller;
+
+        if (WorkspacePage.Visibility == Visibility.Visible && InspectorPanel.Visibility == Visibility.Visible &&
+            IsPointInside(InspectorScroller, dipPoint))
+            return InspectorScroller;
+
+        return null;
     }
 
-    private void ScrollSettingsByWheel(int delta) =>
-        SettingsScroller.ScrollBy(0, -delta, new ScrollingScrollOptions(
+    private bool IsPointInside(ScrollView scroller, Point rootPoint)
+    {
+        if (scroller.ScrollableHeight <= 0 || scroller.ActualWidth <= 0 || scroller.ActualHeight <= 0)
+            return false;
+
+        try
+        {
+            var bounds = scroller.TransformToVisual(RootShell)
+                .TransformBounds(new Rect(0, 0, scroller.ActualWidth, scroller.ActualHeight));
+            return bounds.Contains(rootPoint);
+        }
+        catch (ArgumentException)
+        {
+            return false;
+        }
+    }
+
+    private static void ScrollTargetByWheel(ScrollView target, int delta) =>
+        target.ScrollBy(0, -delta, new ScrollingScrollOptions(
             ScrollingAnimationMode.Disabled, ScrollingSnapPointsMode.Ignore));
 
     private struct WindowPoint { public int X; public int Y; }

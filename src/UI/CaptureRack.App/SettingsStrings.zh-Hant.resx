@@ -597,4 +597,277 @@
   <data name="ExitPreviewFullScreen" xml:space="preserve">
     <value>離開全螢幕</value>
   </data>
+  <data name="CaptureModeTab" xml:space="preserve">
+    <value>監看擷取</value>
+  </data>
+  <data name="QcCenterTab" xml:space="preserve">
+    <value>品管中心</value>
+  </data>
+  <data name="LayoutFocus" xml:space="preserve">
+    <value>專注</value>
+  </data>
+  <data name="LayoutSplit" xml:space="preserve">
+    <value>工作室分割</value>
+  </data>
+  <data name="VectorShort" xml:space="preserve">
+    <value>向量</value>
+  </data>
+  <data name="FilterAll" xml:space="preserve">
+    <value>全部</value>
+  </data>
+  <data name="FilterDrops" xml:space="preserve">
+    <value>掉格</value>
+  </data>
+  <data name="FilterSignal" xml:space="preserve">
+    <value>訊號</value>
+  </data>
+  <data name="CopyEvents" xml:space="preserve">
+    <value>複製事件紀錄</value>
+  </data>
+  <data name="SafeAreaGuides" xml:space="preserve">
+    <value>安全框與中心十字</value>
+  </data>
+  <data name="PinInspector" xml:space="preserve">
+    <value>釘選擷取設定面板</value>
+  </data>
+  <data name="CloseInspector" xml:space="preserve">
+    <value>隱藏擷取設定面板</value>
+  </data>
+  <data name="AudioShort" xml:space="preserve">
+    <value>音訊</value>
+  </data>
+  <data name="MetricValidFrames" xml:space="preserve">
+    <value>有效影格</value>
+  </data>
+  <data name="MetricNoInput" xml:space="preserve">
+    <value>無輸入</value>
+  </data>
+  <data name="MetricMissing" xml:space="preserve">
+    <value>遺失</value>
+  </data>
+  <data name="MetricSkipped" xml:space="preserve">
+    <value>跳格</value>
+  </data>
+  <data name="QcCenterTitle" xml:space="preserve">
+    <value>錄後與離線品管中心</value>
+  </data>
+  <data name="QcCenterSubtitle" xml:space="preserve">
+    <value>驗證 MOV 影音軌解碼完整性、FrameMD5 雜湊值、場序與 QCTools 訊號報告。</value>
+  </data>
+  <data name="QcStepInspect" xml:space="preserve">
+    <value>1. 檢查音視訊軌</value>
+  </data>
+  <data name="QcStepDecode" xml:space="preserve">
+    <value>2. 全影格解碼與 FrameMD5</value>
+  </data>
+  <data name="QcStepAnalyze" xml:space="preserve">
+    <value>3. 訊號分析與 QCTools</value>
+  </data>
+  <data name="QcMetricVideo" xml:space="preserve">
+    <value>已解碼視訊影格</value>
+  </data>
+  <data name="QcMetricAudio" xml:space="preserve">
+    <value>已解碼 PCM 取樣</value>
+  </data>
+  <data name="QcArtifactsHeading" xml:space="preserve">
+    <value>產生的品管報告與檔案</value>
+  </data>
+  <data name="QcViewInlineLog" xml:space="preserve">
+    <value>於頁面內展開 JSON 紀錄</value>
+  </data>
+  <data name="QcHideInlineLog" xml:space="preserve">
+    <value>收合內嵌紀錄</value>
+  </data>
+  <data name="QcDropPrompt" xml:space="preserve">
+    <value>將 MOV 檔案拖曳至此處，或點擊右上角選擇檔案</value>
+  </data>
+  <data name="QcDropHint" xml:space="preserve">
+    <value>停止錄製後自動執行的品管檢查結果也會顯示於此頁面。</value>
+  </data>
+  <data name="RoutingHeading" xml:space="preserve">
+    <value>訊號路由</value>
+  </data>
+  <data name="ToolchainHeading" xml:space="preserve">
+    <value>品管工具鏈</value>
+  </data>
+  <data name="ShortcutsHeading" xml:space="preserve">
+    <value>快速鍵參考</value>
+  </data>
+  <data name="Theme" xml:space="preserve">
+    <value>主題外觀</value>
+  </data>
+  <data name="ThemeDescription" xml:space="preserve">
+    <value>深色工作室主題針對暗室視訊監看進行了中性灰校準。</value>
+  </data>
+  <data name="ThemeDark" xml:space="preserve">
+    <value>深色工作室</value>
+  </data>
+  <data name="ThemeSystem" xml:space="preserve">
+    <value>跟隨系統</value>
+  </data>
+  <data name="ThemeLight" xml:space="preserve">
+    <value>淺色工作室</value>
+  </data>
+  <data name="DefaultLayout" xml:space="preserve">
+    <value>預設監看版面</value>
+  </data>
+  <data name="DefaultLayoutDescription" xml:space="preserve">
+    <value>選擇啟動時是分割並排畫面與示波器，還是專注大圖。</value>
+  </data>
+  <data name="ToolchainCardHeader" xml:space="preserve">
+    <value>FFmpeg 與 FFprobe</value>
+  </data>
+  <data name="ToolchainReady" xml:space="preserve">
+    <value>已就緒</value>
+  </data>
+  <data name="ToolchainMissing" xml:space="preserve">
+    <value>找不到</value>
+  </data>
+  <data name="OpenSettingsFolder" xml:space="preserve">
+    <value>開啟設定資料夾</value>
+  </data>
+  <data name="ShortcutPreview" xml:space="preserve">
+    <value>開始 / 停止預覽</value>
+  </data>
+  <data name="ShortcutRecord" xml:space="preserve">
+    <value>開始 / 停止錄製</value>
+  </data>
+  <data name="ShortcutInspector" xml:space="preserve">
+    <value>展開 / 收合擷取設定</value>
+  </data>
+  <data name="ShortcutLayouts" xml:space="preserve">
+    <value>切換監看版面</value>
+  </data>
+  <data name="Video10Short" xml:space="preserve">
+    <value>10 位元 v210</value>
+  </data>
+  <data name="Video8Short" xml:space="preserve">
+    <value>8 位元 2vuy</value>
+  </data>
+  <data name="Audio16Short" xml:space="preserve">
+    <value>16 位元 PCM</value>
+  </data>
+  <data name="Audio32Short" xml:space="preserve">
+    <value>32 位元 PCM</value>
+  </data>
+  <data name="EventsCountBadge" xml:space="preserve">
+    <value>{0:N0} 筆事件</value>
+  </data>
+  <data name="AnalogSectionHeading" xml:space="preserve">
+    <value>類比輸入準位（硬體擷取）</value>
+  </data>
+  <data name="AnalogIreLabel" xml:space="preserve">
+    <value>NTSC 黑準位 (IRE)</value>
+  </data>
+  <data name="AnalogComponentLabel" xml:space="preserve">
+    <value>類比色差準位</value>
+  </data>
+  <data name="AnalogAudioLevelLabel" xml:space="preserve">
+    <value>類比音訊準位</value>
+  </data>
+  <data name="AnalogGainOverride" xml:space="preserve">
+    <value>覆蓋硬體輸入增益</value>
+  </data>
+  <data name="AnalogGainConsumerNote" xml:space="preserve">
+    <value>消費級準位會由硬體鎖定最大輸入增益。</value>
+  </data>
+  <data name="AnalogGainLink" xml:space="preserve">
+    <value>連動左右聲道增益</value>
+  </data>
+  <data name="AnalogGainReset" xml:space="preserve">
+    <value>將輸入增益重設為 0.0 dB</value>
+  </data>
+  <data name="AnalogDriverDefault" xml:space="preserve">
+    <value>跟隨驅動預設</value>
+  </data>
+  <data name="AnalogIre0" xml:space="preserve">
+    <value>0.0 IRE（日本 NTSC-J）</value>
+  </data>
+  <data name="AnalogIre75" xml:space="preserve">
+    <value>7.5 IRE（北美 NTSC-M）</value>
+  </data>
+  <data name="AnalogComponentSmpte" xml:space="preserve">
+    <value>SMPTE / Betacam SP</value>
+  </data>
+  <data name="AnalogComponentBetacam" xml:space="preserve">
+    <value>Betacam（舊款 Sony）</value>
+  </data>
+  <data name="AnalogAudioPro" xml:space="preserve">
+    <value>專業級 (+4 dBu)</value>
+  </data>
+  <data name="AnalogAudioConsumer" xml:space="preserve">
+    <value>消費級 (-10 dBV)</value>
+  </data>
+  <data name="PreviewOptionsButton" xml:space="preserve">
+    <value>預覽畫面</value>
+  </data>
+  <data name="PreviewOnlyNotice" xml:space="preserve">
+    <value>以下選項僅用於螢幕預覽，絕不會改變最終錄製的無損畫面與 PCM 音軌。</value>
+  </data>
+  <data name="PreviewDeinterlaceLabel" xml:space="preserve">
+    <value>去交錯（僅預覽）</value>
+  </data>
+  <data name="PreviewDeinterlaceDesc" xml:space="preserve">
+    <value>動態自適應 Bob-Weave 在靜止區保留全解析度細節，動態邊緣平滑消除拉絲。</value>
+  </data>
+  <data name="PreviewAspectLabel" xml:space="preserve">
+    <value>顯示長寬比（僅預覽）</value>
+  </data>
+  <data name="PreviewAspectDesc" xml:space="preserve">
+    <value>可手動切換變形 16:9 寬螢幕標清或 1:1 點對點像素預覽。</value>
+  </data>
+  <data name="PreviewMatrixLabel" xml:space="preserve">
+    <value>色彩矩陣（僅預覽）</value>
+  </data>
+  <data name="PreviewMatrixDesc" xml:space="preserve">
+    <value>選擇監看預覽時的 Y′CbCr 轉 RGB 色彩矩陣。</value>
+  </data>
+  <data name="Ntsc480Guide" xml:space="preserve">
+    <value>NTSC 480 裁切參考線（頂 4 行 / 底 2 行）</value>
+  </data>
+  <data name="AudioMonitorTitle" xml:space="preserve">
+    <value>本機音訊監聽</value>
+  </data>
+  <data name="AudioMonitorNotice" xml:space="preserve">
+    <value>僅用於電腦喇叭監聽，靜音或調整音量不會影響錄製的 PCM 音軌。</value>
+  </data>
+  <data name="AudioMonitorOnTooltip" xml:space="preserve">
+    <value>本機音訊監聽已開啟（僅預覽 · 點擊靜音）</value>
+  </data>
+  <data name="AudioMonitorOffTooltip" xml:space="preserve">
+    <value>本機音訊監聽已靜音（僅預覽 · 點擊開啟）</value>
+  </data>
+  <data name="PreviewDefaultsHeading" xml:space="preserve">
+    <value>預覽與監看（僅預覽，不影響最終擷取）</value>
+  </data>
+  <data name="DeinterlaceBobWeave" xml:space="preserve">
+    <value>Bob-Weave（動態自適應）</value>
+  </data>
+  <data name="DeinterlaceField" xml:space="preserve">
+    <value>單場去拉絲（Field Bob）</value>
+  </data>
+  <data name="DeinterlaceOff" xml:space="preserve">
+    <value>關閉（原始交錯）</value>
+  </data>
+  <data name="AspectAuto" xml:space="preserve">
+    <value>自動（SD 4:3 / HD 原比例）</value>
+  </data>
+  <data name="Aspect4x3" xml:space="preserve">
+    <value>4:3</value>
+  </data>
+  <data name="Aspect16x9" xml:space="preserve">
+    <value>16:9（變形寬螢幕）</value>
+  </data>
+  <data name="Aspect1x1" xml:space="preserve">
+    <value>1:1（點對點像素）</value>
+  </data>
+  <data name="MatrixAuto" xml:space="preserve">
+    <value>自動（SD 601 / HD 709）</value>
+  </data>
+  <data name="MatrixBt601" xml:space="preserve">
+    <value>BT.601</value>
+  </data>
+  <data name="MatrixBt709" xml:space="preserve">
+    <value>BT.709</value>
+  </data>
 </root>

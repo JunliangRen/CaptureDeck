@@ -17,13 +17,26 @@ public sealed partial class MainWindow
 
     private void ApplyWorkspaceLanguage()
     {
-        PreviewTab.Text = L("PreviewTab");
-        ScopesTab.Text = L("ScopesTab");
-        SpectrumTab.Text = L("SpectrumTab");
-        EventsTab.Text = L("EventsTab");
-        ToolTipService.SetToolTip(ScopesTab, L("VideoScopes"));
-        ToolTipService.SetToolTip(SpectrumTab, L("AudioSpectrum"));
-        AutomationProperties.SetName(MonitorSelector, L("Monitoring"));
+        CaptureModeLabel.Text = L("CaptureModeTab");
+        QcModeLabel.Text = L("QcCenterTab");
+        LayoutFocusLabel.Text = L("LayoutFocus");
+        LayoutSplitLabel.Text = L("LayoutSplit");
+        LayoutScopesLabel.Text = L("ScopesTab");
+        LayoutSpectrumLabel.Text = L("SpectrumTab");
+        LayoutEventsLabel.Text = L("EventsTab");
+
+        SplitVectorBtn.Content = L("VectorShort");
+        SplitSpectrumBtn.Content = L("SpectrumTab");
+        SplitEventsBtn.Content = L("EventsTab");
+        EventsFilterAllBtn.Content = L("FilterAll");
+        EventsFilterDropsBtn.Content = L("FilterDrops");
+        EventsFilterSignalBtn.Content = L("FilterSignal");
+        ToolTipService.SetToolTip(CopyEventsButton, L("CopyEvents"));
+        ToolTipService.SetToolTip(SafeAreaToggleButton, L("SafeAreaGuides"));
+        ToolTipService.SetToolTip(ToggleInspectorButton, L("Capture"));
+        ToolTipService.SetToolTip(PinInspectorButton, L("PinInspector"));
+        ToolTipService.SetToolTip(CloseInspectorButton, L("CloseInspector"));
+
         AutomationProperties.SetName(PreviewImage, L("PreviewImage"));
         UpdatePreviewFullscreenIcon();
         AutomationProperties.SetName(VectorPlot, L("VectorPlot"));
@@ -38,21 +51,46 @@ public sealed partial class MainWindow
         ToolTipService.SetToolTip(RecordingElapsed, L("ElapsedHelp"));
 
         PreviewPlaceholderText.Text = L("WaitingPreview");
+        PreviewPlaceholderHint.Text = L("PreviewBeforeRecording");
+        PlaceholderStartLabel.Text = L("StartPreview");
         LumaHeading.Text = L("LumaHeading");
-        VectorHeading.Text = L("VectorHeading");
         VectorAxes.Text = L("VectorAxes");
-        StereoHeading.Text = L("StereoHeading");
+        StereoHeading.Text = L("AudioShort");
+        ValidFramesLabel.Text = L("MetricValidFrames");
+        NoInputFramesLabel.Text = L("MetricNoInput");
+        MissingFramesLabel.Text = L("MetricMissing");
+        SkippedFramesLabel.Text = L("MetricSkipped");
+
         RenderCaptureActions();
-        RecordingClockLabel.Text = L(recordingClock.IsRunning ? "RecordingClock" : "Elapsed");
         CheckMovLabel.Text = L("CheckMov");
         AutomationProperties.SetName(CheckMovButton, CheckMovLabel.Text);
-        QcHeading.Text = L("QcHeading");
+        QcHeading.Text = L("QcCenterTitle");
+        QcCenterSubtitle.Text = L("QcCenterSubtitle");
+        QcStep1Label.Text = L("QcStepInspect");
+        QcStep2Label.Text = L("QcStepDecode");
+        QcStep3Label.Text = L("QcStepAnalyze");
+        QcMetricVideoLabel.Text = L("QcMetricVideo");
+        QcMetricAudioLabel.Text = L("QcMetricAudio");
+        QcMetricWarningsLabel.Text = L("QcWarningsHeading");
+        QcArtifactsHeading.Text = L("QcArtifactsHeading");
         QcWarningsHeading.Text = L("QcWarningsHeading");
         QcFolderButton.Content = L("QcFolder");
         QcVideoButton.Content = L("OpenRecordedMov");
         QcLogButton.Content = L("QcLog");
         QcHashButton.Content = L("QcHash");
         QcReportButton.Content = L("QcReport");
+        QcToggleInlineLogLabel.Text = QcInlineLogText.Visibility == Visibility.Visible
+            ? L("QcHideInlineLog") : L("QcViewInlineLog");
+        FullscreenExitLabel.Text = L("ExitPreviewFullScreen");
+
+        if (qcOutputPath is null)
+        {
+            QcFileName.Text = L("QcDropPrompt");
+            QcFilePathText.Text = L("QcDropHint");
+        }
+
+        if (qcStop is not null)
+            FooterQcStageText.Text = activeQcStage is { } stage ? L($"Qc{stage}") : L("QcStarting");
 
         RenderApiVersion();
         RenderStatus();
@@ -60,16 +98,6 @@ public sealed partial class MainWindow
         RenderQcResult();
         RenderCounts(displayedStats);
         RefreshLocalizedMonitoring();
-    }
-
-    private void RenderApiVersion()
-    {
-        ApiVersion.Text = sdkVersion switch
-        {
-            null => L("ApiWaiting"),
-            "" => L("ApiUnavailable"),
-            _ => $"Blackmagic DeckLink API {sdkVersion}"
-        };
     }
 
     private void RenderStatus()
@@ -88,11 +116,24 @@ public sealed partial class MainWindow
     {
         var previewActive = captureTask is not null;
         var recordingActive = recordingSession && qcStop is null;
+
         PreviewActionIcon.Glyph = previewActive ? "\uE71A" : "\uE768";
-        RecordActionIcon.Glyph = recordingActive ? "\uE71A" : "\uE7C8";
         PreviewActionLabel.Text = L(previewActive ? "StopPreview" : "StartPreview");
+
         RecordActionLabel.Text = L(recordingActive ? "StopRecording" : "StartRecording");
-        CancelQcButton.Content = L("CancelQc");
+        RecordActionDot.Visibility = recordingActive ? Visibility.Collapsed : Visibility.Visible;
+        RecordActionStopIcon.Visibility = recordingActive ? Visibility.Visible : Visibility.Collapsed;
+        RecordButton.Style = (Style)Application.Current.Resources[recordingActive
+            ? "StudioRecordActiveButtonStyle" : "StudioRecordIdleButtonStyle"];
+
+        FullscreenRecordLabel.Text = RecordActionLabel.Text;
+        FullscreenRecordIcon.Glyph = recordingActive ? "\uE71A" : "\uE7C8";
+        FullscreenRecordButton.Style = RecordButton.Style;
+
+        ToolTipService.SetToolTip(CancelQcButton, L("CancelQc"));
+        AutomationProperties.SetName(CancelQcButton, L("CancelQc"));
+        QcCenterCancelButton.Content = L("CancelQc");
+
         AutomationProperties.SetName(StartButton, PreviewActionLabel.Text);
         AutomationProperties.SetName(RecordButton, RecordActionLabel.Text);
     }
@@ -101,32 +142,96 @@ public sealed partial class MainWindow
     {
         var recordingWithoutInput = recordingClock.IsRunning && liveSignal == VideoSignal.NoInput;
         var severity = recordingWithoutInput ? InfoBarSeverity.Warning : SignalStatus.Severity;
-        StatusGlyph.Glyph = severity switch
+        var dotBrush = severity switch
         {
-            InfoBarSeverity.Error => "\uE783",
-            InfoBarSeverity.Warning => "\uE7BA",
-            InfoBarSeverity.Success => "\uE73E",
-            _ => "\uE946"
+            InfoBarSeverity.Error => ThemeBrush("StudioDangerBrush"),
+            InfoBarSeverity.Warning => ThemeBrush("StudioCautionBrush"),
+            InfoBarSeverity.Success => ThemeBrush("StudioSignalLockBrush"),
+            _ => ThemeBrush("StudioInfoBrush")
         };
+
+        StatusDot.Fill = dotBrush;
         StatusTitleText.Text = recordingWithoutInput ? L("NoInputSignal") : SignalStatus.Title;
         AutomationProperties.SetName(StatusDetailsButton, StatusTitleText.Text);
         ToolTipService.SetToolTip(StatusDetailsButton, recordingWithoutInput ? L("RecordingNoInput") : SignalStatus.Message);
+
+        // Sync Stage Signal Pill & Fullscreen Signal Indicator
+        if (captureTask is not null)
+        {
+            var isLocked = liveSignal == VideoSignal.Present;
+            var signalBrush = isLocked
+                ? ThemeBrush("StudioSignalLockBrush")
+                : liveSignal == VideoSignal.NoInput
+                    ? ThemeBrush("StudioCautionBrush")
+                    : ThemeBrush("StudioInfoBrush");
+            StageSignalDot.Fill = signalBrush;
+            FullscreenSignalDot.Fill = signalBrush;
+            StageSignalText.Text = FullscreenStatusText.Text = L(isLocked ? "SignalPresent" :
+                liveSignal == VideoSignal.NoInput ? "NoInputSignal" : "WaitingFrames");
+            StageSignalBadge.Background = ThemeBrush(isLocked ? "StudioSignalLockSoftBrush" :
+                liveSignal == VideoSignal.NoInput ? "StudioCautionSoftBrush" : "StudioNeutralPillBrush");
+        }
+        else
+        {
+            StageSignalDot.Fill = ThemeBrush("StudioTextMutedBrush");
+            FullscreenSignalDot.Fill = ThemeBrush("StudioTextMutedBrush");
+            StageSignalText.Text = FullscreenStatusText.Text = L("Idle");
+            StageSignalBadge.Background = ThemeBrush("StudioNeutralPillBrush");
+        }
     }
 
     private void RenderPreviewCaption()
     {
         if (previewCaption is { } caption)
+        {
             PreviewDetail.Text = LocalFormat("PreviewFrameDetail",
                 L(caption.NoInput ? "PreviewNoInputFrame" : "PreviewLiveFrame"), caption.Width,
                 caption.Height, caption.Format, caption.Frames);
+            PreviewHudDot.Fill = ThemeBrush(caption.NoInput ? "StudioCautionBrush" : "StudioSignalLockBrush");
+        }
     }
 
     private void RenderCounts(CaptureStats? stats)
     {
-        var text = LocalFormat("CaptureCounts", stats?.VideoFrames ?? 0, stats?.NoInputFrames ?? 0,
-            stats?.AudioPackets ?? 0, stats?.MissingVideoFrames ?? 0, displayedPreviewSkips);
-        CaptureCountsStatus.Text = text;
-        ToolTipService.SetToolTip(CaptureCountsStatus, text);
+        var valid = stats?.VideoFrames ?? 0;
+        var noInput = stats?.NoInputFrames ?? 0;
+        var audio = stats?.AudioPackets ?? 0;
+        var missing = stats?.MissingVideoFrames ?? 0;
+        var skipped = displayedPreviewSkips;
+
+        ValidFramesValue.Text = valid.ToString("N0", settingsCulture);
+        NoInputFramesValue.Text = noInput.ToString("N0", settingsCulture);
+        MissingFramesValue.Text = missing.ToString("N0", settingsCulture);
+        SkippedFramesValue.Text = skipped.ToString("N0", settingsCulture);
+
+        ApplyTelemetryChipTone(NoInputFramesChip, NoInputFramesValue, noInput > 0 ? "Caution" : null);
+        ApplyTelemetryChipTone(MissingFramesChip, MissingFramesValue, missing > 0 ? "Danger" : null);
+        ApplyTelemetryChipTone(SkippedFramesChip, SkippedFramesValue, skipped > 0 ? "Caution" : null);
+
+        var summary = LocalFormat("CaptureCounts", valid, noInput, audio, missing, skipped);
+        ToolTipService.SetToolTip(TelemetryStrip, summary);
+    }
+
+    private void ApplyTelemetryChipTone(Border chip, TextBlock value, string? tone)
+    {
+        switch (tone)
+        {
+            case "Danger":
+                chip.Background = ThemeBrush("StudioDangerSoftBrush");
+                chip.BorderBrush = ThemeBrush("StudioDangerBrush");
+                value.Foreground = ThemeBrush("StudioDangerBrush");
+                break;
+            case "Caution":
+                chip.Background = ThemeBrush("StudioCautionSoftBrush");
+                chip.BorderBrush = ThemeBrush("StudioCautionBrush");
+                value.Foreground = ThemeBrush("StudioCautionBrush");
+                break;
+            default:
+                chip.Background = ThemeBrush("StudioCardBrush");
+                chip.BorderBrush = ThemeBrush("StudioHairlineBrush");
+                value.Foreground = ThemeBrush("StudioTextPrimaryBrush");
+                break;
+        }
     }
 
     private string DescribeQcResult(QcResult result) => result.Status switch
@@ -139,7 +244,7 @@ public sealed partial class MainWindow
 
     private void RenderQcResult()
     {
-        QcResultsButton.Content = L("QcResults");
+        QcResultsLabel.Text = L("QcResults");
         if (qcOutputPath is null || lastQcPresentation is not { } presentation)
             return;
 
@@ -161,12 +266,45 @@ public sealed partial class MainWindow
                 warnings.Add(L("QcWarnClipping"));
             if (result.VideoFramesWithoutFieldFlags > 0)
                 warnings.Add(LocalFormat("QcWarnFieldFlags", result.VideoFramesWithoutFieldFlags));
+
+            QcMetricVideoValue.Text = result.DecodedVideoFrames?.ToString("N0", settingsCulture) ?? "—";
+            QcMetricAudioValue.Text = result.DecodedAudioSampleFrames?.ToString("N0", settingsCulture) ?? "—";
         }
+        else
+        {
+            QcMetricVideoValue.Text = "—";
+            QcMetricAudioValue.Text = "—";
+        }
+
+        QcMetricWarningsValue.Text = warnings.Count.ToString("N0", settingsCulture);
+        QcMetricWarningsValue.Foreground = warnings.Count > 0
+            ? ThemeBrush("StudioCautionBrush") : ThemeBrush("StudioTextPrimaryBrush");
 
         QcWarningsList.ItemsSource = warnings;
         QcWarningsPanel.Visibility = warnings.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
         if (warnings.Count > 0)
-            QcResultsButton.Content = warnings.Count == 1 ? L("QcOneWarning") : LocalFormat("QcWarningCount", warnings.Count);
+            QcResultsLabel.Text = warnings.Count == 1 ? L("QcOneWarning") : LocalFormat("QcWarningCount", warnings.Count);
+
+        var status = lastQcResult?.Status;
+        var (toneSoft, toneSolid, glyph) = status switch
+        {
+            QcStatus.Passed when warnings.Count == 0 => ("StudioSignalLockSoftBrush", "StudioSignalLockBrush", "\uE73E"),
+            QcStatus.Passed or QcStatus.Cancelled or QcStatus.ToolsUnavailable => ("StudioCautionSoftBrush", "StudioCautionBrush", "\uE7BA"),
+            _ => ("StudioDangerSoftBrush", "StudioDangerBrush", "\uE783")
+        };
+        QcOutcomeBanner.Background = ThemeBrush(toneSoft);
+        QcOutcomeBanner.BorderBrush = ThemeBrush(toneSolid);
+        QcOutcomeIcon.Foreground = ThemeBrush(toneSolid);
+        QcOutcomeIcon.Glyph = glyph;
+
+        QcStatusPill.Visibility = Visibility.Visible;
+        QcStatusPill.Background = ThemeBrush(toneSoft);
+        QcStatusPillText.Text = L(presentation.Title);
+        QcStatusPillText.Foreground = ThemeBrush(toneSolid);
+
+        QcResultsDot.Fill = ThemeBrush(toneSolid);
+        QcResultsButton.Background = ThemeBrush(toneSoft);
+        QcResultsButton.BorderBrush = ThemeBrush(toneSolid);
     }
 
     private sealed record QcPresentation(QcCaptureLog? Capture, string Title, Func<string> Summary);

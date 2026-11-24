@@ -597,4 +597,277 @@
   <data name="ExitPreviewFullScreen" xml:space="preserve">
     <value>退出全屏</value>
   </data>
+  <data name="CaptureModeTab" xml:space="preserve">
+    <value>监看采集</value>
+  </data>
+  <data name="QcCenterTab" xml:space="preserve">
+    <value>质检中心</value>
+  </data>
+  <data name="LayoutFocus" xml:space="preserve">
+    <value>专注</value>
+  </data>
+  <data name="LayoutSplit" xml:space="preserve">
+    <value>工作室分屏</value>
+  </data>
+  <data name="VectorShort" xml:space="preserve">
+    <value>矢量</value>
+  </data>
+  <data name="FilterAll" xml:space="preserve">
+    <value>全部</value>
+  </data>
+  <data name="FilterDrops" xml:space="preserve">
+    <value>丢帧</value>
+  </data>
+  <data name="FilterSignal" xml:space="preserve">
+    <value>信号</value>
+  </data>
+  <data name="CopyEvents" xml:space="preserve">
+    <value>复制事件日志</value>
+  </data>
+  <data name="SafeAreaGuides" xml:space="preserve">
+    <value>安全框与中心十字</value>
+  </data>
+  <data name="PinInspector" xml:space="preserve">
+    <value>钉选采集配置面板</value>
+  </data>
+  <data name="CloseInspector" xml:space="preserve">
+    <value>收起采集配置面板</value>
+  </data>
+  <data name="AudioShort" xml:space="preserve">
+    <value>音频</value>
+  </data>
+  <data name="MetricValidFrames" xml:space="preserve">
+    <value>有效帧</value>
+  </data>
+  <data name="MetricNoInput" xml:space="preserve">
+    <value>无输入</value>
+  </data>
+  <data name="MetricMissing" xml:space="preserve">
+    <value>丢帧</value>
+  </data>
+  <data name="MetricSkipped" xml:space="preserve">
+    <value>跳帧</value>
+  </data>
+  <data name="QcCenterTitle" xml:space="preserve">
+    <value>录后与离线质检中心</value>
+  </data>
+  <data name="QcCenterSubtitle" xml:space="preserve">
+    <value>校验 MOV 音视频轨解码完整性、FrameMD5 校验值、场序与 QCTools 信号报告。</value>
+  </data>
+  <data name="QcStepInspect" xml:space="preserve">
+    <value>1. 轨道与结构检查</value>
+  </data>
+  <data name="QcStepDecode" xml:space="preserve">
+    <value>2. 全帧解码与 FrameMD5</value>
+  </data>
+  <data name="QcStepAnalyze" xml:space="preserve">
+    <value>3. 信号分析与 QCTools</value>
+  </data>
+  <data name="QcMetricVideo" xml:space="preserve">
+    <value>已解码视频帧</value>
+  </data>
+  <data name="QcMetricAudio" xml:space="preserve">
+    <value>已解码 PCM 样本</value>
+  </data>
+  <data name="QcArtifactsHeading" xml:space="preserve">
+    <value>生成的质检报告与文件</value>
+  </data>
+  <data name="QcViewInlineLog" xml:space="preserve">
+    <value>在页面内展开 JSON 日志</value>
+  </data>
+  <data name="QcHideInlineLog" xml:space="preserve">
+    <value>收起内联日志</value>
+  </data>
+  <data name="QcDropPrompt" xml:space="preserve">
+    <value>将 MOV 文件拖放到此处，或点击右上角选择文件</value>
+  </data>
+  <data name="QcDropHint" xml:space="preserve">
+    <value>停止录制后自动执行的录后质检结果也会同步呈现在此页面。</value>
+  </data>
+  <data name="RoutingHeading" xml:space="preserve">
+    <value>信号路由</value>
+  </data>
+  <data name="ToolchainHeading" xml:space="preserve">
+    <value>质检工具链</value>
+  </data>
+  <data name="ShortcutsHeading" xml:space="preserve">
+    <value>快捷键参考</value>
+  </data>
+  <data name="Theme" xml:space="preserve">
+    <value>主题外观</value>
+  </data>
+  <data name="ThemeDescription" xml:space="preserve">
+    <value>深色工作室主题针对暗室视频监看进行了中性灰校准。</value>
+  </data>
+  <data name="ThemeDark" xml:space="preserve">
+    <value>深色工作室</value>
+  </data>
+  <data name="ThemeSystem" xml:space="preserve">
+    <value>跟随系统</value>
+  </data>
+  <data name="ThemeLight" xml:space="preserve">
+    <value>浅色工作室</value>
+  </data>
+  <data name="DefaultLayout" xml:space="preserve">
+    <value>默认监看布局</value>
+  </data>
+  <data name="DefaultLayoutDescription" xml:space="preserve">
+    <value>选择启动时是分屏同显画面与示波器，还是专注大图。</value>
+  </data>
+  <data name="ToolchainCardHeader" xml:space="preserve">
+    <value>FFmpeg 与 FFprobe</value>
+  </data>
+  <data name="ToolchainReady" xml:space="preserve">
+    <value>已就绪</value>
+  </data>
+  <data name="ToolchainMissing" xml:space="preserve">
+    <value>未找到</value>
+  </data>
+  <data name="OpenSettingsFolder" xml:space="preserve">
+    <value>打开配置目录</value>
+  </data>
+  <data name="ShortcutPreview" xml:space="preserve">
+    <value>开始 / 停止预览</value>
+  </data>
+  <data name="ShortcutRecord" xml:space="preserve">
+    <value>开始 / 停止录制</value>
+  </data>
+  <data name="ShortcutInspector" xml:space="preserve">
+    <value>展开 / 收起采集配置</value>
+  </data>
+  <data name="ShortcutLayouts" xml:space="preserve">
+    <value>切换监看布局</value>
+  </data>
+  <data name="Video10Short" xml:space="preserve">
+    <value>10 位 v210</value>
+  </data>
+  <data name="Video8Short" xml:space="preserve">
+    <value>8 位 2vuy</value>
+  </data>
+  <data name="Audio16Short" xml:space="preserve">
+    <value>16 位 PCM</value>
+  </data>
+  <data name="Audio32Short" xml:space="preserve">
+    <value>32 位 PCM</value>
+  </data>
+  <data name="EventsCountBadge" xml:space="preserve">
+    <value>{0:N0} 条事件</value>
+  </data>
+  <data name="AnalogSectionHeading" xml:space="preserve">
+    <value>模拟输入电平（硬件采集）</value>
+  </data>
+  <data name="AnalogIreLabel" xml:space="preserve">
+    <value>NTSC 黑电平 (IRE)</value>
+  </data>
+  <data name="AnalogComponentLabel" xml:space="preserve">
+    <value>模拟分量电平</value>
+  </data>
+  <data name="AnalogAudioLevelLabel" xml:space="preserve">
+    <value>模拟音频电平</value>
+  </data>
+  <data name="AnalogGainOverride" xml:space="preserve">
+    <value>覆盖硬件输入增益</value>
+  </data>
+  <data name="AnalogGainConsumerNote" xml:space="preserve">
+    <value>消费级电平模式会由硬件锁定最大输入增益。</value>
+  </data>
+  <data name="AnalogGainLink" xml:space="preserve">
+    <value>联动左右声道增益</value>
+  </data>
+  <data name="AnalogGainReset" xml:space="preserve">
+    <value>将输入增益重置为 0.0 dB</value>
+  </data>
+  <data name="AnalogDriverDefault" xml:space="preserve">
+    <value>跟随驱动默认</value>
+  </data>
+  <data name="AnalogIre0" xml:space="preserve">
+    <value>0.0 IRE（日本 NTSC-J）</value>
+  </data>
+  <data name="AnalogIre75" xml:space="preserve">
+    <value>7.5 IRE（北美 NTSC-M）</value>
+  </data>
+  <data name="AnalogComponentSmpte" xml:space="preserve">
+    <value>SMPTE / Betacam SP</value>
+  </data>
+  <data name="AnalogComponentBetacam" xml:space="preserve">
+    <value>Betacam（老款 Sony）</value>
+  </data>
+  <data name="AnalogAudioPro" xml:space="preserve">
+    <value>专业级 (+4 dBu)</value>
+  </data>
+  <data name="AnalogAudioConsumer" xml:space="preserve">
+    <value>消费级 (-10 dBV)</value>
+  </data>
+  <data name="PreviewOptionsButton" xml:space="preserve">
+    <value>预览画面</value>
+  </data>
+  <data name="PreviewOnlyNotice" xml:space="preserve">
+    <value>以下选项仅用于屏幕预览，绝对不会改变最终录制的无损画面与 PCM 音轨。</value>
+  </data>
+  <data name="PreviewDeinterlaceLabel" xml:space="preserve">
+    <value>去隔行（仅预览）</value>
+  </data>
+  <data name="PreviewDeinterlaceDesc" xml:space="preserve">
+    <value>运动自适应 Bob-Weave 在静止处保持全分辨率细节，运动处平滑消除拉丝。</value>
+  </data>
+  <data name="PreviewAspectLabel" xml:space="preserve">
+    <value>显示画幅比（仅预览）</value>
+  </data>
+  <data name="PreviewAspectDesc" xml:space="preserve">
+    <value>可手动切换变形 16:9 宽屏标清或 1:1 点对点像素预览。</value>
+  </data>
+  <data name="PreviewMatrixLabel" xml:space="preserve">
+    <value>色彩矩阵（仅预览）</value>
+  </data>
+  <data name="PreviewMatrixDesc" xml:space="preserve">
+    <value>选择监看预览时的 Y′CbCr 转 RGB 色彩矩阵。</value>
+  </data>
+  <data name="Ntsc480Guide" xml:space="preserve">
+    <value>NTSC 480 裁切参考线（顶 4 行 / 底 2 行）</value>
+  </data>
+  <data name="AudioMonitorTitle" xml:space="preserve">
+    <value>本地音频监听</value>
+  </data>
+  <data name="AudioMonitorNotice" xml:space="preserve">
+    <value>仅用于电脑扬声器监听，静音或调节音量不会影响录制的 PCM 音轨。</value>
+  </data>
+  <data name="AudioMonitorOnTooltip" xml:space="preserve">
+    <value>本地音频监听已开启（仅预览 · 点击静音）</value>
+  </data>
+  <data name="AudioMonitorOffTooltip" xml:space="preserve">
+    <value>本地音频监听已静音（仅预览 · 点击开启）</value>
+  </data>
+  <data name="PreviewDefaultsHeading" xml:space="preserve">
+    <value>预览与监看（仅预览，不影响最终采集）</value>
+  </data>
+  <data name="DeinterlaceBobWeave" xml:space="preserve">
+    <value>Bob-Weave（运动自适应）</value>
+  </data>
+  <data name="DeinterlaceField" xml:space="preserve">
+    <value>单场去拉丝（Field Bob）</value>
+  </data>
+  <data name="DeinterlaceOff" xml:space="preserve">
+    <value>关闭（原始交错）</value>
+  </data>
+  <data name="AspectAuto" xml:space="preserve">
+    <value>自动（SD 4:3 / HD 原比例）</value>
+  </data>
+  <data name="Aspect4x3" xml:space="preserve">
+    <value>4:3</value>
+  </data>
+  <data name="Aspect16x9" xml:space="preserve">
+    <value>16:9（变形宽屏）</value>
+  </data>
+  <data name="Aspect1x1" xml:space="preserve">
+    <value>1:1（点对点像素）</value>
+  </data>
+  <data name="MatrixAuto" xml:space="preserve">
+    <value>自动（SD 601 / HD 709）</value>
+  </data>
+  <data name="MatrixBt601" xml:space="preserve">
+    <value>BT.601</value>
+  </data>
+  <data name="MatrixBt709" xml:space="preserve">
+    <value>BT.709</value>
+  </data>
 </root>

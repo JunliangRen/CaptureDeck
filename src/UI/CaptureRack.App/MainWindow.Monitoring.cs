@@ -1,28 +1,60 @@
 using System.Runtime.InteropServices.WindowsRuntime;
 using CaptureRack.DeckLink;
+using Microsoft.UI;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Controls;
-using Microsoft.UI.Xaml.Media.Imaging;
 using Microsoft.UI.Xaml.Media;
+using Microsoft.UI.Xaml.Media.Imaging;
+using Windows.ApplicationModel.DataTransfer;
 using Windows.Foundation;
 
 namespace CaptureRack.App;
 
 public sealed partial class MainWindow
 {
+    private enum EventFilterMode { All, Drops, Signal }
+
     private IReadOnlyList<CaptureEvent>? visibleEvents;
     private VideoScopes? visibleScopes;
     private StereoLevels? visibleAudio;
-    private readonly SolidColorBrush spectrumGridBrush = new(Windows.UI.Color.FromArgb(255, 57, 60, 66));
-    private readonly SolidColorBrush spectrumAxisBrush = new(Windows.UI.Color.FromArgb(255, 204, 211, 220));
+    private EventFilterMode eventFilter = EventFilterMode.All;
+
+    private readonly SolidColorBrush spectrumGridBrush = new(Windows.UI.Color.FromArgb(255, 42, 49, 61));
+    private readonly SolidColorBrush spectrumAxisBrush = new(Windows.UI.Color.FromArgb(255, 155, 165, 184));
+    private readonly SolidColorBrush eventDangerBrush = new(Windows.UI.Color.FromArgb(255, 239, 68, 68));
+    private readonly SolidColorBrush eventCautionBrush = new(Windows.UI.Color.FromArgb(255, 245, 158, 11));
+    private readonly SolidColorBrush eventLockBrush = new(Windows.UI.Color.FromArgb(255, 34, 197, 94));
+    private readonly SolidColorBrush eventInfoBrush = new(Windows.UI.Color.FromArgb(255, 56, 189, 248));
+
+    // Broadcast meter ballistics state (60Hz smooth decay & peak hold)
+    private double leftTargetDb = -60;
+    private double rightTargetDb = -60;
+    private double leftDisplayedDb = -60;
+    private double rightDisplayedDb = -60;
+    private double leftPeakHoldDb = -60;
+    private double rightPeakHoldDb = -60;
+    private int leftPeakHoldFrames;
+    private int rightPeakHoldFrames;
+    private double meterRailHeight;
+    private double? displayedPhase;
+    private float[]? spectrumPeakHoldValues;
 
     private void ResetMonitoring()
     {
         visibleEvents = null;
         visibleAudio = null;
         visibleScopes = null;
+        displayedPhase = null;
+        spectrumPeakHoldValues = null;
+        leftTargetDb = rightTargetDb = -60;
+        leftDisplayedDb = rightDisplayedDb = -60;
+        leftPeakHoldDb = rightPeakHoldDb = -60;
+        leftPeakHoldFrames = rightPeakHoldFrames = 0;
+
         EventList.ItemsSource = null;
+        EventList.Visibility = Visibility.Collapsed;
+        EventsEmptyState.Visibility = Visibility.Visible;
         EventsSummary.Text = L("EventsEmpty");
         ScopeStatus.Text = L("ScopeWaiting");
         WaveformPlot.Source = null;
@@ -31,15 +63,20 @@ public sealed partial class MainWindow
         AutomationProperties.SetName(WaveformPlot, L("LumaHeading"));
         VectorPlot.Source = null;
         SpectrumTrace.Points.Clear();
+        SpectrumFill.Points.Clear();
+        SpectrumPeakHold.Points.Clear();
         PaintSpectrumScale(null);
-        SpectrumTitle.Text = L("SpectrumTitle");
         SpectrumMidFrequency.Text = SpectrumMaxFrequency.Text = "—";
         LeftMeterFill.ScaleY = RightMeterFill.ScaleY = 0;
+        LeftPeakHoldBar.Opacity = RightPeakHoldBar.Opacity = 0;
         LeftLevel.Text = RightLevel.Text = "—";
         AutomationProperties.SetName(LeftLevel, LocalFormat("PeakUnavailable", L("LeftChannel")));
         AutomationProperties.SetName(RightLevel, LocalFormat("PeakUnavailable", L("RightChannel")));
-        ClipPanel.Visibility = LeftClip.Visibility = RightClip.Visibility = Visibility.Collapsed;
-        PhaseLevel.Text = LocalFormat("Phase", "—");
+        UpdateClipBadge(LeftClipBadge, LeftChannel, "L", 0);
+        UpdateClipBadge(RightClipBadge, RightChannel, "R", 0);
+        PhaseLevel.Text = "—";
+        UpdatePhaseBar(null);
+        UpdateSecondaryInstrumentHeader(GetDisplayedSecondaryInstrument());
     }
 
     private void ShowMonitoring(CaptureStats stats)
@@ -60,33 +97,229 @@ public sealed partial class MainWindow
             PaintSpectrumScale(audio.SpectrumFloorDbfs);
     }
 
+    private void EventsFilter_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is Button { Tag: string tag } && Enum.TryParse<EventFilterMode>(tag, out var filter))
+        {
+            eventFilter = filter;
+            UpdateEventFilterButtons();
+            RenderEvents();
+        }
+    }
+
+    private void UpdateEventFilterButtons()
+    {
+        ApplySegmentState(EventsFilterAllBtn, eventFilter == EventFilterMode.All);
+        ApplySegmentState(EventsFilterDropsBtn, eventFilter == EventFilterMode.Drops);
+        ApplySegmentState(EventsFilterSignalBtn, eventFilter == EventFilterMode.Signal);
+    }
+
+    private void CopyEvents_Click(object sender, RoutedEventArgs e)
+    {
+        if (visibleEvents is not { Count: > 0 })
+            return;
+
+        var lines = visibleEvents.Select(item => $"{item.TimeLabel}\t{LocalEventDescription(item)}");
+        var package = new DataPackage();
+        package.SetText(string.Join(Environment.NewLine, lines));
+        Clipboard.SetContent(package);
+    }
+
+    private string LocalEventDescription(CaptureEvent item) => item.Kind switch
+    {
+        CaptureEventKind.TimestampRegression => L("EventTimestampRegression"),
+        CaptureEventKind.FrameGap => LocalFormat("EventFrameGap", item.MissingFrames),
+        CaptureEventKind.NoInputAtStart => L("EventNoInputAtStart"),
+        CaptureEventKind.SignalLost => L("EventSignalLost"),
+        CaptureEventKind.SignalRestored => L("EventSignalRestored"),
+        _ => item.Description
+    };
+
+    private Brush EventAccentBrush(CaptureEventKind kind) => kind switch
+    {
+        CaptureEventKind.TimestampRegression or CaptureEventKind.FrameGap => eventDangerBrush,
+        CaptureEventKind.NoInputAtStart or CaptureEventKind.SignalLost => eventCautionBrush,
+        CaptureEventKind.SignalRestored => eventLockBrush,
+        _ => eventInfoBrush
+    };
+
     private void RenderEvents()
     {
-        EventsSummary.Text = L(visibleEvents is { Count: > 0 } ? "EventsRecent" : "EventsEmpty");
-        EventList.ItemsSource = visibleEvents?.Select(item => new EventRow(item.TimeLabel, item.Kind switch
+        UpdateEventFilterButtons();
+        var filtered = visibleEvents?.Where(item => eventFilter switch
         {
-            CaptureEventKind.TimestampRegression => L("EventTimestampRegression"),
-            CaptureEventKind.FrameGap => LocalFormat("EventFrameGap", item.MissingFrames),
-            CaptureEventKind.NoInputAtStart => L("EventNoInputAtStart"),
-            CaptureEventKind.SignalLost => L("EventSignalLost"),
-            CaptureEventKind.SignalRestored => L("EventSignalRestored"),
-            _ => item.Description
-        })).ToArray();
+            EventFilterMode.Drops => item.Kind is CaptureEventKind.FrameGap or CaptureEventKind.TimestampRegression,
+            EventFilterMode.Signal => item.Kind is CaptureEventKind.NoInputAtStart or CaptureEventKind.SignalLost or CaptureEventKind.SignalRestored,
+            _ => true
+        }).Select(item => new EventRow(item.TimeLabel, LocalEventDescription(item), EventAccentBrush(item.Kind))).ToArray();
+
+        var hasRows = filtered is { Length: > 0 };
+        EventsSummary.Text = L(visibleEvents is { Count: > 0 } ? "EventsRecent" : "EventsEmpty");
+        EventsEmptyState.Visibility = hasRows ? Visibility.Collapsed : Visibility.Visible;
+        EventList.Visibility = hasRows ? Visibility.Visible : Visibility.Collapsed;
+        EventList.ItemsSource = filtered;
+        if (GetDisplayedSecondaryInstrument() == SplitSecondaryInstrument.Events)
+            UpdateSecondaryInstrumentHeader(SplitSecondaryInstrument.Events);
     }
 
     private void RenderStereoLevels(StereoLevels audio)
     {
-        SpectrumTitle.Text = LocalFormat("SpectrumInput", audio.SampleBits, audio.SampleRate / 1000d);
         SpectrumMidFrequency.Text = (audio.SampleRate / 4000d).ToString("0.##", settingsCulture) + " kHz";
         SpectrumMaxFrequency.Text = (audio.SampleRate / 2000d).ToString("0.##", settingsCulture) + " kHz";
-        ShowLevel("LeftChannel", audio.LeftPeak, audio.LeftClips, LeftMeterFill, LeftLevel, LeftClip);
-        ShowLevel("RightChannel", audio.RightPeak, audio.RightClips, RightMeterFill, RightLevel, RightClip);
-        ClipPanel.Visibility = audio.LeftClips > 0 || audio.RightClips > 0
-            ? Visibility.Visible : Visibility.Collapsed;
-        PhaseLevel.Text = LocalFormat("Phase", audio.PhaseCorrelation?.ToString("+0.00;-0.00;0.00", settingsCulture) ?? "—");
+
+        leftTargetDb = audio.LeftPeak > 0 ? Math.Clamp(20 * Math.Log10(audio.LeftPeak), -60, 0) : -60;
+        rightTargetDb = audio.RightPeak > 0 ? Math.Clamp(20 * Math.Log10(audio.RightPeak), -60, 0) : -60;
+
+        LeftLevel.Text = audio.LeftPeak > 0 ? (20 * Math.Log10(audio.LeftPeak)).ToString("0.0", settingsCulture) : "−∞";
+        RightLevel.Text = audio.RightPeak > 0 ? (20 * Math.Log10(audio.RightPeak)).ToString("0.0", settingsCulture) : "−∞";
+        AutomationProperties.SetName(LeftLevel, LocalFormat("PeakValue", L("LeftChannel"), LeftLevel.Text));
+        AutomationProperties.SetName(RightLevel, LocalFormat("PeakValue", L("RightChannel"), RightLevel.Text));
+
+        UpdateClipBadge(LeftClipBadge, LeftChannel, "L", audio.LeftClips);
+        UpdateClipBadge(RightClipBadge, RightChannel, "R", audio.RightClips);
+
+        displayedPhase = audio.PhaseCorrelation;
+        PhaseLevel.Text = audio.PhaseCorrelation?.ToString("+0.00;-0.00;0.00", settingsCulture) ?? "—";
+        UpdatePhaseBar(audio.PhaseCorrelation);
 
         if (audio.Spectrum is { } spectrum)
             PaintSpectrum(spectrum, audio.SpectrumFloorDbfs);
+
+        if (GetDisplayedSecondaryInstrument() == SplitSecondaryInstrument.Spectrum)
+            UpdateSecondaryInstrumentHeader(SplitSecondaryInstrument.Spectrum);
+    }
+
+    private void UpdateClipBadge(Border badge, TextBlock label, string channelCode, long clips)
+    {
+        if (clips > 0)
+        {
+            badge.Background = ThemeBrush("StudioDangerBrush");
+            badge.BorderBrush = ThemeBrush("StudioDangerBrush");
+            label.Foreground = new SolidColorBrush(Colors.White);
+            label.Text = "CLIP";
+            var tip = LocalFormat("ClipCount", L(channelCode == "L" ? "LeftChannel" : "RightChannel"), clips);
+            ToolTipService.SetToolTip(badge, tip);
+        }
+        else
+        {
+            badge.Background = ThemeBrush("StudioMeterTrackBrush");
+            badge.BorderBrush = ThemeBrush("StudioSubtleBorderBrush");
+            label.Foreground = ThemeBrush("StudioTextSecondaryBrush");
+            label.Text = channelCode;
+            ToolTipService.SetToolTip(badge, L(channelCode == "L" ? "LeftChannel" : "RightChannel"));
+        }
+    }
+
+    private void MeterRail_SizeChanged(object sender, SizeChangedEventArgs e)
+    {
+        meterRailHeight = Math.Max(0, e.NewSize.Height - 4);
+        ApplyMeterTransforms();
+    }
+
+    private void PhaseBarRail_SizeChanged(object sender, SizeChangedEventArgs e) =>
+        UpdatePhaseBar(displayedPhase);
+
+    private void UpdatePhaseBar(double? correlation)
+    {
+        var width = PhaseBarRail.ActualWidth;
+        if (width <= 2 || correlation is not { } value)
+        {
+            PhaseIndicatorFill.Width = 0;
+            return;
+        }
+
+        var clamped = Math.Clamp(value, -1, 1);
+        var center = width / 2;
+        var span = Math.Max(2, Math.Abs(clamped) * (center - 1));
+        PhaseIndicatorFill.Width = span;
+        PhaseIndicatorFill.Margin = clamped >= 0
+            ? new Thickness(center, 0, 0, 0)
+            : new Thickness(center - span, 0, 0, 0);
+        PhaseIndicatorFill.Background = clamped >= 0.25
+            ? ThemeBrush("StudioSignalLockBrush")
+            : clamped >= -0.15
+                ? ThemeBrush("StudioCautionBrush")
+                : ThemeBrush("StudioDangerBrush");
+    }
+
+    private void UpdateMeterBallistics()
+    {
+        // Fast attack, broadcast ~24 dB/s gravity decay, 1.2s peak hold (~72 frames at 60Hz)
+        const double decayPerFrame = 0.42;
+        const double peakHoldDecay = 0.22;
+        const int holdFrames = 72;
+
+        StepChannel(leftTargetDb, ref leftDisplayedDb, ref leftPeakHoldDb, ref leftPeakHoldFrames, decayPerFrame, peakHoldDecay, holdFrames);
+        StepChannel(rightTargetDb, ref rightDisplayedDb, ref rightPeakHoldDb, ref rightPeakHoldFrames, decayPerFrame, peakHoldDecay, holdFrames);
+        ApplyMeterTransforms();
+    }
+
+    private static void StepChannel(double targetDb, ref double displayedDb, ref double peakHoldDb, ref int peakHoldFrames,
+        double decayPerFrame, double peakHoldDecay, int holdFrames)
+    {
+        displayedDb = targetDb >= displayedDb
+            ? targetDb
+            : Math.Max(targetDb, displayedDb - decayPerFrame);
+
+        if (displayedDb >= peakHoldDb)
+        {
+            peakHoldDb = displayedDb;
+            peakHoldFrames = holdFrames;
+        }
+        else if (peakHoldFrames > 0)
+        {
+            peakHoldFrames--;
+        }
+        else
+        {
+            peakHoldDb = Math.Max(displayedDb, peakHoldDb - peakHoldDecay);
+        }
+    }
+
+    private void ApplyMeterTransforms()
+    {
+        var leftNorm = Math.Clamp((60 + leftDisplayedDb) / 60, 0, 1);
+        var rightNorm = Math.Clamp((60 + rightDisplayedDb) / 60, 0, 1);
+        LeftMeterFill.ScaleY = leftNorm;
+        RightMeterFill.ScaleY = rightNorm;
+
+        var leftPeakNorm = Math.Clamp((60 + leftPeakHoldDb) / 60, 0, 1);
+        var rightPeakNorm = Math.Clamp((60 + rightPeakHoldDb) / 60, 0, 1);
+        LeftPeakHoldBar.Opacity = leftPeakNorm > 0.01 ? 0.92 : 0;
+        RightPeakHoldBar.Opacity = rightPeakNorm > 0.01 ? 0.92 : 0;
+        LeftPeakHoldOffset.Y = -leftPeakNorm * meterRailHeight;
+        RightPeakHoldOffset.Y = -rightPeakNorm * meterRailHeight;
+    }
+
+    private SplitSecondaryInstrument GetDisplayedSecondaryInstrument() => workspaceLayout switch
+    {
+        WorkspaceLayoutMode.Scopes => SplitSecondaryInstrument.Vector,
+        WorkspaceLayoutMode.Spectrum => SplitSecondaryInstrument.Spectrum,
+        WorkspaceLayoutMode.Events => SplitSecondaryInstrument.Events,
+        _ => splitSecondary
+    };
+
+    private void UpdateSecondaryInstrumentHeader(SplitSecondaryInstrument instrument)
+    {
+        switch (instrument)
+        {
+            case SplitSecondaryInstrument.Vector:
+                SecondaryInstrumentTitle.Text = L("VectorHeading");
+                SecondaryInstrumentSubtitle.Text = L("VectorAxes");
+                break;
+            case SplitSecondaryInstrument.Spectrum:
+                SecondaryInstrumentTitle.Text = L("SpectrumTitle");
+                SecondaryInstrumentSubtitle.Text = visibleAudio is { } audio
+                    ? $"{audio.SampleBits}-bit · {audio.SampleRate / 1000d:0.##} kHz"
+                    : "";
+                break;
+            case SplitSecondaryInstrument.Events:
+                SecondaryInstrumentTitle.Text = L("EventsTab");
+                SecondaryInstrumentSubtitle.Text = visibleEvents is { Count: > 0 }
+                    ? LocalFormat("EventsCountBadge", visibleEvents.Count)
+                    : "";
+                break;
+        }
     }
 
     private void RefreshLocalizedMonitoring()
@@ -107,14 +340,16 @@ public sealed partial class MainWindow
         }
         else
         {
-            SpectrumTitle.Text = L("SpectrumTitle");
-            PhaseLevel.Text = LocalFormat("Phase", "—");
+            PhaseLevel.Text = "—";
             AutomationProperties.SetName(LeftLevel, LocalFormat("PeakUnavailable", L("LeftChannel")));
             AutomationProperties.SetName(RightLevel, LocalFormat("PeakUnavailable", L("RightChannel")));
+            UpdateClipBadge(LeftClipBadge, LeftChannel, "L", 0);
+            UpdateClipBadge(RightClipBadge, RightChannel, "R", 0);
         }
+        UpdateSecondaryInstrumentHeader(GetDisplayedSecondaryInstrument());
     }
 
-    private sealed record EventRow(string TimeLabel, string Description);
+    private sealed record EventRow(string TimeLabel, string Description, Brush AccentBrush);
 
     private void ShowVideoScopes()
     {
@@ -145,17 +380,6 @@ public sealed partial class MainWindow
         ScopeStatus.Text = L(scopes.NoInput ? "ScopeNoInput" : "ScopeLive");
     }
 
-    private void ShowLevel(string channel, double peak, long clips, ScaleTransform meter, TextBlock label, TextBlock clip)
-    {
-        var db = peak > 0 ? 20 * Math.Log10(peak) : double.NegativeInfinity;
-        meter.ScaleY = Math.Clamp((60 + db) / 60, 0, 1);
-        label.Text = peak > 0 ? db.ToString("0.0", settingsCulture) : "−∞";
-        AutomationProperties.SetName(label, LocalFormat("PeakValue", L(channel), label.Text));
-        clip.Visibility = clips > 0 ? Visibility.Visible : Visibility.Collapsed;
-        clip.Text = LocalFormat("ClipCount", L(channel), clips);
-        ToolTipService.SetToolTip(clip, clip.Text);
-    }
-
     private void SpectrumPlot_SizeChanged(object sender, SizeChangedEventArgs e)
     {
         PaintSpectrumScale(visibleAudio?.SpectrumFloorDbfs);
@@ -172,14 +396,14 @@ public sealed partial class MainWindow
         if (floorDbfs is not < 0 || width <= 0 || height <= 0)
             return;
 
-        // Use round intermediate ticks and preserve the actual one-LSB floor.
         var floor = floorDbfs.Value;
         var step = Math.Max(1, Math.Round(-floor / 30) * 10);
         var levels = new[] { 0, -step, -2 * step, floor };
         var labels = levels.Select(level => new TextBlock
         {
             Text = level.ToString("0.#", settingsCulture),
-            FontSize = 12,
+            FontSize = 10,
+            FontFamily = new FontFamily("Cascadia Mono, Consolas"),
             Foreground = spectrumAxisBrush,
             TextAlignment = TextAlignment.Right
         }).ToArray();
@@ -187,21 +411,30 @@ public sealed partial class MainWindow
             label.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
 
         var labelWidth = Math.Ceiling(labels.Max(label => label.DesiredSize.Width));
-        // Include the axis canvas margins and enough space for the dBFS unit underneath.
-        SpectrumLevelColumn.Width = new GridLength(Math.Max(32, labelWidth + 10));
+        SpectrumLevelColumn.Width = new GridLength(Math.Max(34, labelWidth + 10));
 
         for (var i = 0; i < levels.Length; i++)
         {
             var y = SpectrumLevelY(levels[i], floor, height);
             SpectrumGridLines.Children.Add(new Microsoft.UI.Xaml.Shapes.Line
             {
-                X1 = 1, X2 = 1 + width, Y1 = y, Y2 = y, Stroke = spectrumGridBrush
+                X1 = 1, X2 = 1 + width, Y1 = y, Y2 = y, Stroke = spectrumGridBrush, StrokeThickness = 1
             });
 
             var label = labels[i];
-            label.Width = SpectrumLevelColumn.Width.Value - 10;
-            Canvas.SetTop(label, y - label.DesiredSize.Height / 2);
+            label.Width = SpectrumLevelColumn.Width.Value - 8;
+            Canvas.SetTop(label, Math.Max(0, y - label.DesiredSize.Height / 2));
             SpectrumLevelAxis.Children.Add(label);
+        }
+
+        // Subtle vertical quarter frequency guides
+        for (var q = 1; q <= 3; q++)
+        {
+            var x = 1 + width * q / 4.0;
+            SpectrumGridLines.Children.Add(new Microsoft.UI.Xaml.Shapes.Line
+            {
+                X1 = x, X2 = x, Y1 = 1, Y2 = 1 + height, Stroke = spectrumGridBrush, StrokeThickness = 1, Opacity = 0.55
+            });
         }
     }
 
@@ -212,17 +445,39 @@ public sealed partial class MainWindow
     {
         var width = SpectrumPlot.ActualWidth - 2;
         var height = SpectrumPlot.ActualHeight - 2;
-        if (width <= 0 || height <= 0)
+        if (width <= 0 || height <= 0 || spectrum.Count < 2)
             return;
 
-        var points = new PointCollection();
+        if (spectrumPeakHoldValues is null || spectrumPeakHoldValues.Length != spectrum.Count)
+        {
+            spectrumPeakHoldValues = new float[spectrum.Count];
+            Array.Fill(spectrumPeakHoldValues, (float)floorDbfs);
+        }
+
+        var tracePoints = new PointCollection();
+        var fillPoints = new PointCollection();
+        var peakPoints = new PointCollection();
+        var bottomY = 1 + height;
+        fillPoints.Add(new Point(1, bottomY));
+
         for (var bin = 0; bin < spectrum.Count; bin++)
         {
             var x = 1 + bin * width / (spectrum.Count - 1);
-            var y = SpectrumLevelY(spectrum[bin], floorDbfs, height);
-            points.Add(new Point(x, y));
+            var value = spectrum[bin];
+            var y = SpectrumLevelY(value, floorDbfs, height);
+            tracePoints.Add(new Point(x, y));
+            fillPoints.Add(new Point(x, y));
+
+            var held = spectrumPeakHoldValues[bin];
+            held = value >= held ? value : (float)Math.Max(floorDbfs, held - 0.65f);
+            spectrumPeakHoldValues[bin] = held;
+            peakPoints.Add(new Point(x, SpectrumLevelY(held, floorDbfs, height)));
         }
-        SpectrumTrace.Points = points;
+
+        fillPoints.Add(new Point(1 + width, bottomY));
+        SpectrumTrace.Points = tracePoints;
+        SpectrumFill.Points = fillPoints;
+        SpectrumPeakHold.Points = peakPoints;
     }
 
     private static void PaintPlot(Image target, byte[] pixels, int width, int height)

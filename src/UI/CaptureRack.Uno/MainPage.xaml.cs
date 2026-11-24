@@ -144,7 +144,7 @@ public sealed partial class MainPage : Page
         var positions = firstErrors.Where(error => error.Index.HasValue)
             .Select(error => $"{error.Label} · packet {error.Index:N0}").ToArray();
         TsFirstErrors.Text = $"First affected packets (zero-based)\n{string.Join("\n", positions)}";
-        TsFirstErrors.Visibility = VisibleWhen(positions.Length > 0);
+        TsFirstErrorsCard.Visibility = VisibleWhen(positions.Length > 0);
         TsResults.Visibility = Visibility.Visible;
 
         if (!report.Success)

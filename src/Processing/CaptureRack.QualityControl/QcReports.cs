@@ -42,6 +42,9 @@ public static class QcReports
         Converters = { new System.Text.Json.Serialization.JsonStringEnumConverter() }
     };
 
+    public static (string? FfmpegPath, string? FfprobePath) FindTools() =>
+        (FindTool("ffmpeg"), FindTool("ffprobe"));
+
     public static async Task<QcResult> RunAsync(string inputPath, QcCaptureLog? capture = null,
         Action<string>? progress = null, CancellationToken cancellation = default, Action<QcStage>? stageChanged = null)
     {

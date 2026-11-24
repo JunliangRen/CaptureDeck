@@ -12,6 +12,12 @@ public static class DeckLinkCapture
     private const uint NoConversion = 0x6E6F6E65;
     private const uint VideoInputConnection = 0x7669636E;
     private const uint AudioInputConnection = 0x6169636E;
+    private const uint AnalogVideoInputFlags = 0x61766966; // avif
+    private const uint AnalogAudioConsumerLevels = 0x6161636C; // aacl
+    private const uint AnalogAudioInputScaleChannel1 = 0x61697331; // ais1
+    private const uint AnalogAudioInputScaleChannel2 = 0x61697332; // ais2
+    private const long AnalogFlagCompositeSetup75 = 1L << 0;
+    private const long AnalogFlagComponentBetacamLevels = 1L << 1;
     private const uint DetectedInputMode = 0x6476696D;
     private const uint FormatDetection = 1;
     private const uint SupportsInputFormatDetection = 0x696E6664;
@@ -52,7 +58,8 @@ public static class DeckLinkCapture
         Action<VideoMode, CaptureStats> progress, CancellationToken cancellation,
         CaptureRouting? routing = null, PreviewFeed? preview = null,
         CapturePixelFormat pixelFormat = CapturePixelFormat.V210, string? recordingPath = null,
-        CaptureAudioFormat audioFormat = CaptureAudioFormat.Pcm16, PreviewRecorder? previewRecorder = null)
+        CaptureAudioFormat audioFormat = CaptureAudioFormat.Pcm16, PreviewRecorder? previewRecorder = null,
+        AnalogInputOptions? analogOptions = null, LocalAudioMonitor? localAudioMonitor = null)
     {
         if (recordingPath is not null && requestedMode is null)
             throw new InvalidOperationException("Choose a fixed input mode before recording.");
@@ -69,10 +76,10 @@ public static class DeckLinkCapture
             if (device is not IDeckLinkInput input)
                 throw new InvalidOperationException($"Device {index} has no video input.");
 
-            using var route = routing is { } selected ? new InputRoutingScope(device, selected) : null;
+            using var route = routing is { } selected ? new InputRoutingScope(device, selected, analogOptions) : null;
             var info = ReadDevice(index, device, input, includeSources: false, pixelFormat);
             result = RunCapture(device, input, info, requestedMode, duration, progress, cancellation, preview,
-                pixelFormat, recordingPath, audioFormat, previewRecorder, routing?.Video ?? 0);
+                pixelFormat, recordingPath, audioFormat, previewRecorder, routing?.Video ?? 0, localAudioMonitor);
             return false;
         });
         return result ?? throw new InvalidOperationException($"DeckLink device {index} was not found.");
@@ -137,12 +144,21 @@ public static class DeckLinkCapture
         Check(device.GetDisplayName(out var name), "GetDisplayName");
         uint video = 0;
         uint audio = 0;
+        var supportsAnalogVideoFlags = false;
+        var supportsConsumerAudioLevels = false;
+        var supportsAnalogAudioGain = false;
         if (device is IDeckLinkConfiguration configuration)
         {
             if (configuration.GetInt(VideoInputConnection, out var videoValue) == 0)
                 video = (uint)videoValue;
             if (configuration.GetInt(AudioInputConnection, out var audioValue) == 0)
                 audio = (uint)audioValue;
+            if (includeSources)
+            {
+                supportsAnalogVideoFlags = configuration.GetInt(AnalogVideoInputFlags, out _) == 0;
+                supportsConsumerAudioLevels = configuration.GetFlag(AnalogAudioConsumerLevels, out _) == 0;
+                supportsAnalogAudioGain = configuration.GetFloat(AnalogAudioInputScaleChannel1, out _) == 0;
+            }
         }
 
         var attributes = device as IDeckLinkProfileAttributes;
@@ -170,7 +186,12 @@ public static class DeckLinkCapture
         long? persistentId = attributes is not null && attributes.GetInt(persistentIdAttribute, out var idValue) == 0
             ? idValue : null;
         return new(index, name, DescribeVideo(video), DescribeAudio(audio), currentModes, true, supportsDetection,
-            videoSources, audioSources, device is IDeckLinkEncoderInput) { PersistentId = persistentId };
+            videoSources, audioSources, device is IDeckLinkEncoderInput)
+        {
+            PersistentId = persistentId,
+            AnalogCapabilities = new AnalogInputCapabilities(
+                supportsAnalogVideoFlags, supportsConsumerAudioLevels, supportsAnalogAudioGain)
+        };
     }
 
     private static IEnumerable<uint> Connections(long mask)
@@ -249,7 +270,7 @@ public static class DeckLinkCapture
     private static CaptureStats RunCapture(IDeckLink device, IDeckLinkInput input, CaptureDevice info,
         uint? requestedMode, TimeSpan? duration, Action<VideoMode, CaptureStats> progress, CancellationToken stop,
         PreviewFeed? preview, CapturePixelFormat format, string? recordingPath, CaptureAudioFormat audioFormat,
-        PreviewRecorder? previewRecorder, uint videoConnection)
+        PreviewRecorder? previewRecorder, uint videoConnection, LocalAudioMonitor? localAudioMonitor)
     {
         var modes = info.Modes;
         if (modes.Count == 0)
@@ -270,7 +291,7 @@ public static class DeckLinkCapture
         while (true)
         {
             var stats = Capture(input, mode, duration, detect, progress, stop, preview, format, recordingPath,
-                audioFormat, previewRecorder, videoConnection, automaticMode: requestedMode is null);
+                audioFormat, previewRecorder, videoConnection, automaticMode: requestedMode is null, localAudioMonitor);
             if (stats.Error is not null || stats.NextMode is not { } next || stop.IsCancellationRequested)
                 return stats;
 
@@ -284,7 +305,7 @@ public static class DeckLinkCapture
     private static CaptureStats Capture(IDeckLinkInput input, VideoMode mode, TimeSpan? duration,
         bool detect, Action<VideoMode, CaptureStats> progress, CancellationToken stop, PreviewFeed? preview,
         CapturePixelFormat format, string? recordingPath, CaptureAudioFormat audioFormat,
-        PreviewRecorder? previewRecorder, uint videoConnection, bool automaticMode)
+        PreviewRecorder? previewRecorder, uint videoConnection, bool automaticMode, LocalAudioMonitor? localAudioMonitor)
     {
         var empty = new CaptureStats();
         if (stop.IsCancellationRequested)
@@ -292,7 +313,7 @@ public static class DeckLinkCapture
 
         using var recording = recordingPath is null ? null : new MovRecording(recordingPath, mode, format, audioFormat);
         var lumaScaleBits = preview is null ? 0 : ReadMaximumVideoBits(input, videoConnection, mode.Id, format);
-        var callback = new CaptureCallback(preview, format, audioFormat, mode, recording, automaticMode);
+        var callback = new CaptureCallback(preview, format, audioFormat, mode, recording, automaticMode, localAudioMonitor);
         Check(input.SetCallback(callback), "SetCallback");
         try
         {
@@ -421,10 +442,18 @@ public static class DeckLinkCapture
         private readonly IDeckLinkConfiguration configuration;
         private readonly long originalVideo;
         private readonly long originalAudio;
+        private long originalAnalogFlags;
+        private int originalConsumerAudio;
+        private double originalGainLeft;
+        private double originalGainRight;
         private bool videoChanged;
         private bool audioChanged;
+        private bool analogFlagsChanged;
+        private bool consumerAudioChanged;
+        private bool gainLeftChanged;
+        private bool gainRightChanged;
 
-        public InputRoutingScope(IDeckLink device, CaptureRouting routing)
+        public InputRoutingScope(IDeckLink device, CaptureRouting routing, AnalogInputOptions? analog)
         {
             configuration = device as IDeckLinkConfiguration
                 ?? throw new InvalidOperationException("This DeckLink device does not expose input routing.");
@@ -436,6 +465,9 @@ public static class DeckLinkCapture
                 videoChanged = true;
                 Check(configuration.SetInt(AudioInputConnection, routing.Audio), "Select audio input");
                 audioChanged = true;
+
+                if (analog is not null)
+                    ApplyAnalogOptions(routing, analog);
             }
             catch
             {
@@ -444,10 +476,78 @@ public static class DeckLinkCapture
             }
         }
 
+        private void ApplyAnalogOptions(CaptureRouting routing, AnalogInputOptions analog)
+        {
+            // Analog video flags (IRE 7.5 setup for Composite/S-Video, Betacam levels for Component).
+            var isCompositeOrSVideo = routing.Video is 16 or 32;
+            var isComponent = routing.Video == 8;
+            if (((isCompositeOrSVideo && analog.NtscIre != AnalogNtscIreMode.Driver) ||
+                (isComponent && analog.ComponentLevel != AnalogComponentLevelMode.Driver)) &&
+                configuration.GetInt(AnalogVideoInputFlags, out originalAnalogFlags) == 0)
+            {
+                var updated = originalAnalogFlags;
+                if (isCompositeOrSVideo && analog.NtscIre != AnalogNtscIreMode.Driver)
+                {
+                    updated = analog.NtscIre == AnalogNtscIreMode.Ire75
+                        ? updated | AnalogFlagCompositeSetup75
+                        : updated & ~AnalogFlagCompositeSetup75;
+                }
+                if (isComponent && analog.ComponentLevel != AnalogComponentLevelMode.Driver)
+                {
+                    updated = analog.ComponentLevel == AnalogComponentLevelMode.Betacam
+                        ? updated | AnalogFlagComponentBetacamLevels
+                        : updated & ~AnalogFlagComponentBetacamLevels;
+                }
+                if (updated != originalAnalogFlags && configuration.SetInt(AnalogVideoInputFlags, updated) == 0)
+                    analogFlagsChanged = true;
+            }
+
+            // Analog audio consumer/pro level & per-channel hardware gain (Analog / XLR / RCA).
+            var isAnalogAudio = routing.Audio is 4 or 8 or 16;
+            if (!isAnalogAudio)
+                return;
+
+            if (analog.AudioLevel != AnalogAudioLevelMode.Driver &&
+                configuration.GetFlag(AnalogAudioConsumerLevels, out originalConsumerAudio) == 0)
+            {
+                var consumerFlag = analog.AudioLevel == AnalogAudioLevelMode.Consumer ? 1 : 0;
+                if (consumerFlag != originalConsumerAudio &&
+                    configuration.SetFlag(AnalogAudioConsumerLevels, consumerFlag) == 0)
+                    consumerAudioChanged = true;
+            }
+
+            // Hardware gain scaling applies when consumer max-gain mode is not forced.
+            if (analog.AudioLevel != AnalogAudioLevelMode.Consumer)
+            {
+                if (analog.GainLeftDb is { } leftDb &&
+                    configuration.GetFloat(AnalogAudioInputScaleChannel1, out originalGainLeft) == 0)
+                {
+                    var clamped = Math.Clamp(leftDb, -12.0, 12.0);
+                    if (configuration.SetFloat(AnalogAudioInputScaleChannel1, clamped) == 0)
+                        gainLeftChanged = true;
+                }
+                if (analog.GainRightDb is { } rightDb &&
+                    configuration.GetFloat(AnalogAudioInputScaleChannel2, out originalGainRight) == 0)
+                {
+                    var clamped = Math.Clamp(rightDb, -12.0, 12.0);
+                    if (configuration.SetFloat(AnalogAudioInputScaleChannel2, clamped) == 0)
+                        gainRightChanged = true;
+                }
+            }
+        }
+
         public void Dispose()
         {
             try
             {
+                if (gainLeftChanged)
+                    configuration.SetFloat(AnalogAudioInputScaleChannel1, originalGainLeft);
+                if (gainRightChanged)
+                    configuration.SetFloat(AnalogAudioInputScaleChannel2, originalGainRight);
+                if (consumerAudioChanged)
+                    configuration.SetFlag(AnalogAudioConsumerLevels, originalConsumerAudio);
+                if (analogFlagsChanged)
+                    configuration.SetInt(AnalogVideoInputFlags, originalAnalogFlags);
                 // Video routing can affect the audio routing. Restore it first.
                 if (videoChanged)
                     Check(configuration.SetInt(VideoInputConnection, originalVideo), "Restore previous video input");
@@ -461,12 +561,33 @@ public static class DeckLinkCapture
     }
 }
 
+public sealed record AnalogInputCapabilities(
+    bool SupportsAnalogVideoFlags,
+    bool SupportsConsumerAudioLevels,
+    bool SupportsAnalogAudioGain);
+
+public enum AnalogNtscIreMode { Driver, Ire0, Ire75 }
+
+public enum AnalogComponentLevelMode { Driver, Smpte, Betacam }
+
+public enum AnalogAudioLevelMode { Driver, Pro, Consumer }
+
+public sealed record AnalogInputOptions
+{
+    public AnalogNtscIreMode NtscIre { get; init; } = AnalogNtscIreMode.Driver;
+    public AnalogComponentLevelMode ComponentLevel { get; init; } = AnalogComponentLevelMode.Driver;
+    public AnalogAudioLevelMode AudioLevel { get; init; } = AnalogAudioLevelMode.Driver;
+    public double? GainLeftDb { get; init; }
+    public double? GainRightDb { get; init; }
+}
+
 public sealed record CaptureDevice(int Index, string Name, string VideoInput, string AudioInput,
     IReadOnlyList<VideoMode> Modes, bool HasVideoInput, bool SupportsFormatDetection,
     IReadOnlyList<VideoInputSource> VideoSources, IReadOnlyList<AudioInputSource> AudioSources,
     bool HasHardwareEncoderInput)
 {
     public long? PersistentId { get; init; }
+    public AnalogInputCapabilities AnalogCapabilities { get; init; } = new(false, false, false);
 }
 
 public sealed record VideoInputSource(uint Id, string Name, IReadOnlyList<VideoMode> TenBitModes,

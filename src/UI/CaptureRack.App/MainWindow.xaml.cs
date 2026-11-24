@@ -1,23 +1,35 @@
 using System.Diagnostics;
 using System.Globalization;
+using System.Numerics;
 using System.Runtime.InteropServices;
 using System.Runtime.InteropServices.WindowsRuntime;
-using Microsoft.UI.Dispatching;
-using Microsoft.UI.Xaml.Media.Imaging;
 using CaptureRack.Core;
 using CaptureRack.DeckLink;
 using CaptureRack.QualityControl;
+using Microsoft.UI;
 using Microsoft.UI.Composition;
+using Microsoft.UI.Composition.SystemBackdrops;
+using Microsoft.UI.Dispatching;
+using Microsoft.UI.Text;
 using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Hosting;
+using Microsoft.UI.Xaml.Input;
+using Microsoft.UI.Xaml.Media;
+using Microsoft.UI.Xaml.Media.Imaging;
 using Microsoft.Windows.Storage.Pickers;
+using Windows.ApplicationModel.DataTransfer;
+using Windows.Storage;
 
 namespace CaptureRack.App;
 
 public sealed partial class MainWindow : Window
 {
+    private enum WorkspaceLayoutMode { Focus, Split, Scopes, Spectrum, Events }
+    private enum SplitSecondaryInstrument { Vector, Spectrum, Events }
+    private enum ActiveAppPage { Capture, QcCenter, Settings }
+
     private static readonly DeckLinkBackend DeckLink = new CaptureBackendRegistry(new DeckLinkBackend())
             .Get<DeckLinkBackend>(DeckLinkBackend.BackendId);
     private CancellationTokenSource? captureStop;
@@ -29,21 +41,22 @@ public sealed partial class MainWindow : Window
     private readonly Stopwatch recordingClock = new();
     private long displayedRecordingSeconds;
     private long displayedPreviewSkips;
+    private long lastMissingFrames;
     private string? qcOutputPath;
     private string? statusFilePath;
     private QcResult? lastQcResult;
+    private QcStage? activeQcStage;
     private PreviewFeed? preview;
     private PreviewFrame? previewFrame;
     private WriteableBitmap? previewBitmap;
     private Stream? bitmapPixels;
     private const double DefaultPreviewAspectRatio = 4d / 3;
-    private const double StereoMeterGap = 12;
     private double previewAspectRatio = DefaultPreviewAspectRatio;
     private VideoMode? observedPreviewMode;
     private bool observedPreviewModeIsFallback;
     private (long? DeviceId, int? DeviceIndex, uint? Source, uint? Mode, CapturePixelFormat? Format) previewSelection;
-    private double previewAvailableWidth;
-    private double previewHeightLimit;
+    private double previewBoxWidth;
+    private double previewBoxHeight;
     private bool loading;
     private bool closing;
     private bool closeAfterQc;
@@ -53,6 +66,17 @@ public sealed partial class MainWindow : Window
     private PreviewRecorder? previewRecorder;
     private DateTimeOffset recordingStarted;
     private bool pickingOutput;
+
+    private ActiveAppPage activePage = ActiveAppPage.Capture;
+    private ActiveAppPage pageBeforeSettings = ActiveAppPage.Capture;
+    private WorkspaceLayoutMode workspaceLayout = WorkspaceLayoutMode.Split;
+    private SplitSecondaryInstrument splitSecondary = SplitSecondaryInstrument.Vector;
+    private bool inspectorPinned = true;
+    private bool inspectorOverlayOpen;
+    private bool showSafeArea;
+    private double lastWindowWidth = 1320;
+    private CapturePixelFormat selectedVideoFormat = CapturePixelFormat.V210;
+    private CaptureAudioFormat selectedAudioFormat = CaptureAudioFormat.Pcm16;
 
     public MainWindow()
     {
@@ -64,101 +88,516 @@ public sealed partial class MainWindow : Window
             previewHoverReady = true;
             UpdatePreviewFullscreenButton();
         };
+        fullscreenIdleTimer = DispatcherQueue.CreateTimer();
+        fullscreenIdleTimer.Interval = TimeSpan.FromSeconds(2);
+        fullscreenIdleTimer.IsRepeating = false;
+        fullscreenIdleTimer.Tick += (_, _) =>
+        {
+            fullscreenBarVisible = false;
+            UpdateFullscreenMiniBar();
+        };
+
         InitializeComponent();
-        MonitorSelector.SelectedItem = PreviewTab;
+        ConfigureWindowChrome();
         InitializeSettings();
         InitializeSettingsInput();
+
         previewTimer = DispatcherQueue.CreateTimer();
         previewTimer.Interval = TimeSpan.FromMilliseconds(1000d / 60);
         previewTimer.Tick += (_, _) =>
         {
             PresentPreview();
             ShowVideoScopes();
+            UpdateMeterBallistics();
             if (recordingClock.IsRunning)
                 UpdateRecordingClock();
         };
         detectedModeTimer = DispatcherQueue.CreateTimer();
         detectedModeTimer.Interval = TimeSpan.FromSeconds(2);
         detectedModeTimer.Tick += async (_, _) => await RefreshDetectedPreviewModeAsync();
-        AppWindow.Resize(new Windows.Graphics.SizeInt32(1100, 835));
+
+        ResizeWindowForDpi(1320, 840);
         AppWindow.Closing += OnClosing;
         ((FrameworkElement)Content).Loaded += OnLoaded;
     }
 
-    private void Viewport_SizeChanged(object sender, SizeChangedEventArgs e)
+    private void ResizeWindowForDpi(int logicalWidth, int logicalHeight)
     {
-        var padding = WorkspacePage.Padding;
-        var availableWidth = e.NewSize.Width - padding.Left - padding.Right;
-        var wideSettings = availableWidth >= 800;
-        SettingsRightColumn.Width = wideSettings ? new GridLength(1, GridUnitType.Star) : new GridLength(0);
-        SettingsColumns.ColumnSpacing = wideSettings ? 24 : 0;
-        SettingsColumns.RowSpacing = wideSettings ? 0 : 20;
-        Grid.SetColumn(SettingsSecondaryGroup, wideSettings ? 1 : 0);
-        Grid.SetRow(SettingsSecondaryGroup, wideSettings ? 0 : 1);
-        var stackFooter = availableWidth < 630;
-        var stackAuxiliary = availableWidth < 460;
-        var stackTelemetry = availableWidth < 810;
-        FooterActionsColumn.Width = stackFooter ? new GridLength(1, GridUnitType.Star) : GridLength.Auto;
-        FooterStatusColumn.Width = stackFooter ? new GridLength(0) : new GridLength(1, GridUnitType.Star);
-        FooterLayout.ColumnSpacing = stackFooter ? 0 : 12;
-        FooterLayout.RowSpacing = stackFooter ? 4 : 0;
-        FooterActionCluster.RowSpacing = stackAuxiliary ? 4 : 0;
-        Grid.SetColumn(StatusDetailsButton, stackFooter ? 0 : 1);
-        Grid.SetRow(StatusDetailsButton, stackFooter ? 1 : 0);
-        StatusDetailsButton.HorizontalAlignment = stackFooter ? HorizontalAlignment.Left : HorizontalAlignment.Right;
-        foreach (var control in new FrameworkElement[] { RecordingClock, CancelQcButton, QcResultsButton })
-        {
-            Grid.SetColumn(control, stackAuxiliary ? 0 : 1);
-            Grid.SetRow(control, stackAuxiliary ? 1 : 0);
-        }
-        TelemetryStorageColumn.Width = stackTelemetry ? new GridLength(0) : GridLength.Auto;
-        FooterTelemetry.ColumnSpacing = stackTelemetry ? 0 : 16;
-        FooterTelemetry.RowSpacing = stackTelemetry ? 2 : 0;
-        Grid.SetColumn(StorageStatus, stackTelemetry ? 0 : 1);
-        Grid.SetRow(StorageStatus, stackTelemetry ? 1 : 0);
-        StartActions.Orientation = availableWidth < 310 ? Orientation.Vertical : Orientation.Horizontal;
-
+        var hwnd = WinRT.Interop.WindowNative.GetWindowHandle(this);
+        var dpi = GetDpiForWindow(hwnd);
+        var scale = dpi > 0 ? dpi / 96.0 : 1.0;
+        var workArea = DisplayArea.GetFromWindowId(AppWindow.Id, DisplayAreaFallback.Primary).WorkArea;
+        var margin = (int)Math.Round(48 * scale);
+        var width = Math.Min((int)Math.Round(logicalWidth * scale), Math.Max(800, workArea.Width - margin));
+        var height = Math.Min((int)Math.Round(logicalHeight * scale), Math.Max(600, workArea.Height - margin));
+        AppWindow.Resize(new Windows.Graphics.SizeInt32(width, height));
     }
 
-    private void MonitorViewport_SizeChanged(object sender, SizeChangedEventArgs e)
+    [DllImport("user32.dll", ExactSpelling = true)]
+    private static extern uint GetDpiForWindow(nint hwnd);
+
+    private void ConfigureWindowChrome()
     {
-        previewAvailableWidth = e.NewSize.Width;
-        previewHeightLimit = e.NewSize.Height;
+        if (MicaController.IsSupported())
+            SystemBackdrop = new MicaBackdrop { Kind = MicaKind.BaseAlt };
+        else
+            RootShell.Background = ThemeBrush("StudioWindowBackgroundBrush");
+
+        ExtendsContentIntoTitleBar = true;
+        SetTitleBar(TitleBarDragRegion);
+        if (AppWindowTitleBar.IsCustomizationSupported())
+        {
+            var bar = AppWindow.TitleBar;
+            bar.PreferredHeightOption = TitleBarHeightOption.Standard;
+            bar.ButtonBackgroundColor = Colors.Transparent;
+            bar.ButtonInactiveBackgroundColor = Colors.Transparent;
+        }
+        UpdateTitleBarInsets();
+    }
+
+    private void UpdateTitleBarInsets()
+    {
+        if (!AppWindowTitleBar.IsCustomizationSupported())
+            return;
+
+        var scale = RootShell.XamlRoot?.RasterizationScale ?? 1.0;
+        var right = AppWindow.TitleBar.RightInset / scale;
+        TitleBarRightInset.Width = new GridLength(Math.Max(136, right));
+    }
+
+    private bool IsDarkTheme() => RootShell.RequestedTheme switch
+    {
+        ElementTheme.Light => false,
+        ElementTheme.Dark => true,
+        _ => RootShell.ActualTheme switch
+        {
+            ElementTheme.Light => false,
+            ElementTheme.Dark => true,
+            _ => Application.Current.RequestedTheme == ApplicationTheme.Dark
+        }
+    };
+
+    private void UpdateTitleBarTheme()
+    {
+        if (!AppWindowTitleBar.IsCustomizationSupported())
+            return;
+
+        var dark = IsDarkTheme();
+        var bar = AppWindow.TitleBar;
+        bar.ButtonForegroundColor = dark ? Windows.UI.Color.FromArgb(255, 232, 236, 244) : Windows.UI.Color.FromArgb(255, 24, 29, 40);
+        bar.ButtonHoverForegroundColor = dark ? Colors.White : Colors.Black;
+        bar.ButtonHoverBackgroundColor = dark ? Windows.UI.Color.FromArgb(28, 255, 255, 255) : Windows.UI.Color.FromArgb(20, 0, 0, 0);
+        bar.ButtonPressedBackgroundColor = dark ? Windows.UI.Color.FromArgb(44, 255, 255, 255) : Windows.UI.Color.FromArgb(32, 0, 0, 0);
+        bar.ButtonInactiveForegroundColor = dark ? Windows.UI.Color.FromArgb(160, 180, 190, 206) : Windows.UI.Color.FromArgb(160, 82, 93, 113);
+        if (!MicaController.IsSupported())
+            RootShell.Background = ThemeBrush("StudioWindowBackgroundBrush");
+    }
+
+    private Brush ThemeBrush(string key)
+    {
+        var themeKey = IsDarkTheme() ? "Dark" : "Light";
+        foreach (var merged in Application.Current.Resources.MergedDictionaries)
+        {
+            if (merged.ThemeDictionaries.TryGetValue(themeKey, out var obj) &&
+                obj is ResourceDictionary dict && dict.TryGetValue(key, out var themed) && themed is Brush themedBrush)
+                return themedBrush;
+        }
+        return Application.Current.Resources.TryGetValue(key, out var value) && value is Brush brush
+            ? brush : new SolidColorBrush(Colors.Transparent);
+    }
+
+    private void RefreshDynamicThemeBrushes()
+    {
+        UpdateTitleBarTheme();
+        UpdateNavigationStyles();
+        ApplyWorkspaceLayout();
+        UpdateFormatSegmentVisuals();
+        UpdateInspectorLayout();
+        ApplySafeAreaOverlay();
+        UpdateAudioMonitorVisuals();
+        RenderCaptureActions();
+        RenderCounts(displayedStats);
+        RenderCompactStatus();
+        RenderQcResult();
+        UpdateQcNavBadge();
+        UpdateConfigurationStatus();
+        RefreshToolchainDiagnostics();
+        UpdatePhaseBar(displayedPhase);
+        UpdateClipBadge(LeftClipBadge, LeftChannel, "L", visibleAudio?.LeftClips ?? 0);
+        UpdateClipBadge(RightClipBadge, RightChannel, "R", visibleAudio?.RightClips ?? 0);
+        UpdateRecordingIndicator(recordingClock.IsRunning);
+        if (QcPipelineCard.Visibility == Visibility.Visible)
+            UpdateQcPipeline(activeQcStage, qcStop is not null, lastQcResult?.Status);
+    }
+
+    private void Viewport_SizeChanged(object sender, SizeChangedEventArgs e)
+    {
+        lastWindowWidth = e.NewSize.Width;
+        UpdateTitleBarInsets();
+        UpdateInspectorLayout();
+        UpdateResponsiveFooter(e.NewSize.Width);
+        UpdateMonitorLayout();
+    }
+
+    private void UpdateResponsiveFooter(double width)
+    {
+        var compact = width < 1040;
+        var narrow = width < 760;
+        FooterCenterColumn.Width = compact ? new GridLength(0) : new GridLength(1, GridUnitType.Star);
+        FooterLayout.RowSpacing = compact ? 6 : 0;
+        Grid.SetRow(TelemetryStrip, compact ? 1 : 0);
+        Grid.SetColumn(TelemetryStrip, compact ? 0 : 1);
+        Grid.SetColumnSpan(TelemetryStrip, compact ? 3 : 1);
+        TelemetryStrip.HorizontalAlignment = compact ? HorizontalAlignment.Left : HorizontalAlignment.Center;
+        FooterStorageButton.Visibility = narrow ? Visibility.Collapsed : Visibility.Visible;
+        QuickSourceButton.Visibility = width < 820 ? Visibility.Collapsed : Visibility.Visible;
+        StereoMeter.Visibility = !previewFullscreen && width >= 680 ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    private void UpdateInspectorLayout()
+    {
+        if (previewFullscreen)
+        {
+            InspectorPanel.Visibility = Visibility.Collapsed;
+            InspectorScrim.Visibility = Visibility.Collapsed;
+            InspectorDockColumn.Width = new GridLength(0);
+            return;
+        }
+
+        var canDock = lastWindowWidth >= 1180;
+        if (canDock && inspectorPinned)
+        {
+            InspectorDockColumn.Width = GridLength.Auto;
+            Grid.SetColumn(InspectorPanel, 2);
+            Grid.SetColumnSpan(InspectorPanel, 1);
+            InspectorPanel.HorizontalAlignment = HorizontalAlignment.Stretch;
+            InspectorPanel.Margin = new Thickness(0);
+            InspectorPanel.Visibility = Visibility.Visible;
+            InspectorScrim.Visibility = Visibility.Collapsed;
+            inspectorOverlayOpen = false;
+        }
+        else if (inspectorOverlayOpen)
+        {
+            InspectorDockColumn.Width = new GridLength(0);
+            Grid.SetColumn(InspectorPanel, 0);
+            Grid.SetColumnSpan(InspectorPanel, 3);
+            InspectorPanel.HorizontalAlignment = HorizontalAlignment.Right;
+            InspectorPanel.Margin = new Thickness(0);
+            InspectorPanel.Visibility = Visibility.Visible;
+            InspectorScrim.Visibility = Visibility.Visible;
+        }
+        else
+        {
+            InspectorDockColumn.Width = new GridLength(0);
+            InspectorPanel.Visibility = Visibility.Collapsed;
+            InspectorScrim.Visibility = Visibility.Collapsed;
+        }
+
+        UpdateInspectorButtonsVisuals(canDock);
+        UpdateWheelFallbackState();
+    }
+
+    private void UpdateInspectorButtonsVisuals(bool canDock)
+    {
+        var open = InspectorPanel.Visibility == Visibility.Visible;
+        PinInspectorButton.Visibility = canDock ? Visibility.Visible : Visibility.Collapsed;
+        PinInspectorIcon.Glyph = inspectorPinned ? "\uE840" : "\uE718";
+        ToggleInspectorButton.Background = open
+            ? ThemeBrush("StudioSegmentActiveBrush")
+            : new SolidColorBrush(Colors.Transparent);
+    }
+
+    private void ToggleInspector()
+    {
+        if (activePage != ActiveAppPage.Capture)
+            NavigateToPage(ActiveAppPage.Capture);
+
+        var canDock = lastWindowWidth >= 1180;
+        if (canDock)
+        {
+            if (inspectorPinned)
+            {
+                inspectorPinned = false;
+                inspectorOverlayOpen = false;
+            }
+            else
+            {
+                inspectorPinned = true;
+                inspectorOverlayOpen = false;
+                AnimateInspectorSlideIn();
+            }
+            SettingsChanged();
+        }
+        else
+        {
+            inspectorOverlayOpen = !inspectorOverlayOpen;
+            if (inspectorOverlayOpen)
+                AnimateInspectorSlideIn();
+        }
+        UpdateInspectorLayout();
+    }
+
+    private void AnimateInspectorSlideIn()
+    {
+        if (!new Windows.UI.ViewManagement.UISettings().AnimationsEnabled)
+            return;
+
+        var visual = ElementCompositionPreview.GetElementVisual(InspectorPanel);
+        var compositor = visual.Compositor;
+        var easing = compositor.CreateCubicBezierEasingFunction(new Vector2(0.1f, 0.9f), new Vector2(0.2f, 1.0f));
+
+        var offset = compositor.CreateVector3KeyFrameAnimation();
+        offset.InsertKeyFrame(0f, new Vector3(28f, 0f, 0f));
+        offset.InsertKeyFrame(1f, Vector3.Zero, easing);
+        offset.Duration = TimeSpan.FromMilliseconds(210);
+
+        var opacity = compositor.CreateScalarKeyFrameAnimation();
+        opacity.InsertKeyFrame(0f, 0.2f);
+        opacity.InsertKeyFrame(1f, 1f, easing);
+        opacity.Duration = TimeSpan.FromMilliseconds(180);
+
+        visual.StartAnimation(nameof(Visual.Offset), offset);
+        visual.StartAnimation(nameof(Visual.Opacity), opacity);
+    }
+
+    private void QuickSourceButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (activePage != ActiveAppPage.Capture)
+            NavigateToPage(ActiveAppPage.Capture);
+
+        if (InspectorPanel.Visibility != Visibility.Visible)
+            ToggleInspector();
+    }
+
+    private void ToggleInspectorButton_Click(object sender, RoutedEventArgs e) => ToggleInspector();
+
+    private void PinInspectorButton_Click(object sender, RoutedEventArgs e)
+    {
+        inspectorPinned = !inspectorPinned;
+        inspectorOverlayOpen = !inspectorPinned;
+        SettingsChanged();
+        UpdateInspectorLayout();
+    }
+
+    private void CloseInspectorButton_Click(object sender, RoutedEventArgs e)
+    {
+        inspectorPinned = false;
+        inspectorOverlayOpen = false;
+        SettingsChanged();
+        UpdateInspectorLayout();
+    }
+
+    private void InspectorScrim_Tapped(object sender, TappedRoutedEventArgs e)
+    {
+        inspectorOverlayOpen = false;
+        UpdateInspectorLayout();
+    }
+
+    private void CaptureModeButton_Click(object sender, RoutedEventArgs e) => NavigateToPage(ActiveAppPage.Capture);
+
+    private void QcModeButton_Click(object sender, RoutedEventArgs e) => NavigateToPage(ActiveAppPage.QcCenter);
+
+    private void QcResultsButton_Click(object sender, RoutedEventArgs e) => NavigateToPage(ActiveAppPage.QcCenter);
+
+    private void NavigateToPage(ActiveAppPage target)
+    {
+        if (activePage == target)
+            return;
+
+        if (activePage == ActiveAppPage.Settings)
+        {
+            SavePendingSettings();
+            StopSettingsWheelFallback();
+        }
+        if (target == ActiveAppPage.Settings)
+            pageBeforeSettings = activePage;
+
+        activePage = target;
+        WorkspacePage.Visibility = target == ActiveAppPage.Capture ? Visibility.Visible : Visibility.Collapsed;
+        QcCenterPage.Visibility = target == ActiveAppPage.QcCenter ? Visibility.Visible : Visibility.Collapsed;
+        SettingsPage.Visibility = target == ActiveAppPage.Settings ? Visibility.Visible : Visibility.Collapsed;
+
+        if (target == ActiveAppPage.Settings)
+        {
+            RefreshToolchainDiagnostics();
+            RevealWorkspacePanel(SettingsPage);
+            BackButton.Focus(FocusState.Programmatic);
+        }
+        else if (target == ActiveAppPage.QcCenter)
+        {
+            RevealWorkspacePanel(QcCenterPage);
+        }
+        else
+        {
+            RevealWorkspacePanel(WorkspacePage);
+            UpdateMonitorLayout();
+        }
+
+        UpdateNavigationStyles();
+        UpdateCaptureFooter();
+        UpdateWheelFallbackState();
+    }
+
+    private void UpdateNavigationStyles()
+    {
+        ApplySegmentState(CaptureModeButton, activePage == ActiveAppPage.Capture);
+        ApplySegmentState(QcModeButton, activePage == ActiveAppPage.QcCenter);
+        OpenSettingsButton.Background = activePage == ActiveAppPage.Settings
+            ? ThemeBrush("StudioSegmentActiveBrush")
+            : new SolidColorBrush(Colors.Transparent);
+    }
+
+    private void ApplySegmentState(Button button, bool active)
+    {
+        button.Background = active ? ThemeBrush("StudioSegmentActiveBrush") : new SolidColorBrush(Colors.Transparent);
+        button.BorderBrush = active ? ThemeBrush("StudioHairlineBrush") : new SolidColorBrush(Colors.Transparent);
+        button.Foreground = active ? ThemeBrush("StudioTextPrimaryBrush") : ThemeBrush("StudioTextSecondaryBrush");
+        button.FontWeight = active ? FontWeights.SemiBold : FontWeights.Normal;
+    }
+
+    private void LayoutModeButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is Button { Tag: string tag } && Enum.TryParse<WorkspaceLayoutMode>(tag, out var mode))
+            SetWorkspaceLayout(mode, saveIfDefaultable: true);
+    }
+
+    private void SetWorkspaceLayout(WorkspaceLayoutMode mode, bool saveIfDefaultable)
+    {
+        workspaceLayout = mode;
+        ApplyWorkspaceLayout();
+        if (saveIfDefaultable && mode is WorkspaceLayoutMode.Split or WorkspaceLayoutMode.Focus)
+            SettingsChanged();
+    }
+
+    private void ApplyWorkspaceLayout()
+    {
+        ApplySegmentState(LayoutFocusBtn, workspaceLayout == WorkspaceLayoutMode.Focus);
+        ApplySegmentState(LayoutSplitBtn, workspaceLayout == WorkspaceLayoutMode.Split);
+        ApplySegmentState(LayoutScopesBtn, workspaceLayout == WorkspaceLayoutMode.Scopes);
+        ApplySegmentState(LayoutSpectrumBtn, workspaceLayout == WorkspaceLayoutMode.Spectrum);
+        ApplySegmentState(LayoutEventsBtn, workspaceLayout == WorkspaceLayoutMode.Events);
+
+        var showPreview = previewFullscreen || workspaceLayout is WorkspaceLayoutMode.Focus or WorkspaceLayoutMode.Split;
+        var showInstruments = !previewFullscreen && workspaceLayout != WorkspaceLayoutMode.Focus;
+
+        PreviewMonitorHousing.Visibility = showPreview ? Visibility.Visible : Visibility.Collapsed;
+        InstrumentsHost.Visibility = showInstruments ? Visibility.Visible : Visibility.Collapsed;
+
+        if (previewFullscreen || workspaceLayout == WorkspaceLayoutMode.Focus)
+        {
+            PreviewStageRow.Height = new GridLength(1, GridUnitType.Star);
+            InstrumentsStageRow.Height = new GridLength(0);
+            MonitorViewport.RowSpacing = 0;
+        }
+        else if (workspaceLayout == WorkspaceLayoutMode.Split)
+        {
+            PreviewStageRow.Height = new GridLength(63, GridUnitType.Star);
+            InstrumentsStageRow.Height = new GridLength(37, GridUnitType.Star);
+            MonitorViewport.RowSpacing = 10;
+        }
+        else
+        {
+            PreviewStageRow.Height = new GridLength(0);
+            InstrumentsStageRow.Height = new GridLength(1, GridUnitType.Star);
+            MonitorViewport.RowSpacing = 0;
+        }
+
+        if (showInstruments)
+        {
+            var twoColumns = workspaceLayout is WorkspaceLayoutMode.Split or WorkspaceLayoutMode.Scopes;
+            LumaCard.Visibility = twoColumns ? Visibility.Visible : Visibility.Collapsed;
+            InstrumentCol0.Width = twoColumns ? new GridLength(56, GridUnitType.Star) : new GridLength(0);
+            InstrumentCol1.Width = twoColumns ? new GridLength(44, GridUnitType.Star) : new GridLength(1, GridUnitType.Star);
+            InstrumentsHost.ColumnSpacing = twoColumns ? 10 : 0;
+
+            SplitRightSwitcher.Visibility = workspaceLayout == WorkspaceLayoutMode.Split
+                ? Visibility.Visible : Visibility.Collapsed;
+
+            var secondary = workspaceLayout switch
+            {
+                WorkspaceLayoutMode.Scopes => SplitSecondaryInstrument.Vector,
+                WorkspaceLayoutMode.Spectrum => SplitSecondaryInstrument.Spectrum,
+                WorkspaceLayoutMode.Events => SplitSecondaryInstrument.Events,
+                _ => splitSecondary
+            };
+            ApplySecondaryInstrument(secondary);
+        }
+
+        UpdateMonitorLayout();
+    }
+
+    private void SplitSecondary_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is Button { Tag: string tag } && Enum.TryParse<SplitSecondaryInstrument>(tag, out var instrument))
+        {
+            splitSecondary = instrument;
+            ApplySecondaryInstrument(instrument);
+        }
+    }
+
+    private void ApplySecondaryInstrument(SplitSecondaryInstrument instrument)
+    {
+        ApplySegmentState(SplitVectorBtn, instrument == SplitSecondaryInstrument.Vector);
+        ApplySegmentState(SplitSpectrumBtn, instrument == SplitSecondaryInstrument.Spectrum);
+        ApplySegmentState(SplitEventsBtn, instrument == SplitSecondaryInstrument.Events);
+
+        VectorBody.Visibility = instrument == SplitSecondaryInstrument.Vector ? Visibility.Visible : Visibility.Collapsed;
+        SpectrumBody.Visibility = instrument == SplitSecondaryInstrument.Spectrum ? Visibility.Visible : Visibility.Collapsed;
+        EventsBody.Visibility = instrument == SplitSecondaryInstrument.Events ? Visibility.Visible : Visibility.Collapsed;
+        EventsToolbar.Visibility = instrument == SplitSecondaryInstrument.Events && workspaceLayout == WorkspaceLayoutMode.Events
+            ? Visibility.Visible : Visibility.Collapsed;
+
+        UpdateSecondaryInstrumentHeader(instrument);
+    }
+
+    private void SafeAreaToggleButton_Click(object sender, RoutedEventArgs e)
+    {
+        showSafeArea = !showSafeArea;
+        ApplySafeAreaOverlay();
+        SettingsChanged();
+    }
+
+    private void ApplySafeAreaOverlay()
+    {
+        SafeAreaOverlay.Visibility = showSafeArea && PreviewPlaceholder.Visibility == Visibility.Collapsed
+            ? Visibility.Visible : Visibility.Collapsed;
+        SafeAreaToggleButton.Background = showSafeArea
+            ? ThemeBrush("StudioSegmentActiveBrush") : new SolidColorBrush(Colors.Transparent);
+        SafeAreaCheckBox.IsChecked = showSafeArea;
+        Ntsc480GuideCheckBox.IsChecked = showNtsc480Guide;
+        UpdateNtsc480GuideLayout();
+    }
+
+    private void MonitorViewport_SizeChanged(object sender, SizeChangedEventArgs e) => UpdateMonitorLayout();
+
+    private void PreviewMonitorHousing_SizeChanged(object sender, SizeChangedEventArgs e)
+    {
+        previewBoxWidth = e.NewSize.Width;
+        previewBoxHeight = e.NewSize.Height;
         UpdateMonitorLayout();
     }
 
     private void UpdateMonitorLayout()
     {
-        if (previewAvailableWidth <= 0 || previewHeightLimit <= 0)
+        if (previewBoxWidth <= 0 || previewBoxHeight <= 0)
             return;
 
-        MonitorBody.MinHeight = previewHeightLimit;
-        EventsView.Height = previewHeightLimit;
-        WaveformPlot.Height = VectorPlot.Height = Math.Max(104, previewHeightLimit - 88);
-        SpectrumPlot.Height = Math.Max(104, previewHeightLimit - 66);
-
-        var meterSpace = previewFullscreen ? 0 : StereoMeter.Width + StereoMeterGap;
-        var captionSpace = previewFullscreen ? 0 : 28;
-        const double border = 2;
-        var videoSpace = Math.Max(0, previewAvailableWidth - meterSpace - border);
-        var height = Math.Min(videoSpace / previewAspectRatio, Math.Max(0, previewHeightLimit - captionSpace - border));
-        var videoWidth = height * previewAspectRatio + border;
-        PreviewView.Width = PreviewSurface.Width = videoWidth;
-        PreviewSurface.Height = height + border;
-
-        // Center the video when the meter fits beside it. Shift left only as far as needed.
-        var unusedWidth = Math.Max(0, previewAvailableWidth - videoWidth - meterSpace);
-        var leftMargin = Math.Clamp((previewAvailableWidth - videoWidth) / 2, 0, unusedWidth);
-        PreviewView.Margin = new Thickness(leftMargin, 0, 0, 0);
-        StereoMeter.Margin = new Thickness(0, 0, unusedWidth - leftMargin, 0);
-        StereoMeter.Height = Math.Max(174, PreviewSurface.Height);
+        var pad = previewFullscreen ? 0 : 14;
+        var availW = Math.Max(0, previewBoxWidth - pad * 2);
+        var availH = Math.Max(0, previewBoxHeight - pad * 2);
+        var height = Math.Min(availW / previewAspectRatio, availH);
+        var width = height * previewAspectRatio;
+        PreviewSurface.Width = Math.Max(0, width);
+        PreviewSurface.Height = Math.Max(0, height);
+        UpdateNtsc480GuideLayout();
     }
 
     private void UpdatePreviewAspectRatio(int width, int height)
     {
-        var aspectRatio = width <= 0 || height <= 0 || (width == 720 && height <= 576)
-            ? DefaultPreviewAspectRatio : (double)width / height;
-        if (previewAspectRatio == aspectRatio)
+        lastSignalWidth = width;
+        lastSignalHeight = height;
+        var aspectRatio = ComputeEffectivePreviewAspectRatio(width, height);
+        if (Math.Abs(previewAspectRatio - aspectRatio) < 0.001)
             return;
 
         previewAspectRatio = aspectRatio;
@@ -173,15 +612,14 @@ public sealed partial class MainWindow : Window
         var device = DevicePicker.SelectedItem as CaptureDevice;
         var source = VideoInputPicker.SelectedItem as VideoInputSource;
         var selectedMode = ModePicker.SelectedItem as ModeOption;
-        var format = FormatPicker.SelectedItem as FormatOption;
-        var selection = (device?.PersistentId, device?.Index, source?.Id, selectedMode?.Id, format?.Id);
+        var selection = (device?.PersistentId, device?.Index, source?.Id, selectedMode?.Id, selectedVideoFormat);
         if (previewSelection == selection)
             return;
 
         previewSelection = selection;
         observedPreviewMode = null;
-        var mode = selectedMode?.Id is { } id && format is not null
-            ? source?.ModesFor(format.Id).FirstOrDefault(candidate => candidate.Id == id) : null;
+        var mode = selectedMode?.Id is { } id
+            ? source?.ModesFor(selectedVideoFormat).FirstOrDefault(candidate => candidate.Id == id) : null;
         ResetPreview(null);
         UpdatePreviewAspectRatio(mode?.Width ?? 0, mode?.Height ?? 0);
         if (selectedMode is { Id: null })
@@ -193,8 +631,7 @@ public sealed partial class MainWindow : Window
         if (checkingDetectedMode || captureTask is not null || loading || closing ||
             ModePicker.SelectedItem is not ModeOption { Id: null } ||
             DevicePicker.SelectedItem is not CaptureDevice device ||
-            VideoInputPicker.SelectedItem is not VideoInputSource source ||
-            FormatPicker.SelectedItem is not FormatOption format)
+            VideoInputPicker.SelectedItem is not VideoInputSource source)
             return;
 
         var selection = previewSelection;
@@ -204,11 +641,10 @@ public sealed partial class MainWindow : Window
             var id = await Task.Run(() => DeckLinkCapture.GetLockedVideoInputMode(device, source.Id));
             if (!closing && captureTask is null && previewSelection == selection)
                 UpdateObservedPreviewMode(id is null ? null :
-                    source.ModesFor(format.Id).FirstOrDefault(candidate => candidate.Id == id));
+                    source.ModesFor(selectedVideoFormat).FirstOrDefault(candidate => candidate.Id == id));
         }
         catch (COMException)
         {
-            // A disconnected board has no idle mode to display.
         }
         finally
         {
@@ -216,23 +652,22 @@ public sealed partial class MainWindow : Window
         }
     }
 
-    private void MonitorSelector_SelectionChanged(SelectorBar sender, SelectorBarSelectionChangedEventArgs args)
-    {
-        var selected = sender.SelectedItem;
-        PreviewView.Visibility = selected == PreviewTab ? Visibility.Visible : Visibility.Collapsed;
-        StereoMeter.Visibility = previewFullscreen ? Visibility.Collapsed : PreviewView.Visibility;
-        ScopesView.Visibility = selected == ScopesTab ? Visibility.Visible : Visibility.Collapsed;
-        SpectrumView.Visibility = selected == SpectrumTab ? Visibility.Visible : Visibility.Collapsed;
-        EventsView.Visibility = selected == EventsTab ? Visibility.Visible : Visibility.Collapsed;
-        UpdateMonitorLayout();
-    }
-
     private async void OnLoaded(object sender, RoutedEventArgs e)
     {
         ((FrameworkElement)sender).Loaded -= OnLoaded;
+        RootShell.ActualThemeChanged += (_, _) => RefreshDynamicThemeBrushes();
         await RestoreSettingsAsync();
         if (closing)
             return;
+        UpdateTitleBarTheme();
+        UpdateNavigationStyles();
+        ApplyWorkspaceLayout();
+        UpdateInspectorLayout();
+        ApplySafeAreaOverlay();
+        ApplyPreviewOptionsToUi();
+        SyncAnalogUiFromState();
+        UpdateAudioMonitorVisuals();
+        RefreshToolchainDiagnostics();
         await RefreshDevicesAsync();
         if (closing)
             return;
@@ -333,8 +768,8 @@ public sealed partial class MainWindow : Window
     {
         var currentMode = ModePicker.SelectedItem as ModeOption;
         List<ModeOption> options = [];
-        if (VideoInputPicker.SelectedItem is VideoInputSource video && FormatPicker.SelectedItem is FormatOption format &&
-            video.ModesFor(format.Id) is { Count: > 0 } modes)
+        if (VideoInputPicker.SelectedItem is VideoInputSource video &&
+            video.ModesFor(selectedVideoFormat) is { Count: > 0 } modes)
         {
             if (DevicePicker.SelectedItem is CaptureDevice { SupportsFormatDetection: true })
                 options.Add(new(L("Auto"), null));
@@ -355,12 +790,46 @@ public sealed partial class MainWindow : Window
             ShowInputSelectionStatus();
     }
 
-    private void FormatPicker_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    private void VideoFormatSegment_Click(object sender, RoutedEventArgs e)
     {
+        if (captureTask is not null || sender is not Button { Tag: string tag })
+            return;
+
+        var format = tag == "Uyvy" ? CapturePixelFormat.Uyvy : CapturePixelFormat.V210;
+        if (selectedVideoFormat == format)
+            return;
+
+        selectedVideoFormat = format;
+        UpdateFormatSegmentVisuals();
         UpdateModeOptions();
         SettingsChanged();
         if (!loading && captureTask is null)
             ShowInputSelectionStatus();
+    }
+
+    private void AudioFormatSegment_Click(object sender, RoutedEventArgs e)
+    {
+        if (captureTask is not null || sender is not Button { Tag: string tag })
+            return;
+
+        var format = tag == "Pcm32" ? CaptureAudioFormat.Pcm32 : CaptureAudioFormat.Pcm16;
+        if (selectedAudioFormat == format)
+            return;
+
+        selectedAudioFormat = format;
+        UpdateFormatSegmentVisuals();
+        UpdateControls();
+        SettingsChanged();
+        if (!loading && captureTask is null)
+            ShowInputSelectionStatus();
+    }
+
+    private void UpdateFormatSegmentVisuals()
+    {
+        ApplySegmentState(VideoFormat10Button, selectedVideoFormat == CapturePixelFormat.V210);
+        ApplySegmentState(VideoFormat8Button, selectedVideoFormat == CapturePixelFormat.Uyvy);
+        ApplySegmentState(AudioFormat16Button, selectedAudioFormat == CaptureAudioFormat.Pcm16);
+        ApplySegmentState(AudioFormat32Button, selectedAudioFormat == CaptureAudioFormat.Pcm32);
     }
 
     private void OutputPath_TextChanged(object sender, TextChangedEventArgs e)
@@ -401,11 +870,10 @@ public sealed partial class MainWindow : Window
         if (DevicePicker.SelectedItem is CaptureDevice device &&
             (device.VideoSources.Count == 0 || device.AudioSources.Count == 0))
         {
-            SetStatus("InputsUnavailable", "NoInputRoutes",
-                InfoBarSeverity.Warning);
+            SetStatus("InputsUnavailable", "NoInputRoutes", InfoBarSeverity.Warning);
         }
         else if (VideoInputPicker.SelectedItem is VideoInputSource video &&
-            FormatPicker.SelectedItem is FormatOption format && video.ModesFor(format.Id).Count == 0)
+            video.ModesFor(selectedVideoFormat).Count == 0)
         {
             SetStatus("NoModes", "ChooseModeSource", InfoBarSeverity.Warning);
         }
@@ -451,12 +919,64 @@ public sealed partial class MainWindow : Window
         }
     }
 
+    private void TogglePreview_Invoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
+    {
+        if (activePage == ActiveAppPage.Capture && StartButton.IsEnabled)
+        {
+            StartButton_Click(StartButton, new RoutedEventArgs());
+            args.Handled = true;
+        }
+    }
+
+    private void ToggleRecord_Invoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
+    {
+        if (activePage == ActiveAppPage.Capture && RecordButton.IsEnabled)
+        {
+            RecordButton_Click(RecordButton, new RoutedEventArgs());
+            args.Handled = true;
+        }
+    }
+
+    private void LayoutFocus_Invoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
+    {
+        if (activePage == ActiveAppPage.Capture && !previewFullscreen)
+        {
+            SetWorkspaceLayout(WorkspaceLayoutMode.Focus, saveIfDefaultable: true);
+            args.Handled = true;
+        }
+    }
+
+    private void LayoutSplit_Invoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
+    {
+        if (activePage == ActiveAppPage.Capture && !previewFullscreen)
+        {
+            SetWorkspaceLayout(WorkspaceLayoutMode.Split, saveIfDefaultable: true);
+            args.Handled = true;
+        }
+    }
+
+    private void LayoutScopes_Invoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
+    {
+        if (activePage == ActiveAppPage.Capture && !previewFullscreen)
+        {
+            SetWorkspaceLayout(WorkspaceLayoutMode.Scopes, saveIfDefaultable: false);
+            args.Handled = true;
+        }
+    }
+
+    private void ToggleInspector_Invoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
+    {
+        if (!previewFullscreen)
+        {
+            ToggleInspector();
+            args.Handled = true;
+        }
+    }
+
     private async Task BeginRecordingAsync()
     {
         if (!previewReady || displayedStats?.CanStartRecording != true ||
-            previewRecorder is not { } recorder || recordingTransition ||
-            FormatPicker.SelectedItem is not FormatOption videoFormat ||
-            AudioFormatPicker.SelectedItem is not AudioFormatOption audioFormat)
+            previewRecorder is not { } recorder || recordingTransition)
             return;
 
         var directory = OutputPath.Text.Trim();
@@ -465,6 +985,8 @@ public sealed partial class MainWindow : Window
             holdRecordingStatus = true;
             UpdateLivePreviewStatus();
             SetStatus("ChooseOutput", "ExistingOutput", InfoBarSeverity.Warning);
+            if (InspectorPanel.Visibility != Visibility.Visible)
+                ToggleInspector();
             return;
         }
 
@@ -473,9 +995,11 @@ public sealed partial class MainWindow : Window
         UpdateControls();
         try
         {
+            var videoTag = selectedVideoFormat == CapturePixelFormat.Uyvy ? "8bit-Uncompressed" : "10bit-Uncompressed";
+            var audioTag = selectedAudioFormat == CaptureAudioFormat.Pcm32 ? "32bit-PCM" : "16bit-PCM";
             var timestamp = DateTime.Now.ToString("yyyyMMdd_HHmmss_fff", CultureInfo.InvariantCulture);
             var prefix = $"CaptureRack_{timestamp}";
-            var formats = $"{videoFormat.FileTag}_{audioFormat.FileTag}";
+            var formats = $"{videoTag}_{audioTag}";
             var opened = await Task.Run(() =>
             {
                 var path = Path.Combine(directory, $"{prefix}_{formats}.mov");
@@ -491,8 +1015,7 @@ public sealed partial class MainWindow : Window
             statusFilePath = opened.Path;
             recordingSession = true;
             displayedRecordingSeconds = 0;
-            RecordingElapsed.Text = "00:00:00";
-            RecordingClockLabel.Text = L("RecordingClock");
+            RecordingElapsed.Text = FullscreenClockText.Text = "00:00:00";
             recordingClock.Restart();
             UpdateRecordingIndicator(active: true);
             SetStatus("RecordingActive", "WritingMov");
@@ -577,8 +1100,7 @@ public sealed partial class MainWindow : Window
             DevicePicker.SelectedItem is not CaptureDevice device ||
             VideoInputPicker.SelectedItem is not VideoInputSource video ||
             AudioInputPicker.SelectedItem is not AudioInputSource audio ||
-            ModePicker.SelectedItem is not ModeOption mode || FormatPicker.SelectedItem is not FormatOption format ||
-            AudioFormatPicker.SelectedItem is not AudioFormatOption audioFormat)
+            ModePicker.SelectedItem is not ModeOption mode)
             return;
 
         using var stop = new CancellationTokenSource();
@@ -587,7 +1109,18 @@ public sealed partial class MainWindow : Window
         previewRecorder = recorder;
         holdRecordingStatus = false;
         liveSignal = default;
-        var feed = new PreviewFeed();
+        lastMissingFrames = 0;
+        var feed = new PreviewFeed
+        {
+            DeinterlaceMode = previewDeinterlace,
+            ColorMatrix = previewColorMatrix
+        };
+        using var audioMonitor = new LocalAudioMonitor
+        {
+            Enabled = audioMonitorEnabled,
+            Volume = audioMonitorVolume
+        };
+        activeAudioMonitor = audioMonitor;
         ResetPreview(feed);
         ResetMonitoring();
         previewTimer.Start();
@@ -598,9 +1131,11 @@ public sealed partial class MainWindow : Window
         {
             Routing = new CaptureRouting(video.Id, audio.Id),
             Preview = feed,
-            PixelFormat = format.Id,
-            AudioFormat = audioFormat.Id,
-            PreviewRecorder = recorder
+            PixelFormat = selectedVideoFormat,
+            AudioFormat = selectedAudioFormat,
+            PreviewRecorder = recorder,
+            AnalogOptions = BuildAnalogInputOptions(),
+            LocalAudioMonitor = audioMonitor
         };
         var task = Task.Factory.StartNew(() => DeckLink.Run(request,
             update =>
@@ -640,6 +1175,7 @@ public sealed partial class MainWindow : Window
             }
             preview = null;
             previewFrame = null;
+            activeAudioMonitor = null;
             captureTask = null;
             captureStop = null;
             previewReady = false;
@@ -701,11 +1237,9 @@ public sealed partial class MainWindow : Window
         }
         catch (Exception ex) when (IsSessionError(ex))
         {
-            // Preview is already shutting down.
         }
 
         bitmapPixels?.Dispose();
-        // Complete outside the Closing event, even if the worker task has already finished.
         DispatcherQueue.TryEnqueue(() => Close());
     }
 
@@ -738,8 +1272,40 @@ public sealed partial class MainWindow : Window
 
         if (file is not null && !closing)
         {
+            NavigateToPage(ActiveAppPage.QcCenter);
             await RunQcAsync(file.Path, null);
             CloseAfterRecordingIfRequested();
+        }
+    }
+
+    private void QcDropZone_DragOver(object sender, DragEventArgs e)
+    {
+        if (CheckMovButton.IsEnabled && e.DataView.Contains(StandardDataFormats.StorageItems))
+            e.AcceptedOperation = DataPackageOperation.Copy;
+        else
+            e.AcceptedOperation = DataPackageOperation.None;
+    }
+
+    private async void QcDropZone_Drop(object sender, DragEventArgs e)
+    {
+        if (!CheckMovButton.IsEnabled || !e.DataView.Contains(StandardDataFormats.StorageItems))
+            return;
+
+        try
+        {
+            var items = await e.DataView.GetStorageItemsAsync();
+            var mov = items.OfType<StorageFile>().FirstOrDefault(item =>
+                string.Equals(Path.GetExtension(item.Path), ".mov", StringComparison.OrdinalIgnoreCase));
+            if (mov is not null && !closing)
+            {
+                await RunQcAsync(mov.Path, null);
+                CloseAfterRecordingIfRequested();
+            }
+        }
+        catch (Exception ex) when (IsSessionError(ex))
+        {
+            if (!closing)
+                SetStatus("CheckMovOpenFailed", () => ex.Message, InfoBarSeverity.Error);
         }
     }
 
@@ -747,14 +1313,33 @@ public sealed partial class MainWindow : Window
     {
         using var cancellation = new CancellationTokenSource();
         qcStop = cancellation;
+        activeQcStage = null;
         statusFilePath = path;
-        void SetQcProgress(string stage) => SetStatus(log is null ? "QcChecking" : "RecordingSaved",
-            () => log is null ? L(stage) : WithModeChangeNotice(LocalFormat("SavedQcProgress", L(stage))),
-            log is { InputModeChanged: true } ? InfoBarSeverity.Warning : InfoBarSeverity.Informational);
+        qcOutputPath = path;
+        lastQcResult = null;
+        QcFileName.Text = Path.GetFileName(path);
+        QcFilePathText.Text = path;
+        QcInlineLogText.Text = "";
+        QcInlineLogText.Visibility = Visibility.Collapsed;
+        QcResultSection.Visibility = Visibility.Collapsed;
+        QcPipelineCard.Visibility = Visibility.Visible;
+        QcProgressBar.Visibility = Visibility.Visible;
+        UpdateQcPipeline(null, running: true, finalStatus: null);
+
+        void SetQcProgress(string stageKey, QcStage? stage)
+        {
+            activeQcStage = stage;
+            FooterQcStageText.Text = L(stageKey);
+            UpdateQcPipeline(stage, running: true, finalStatus: null);
+            SetStatus(log is null ? "QcChecking" : "RecordingSaved",
+                () => log is null ? L(stageKey) : WithModeChangeNotice(LocalFormat("SavedQcProgress", L(stageKey))),
+                log is { InputModeChanged: true } ? InfoBarSeverity.Warning : InfoBarSeverity.Informational);
+        }
         string WithModeChangeNotice(string detail) => log is { InputModeChanged: true }
             ? $"{L("QcWarnInputModeChange")} {detail}" : detail;
         string QcDetail(string detail) => log is null ? detail : WithModeChangeNotice(LocalFormat("SavedQcOutcome", detail));
-        SetQcProgress("QcStarting");
+
+        SetQcProgress("QcStarting", null);
         UpdateControls();
         var dispatcher = DispatcherQueue;
         try
@@ -764,7 +1349,7 @@ public sealed partial class MainWindow : Window
                 dispatcher.TryEnqueue(() =>
                 {
                     if (ReferenceEquals(qcStop, cancellation) && !cancellation.IsCancellationRequested)
-                        SetQcProgress($"Qc{stage}");
+                        SetQcProgress($"Qc{stage}", stage);
                 });
             }));
             var (title, severity) = result.Status switch
@@ -776,6 +1361,7 @@ public sealed partial class MainWindow : Window
             };
             if (severity == InfoBarSeverity.Success && log is { InputModeChanged: true })
                 severity = InfoBarSeverity.Warning;
+            UpdateQcPipeline(activeQcStage, running: false, finalStatus: result.Status);
             ShowQcResult(path, result, log, title, () => DescribeQcResult(result));
             SetStatus(title, () => QcDetail(DescribeQcResult(result)), severity);
             return result.Status is QcStatus.Passed or QcStatus.Cancelled;
@@ -783,6 +1369,7 @@ public sealed partial class MainWindow : Window
         catch (Exception ex) when (IsSessionError(ex))
         {
             const string title = "QcWriteFailed";
+            UpdateQcPipeline(activeQcStage, running: false, finalStatus: QcStatus.Failed);
             ShowQcResult(path, null, log, title, () => ex.Message);
             SetStatus(title, () => QcDetail(ex.Message), InfoBarSeverity.Error);
             return false;
@@ -790,9 +1377,61 @@ public sealed partial class MainWindow : Window
         finally
         {
             qcStop = null;
+            QcProgressBar.Visibility = Visibility.Collapsed;
             if (!closing)
                 UpdateControls();
         }
+    }
+
+    private void UpdateQcPipeline(QcStage? stage, bool running, QcStatus? finalStatus)
+    {
+        var stepIndex = stage switch
+        {
+            QcStage.Inspecting => 1,
+            QcStage.Decoding => 2,
+            QcStage.Analyzing => 3,
+            _ => 0
+        };
+
+        void StyleStep(Border card, FontIcon icon, int index)
+        {
+            var completed = finalStatus == QcStatus.Passed || (!running && index < stepIndex) || (running && index < stepIndex);
+            var active = running && index == stepIndex;
+            var failed = !running && finalStatus is QcStatus.Failed or QcStatus.ToolsUnavailable && index == Math.Max(1, stepIndex);
+
+            if (completed)
+            {
+                card.Background = ThemeBrush("StudioSignalLockSoftBrush");
+                card.BorderBrush = ThemeBrush("StudioSignalLockBrush");
+                icon.Glyph = "\uE73E";
+                icon.Foreground = ThemeBrush("StudioSignalLockBrush");
+            }
+            else if (active)
+            {
+                card.Background = ThemeBrush("StudioInfoSoftBrush");
+                card.BorderBrush = ThemeBrush("StudioInfoBrush");
+                icon.Glyph = "\uE895";
+                icon.Foreground = ThemeBrush("StudioInfoBrush");
+            }
+            else if (failed)
+            {
+                card.Background = ThemeBrush("StudioDangerSoftBrush");
+                card.BorderBrush = ThemeBrush("StudioDangerBrush");
+                icon.Glyph = "\uE783";
+                icon.Foreground = ThemeBrush("StudioDangerBrush");
+            }
+            else
+            {
+                card.Background = ThemeBrush("StudioPanelSecondaryBrush");
+                card.BorderBrush = ThemeBrush("StudioHairlineBrush");
+                icon.Glyph = "\uE91F";
+                icon.Foreground = ThemeBrush("StudioTextMutedBrush");
+            }
+        }
+
+        StyleStep(QcStep1Card, QcStep1Icon, 1);
+        StyleStep(QcStep2Card, QcStep2Icon, 2);
+        StyleStep(QcStep3Card, QcStep3Icon, 3);
     }
 
     private void ShowQcResult(string path, QcResult? result, QcCaptureLog? capture, string title, Func<string> summary)
@@ -801,14 +1440,39 @@ public sealed partial class MainWindow : Window
         lastQcResult = result;
         lastQcPresentation = new(capture, title, summary);
         QcFileName.Text = Path.GetFileName(path);
-        ToolTipService.SetToolTip(QcFileName, path);
-        RenderQcResult();
+        QcFilePathText.Text = path;
+        QcResultSection.Visibility = Visibility.Visible;
         QcLogButton.Visibility = result?.CaptureLog is null ? Visibility.Collapsed : Visibility.Visible;
+        QcToggleInlineLogButton.Visibility = result?.CaptureLog is null ? Visibility.Collapsed : Visibility.Visible;
         QcHashButton.Visibility = result?.FrameMd5 is null ? Visibility.Collapsed : Visibility.Visible;
         QcReportButton.Visibility = result?.QcToolsReport is null ? Visibility.Collapsed : Visibility.Visible;
+        RenderQcResult();
     }
 
-    private void QcResultsFlyout_Opened(object sender, object e) => QcOpenStatus.IsOpen = false;
+    private async void QcToggleInlineLog_Click(object sender, RoutedEventArgs e)
+    {
+        if (lastQcResult?.CaptureLog is not { } logPath)
+            return;
+
+        if (QcInlineLogText.Visibility == Visibility.Visible)
+        {
+            QcInlineLogText.Visibility = Visibility.Collapsed;
+            QcToggleInlineLogLabel.Text = L("QcViewInlineLog");
+            return;
+        }
+
+        try
+        {
+            QcInlineLogText.Text = await File.ReadAllTextAsync(logPath);
+            QcInlineLogText.Visibility = Visibility.Visible;
+            QcToggleInlineLogLabel.Text = L("QcHideInlineLog");
+        }
+        catch (Exception ex) when (IsSessionError(ex))
+        {
+            QcOpenStatus.Message = ex.Message;
+            QcOpenStatus.IsOpen = true;
+        }
+    }
 
     private async void OpenQcArtifact_Click(object sender, RoutedEventArgs e)
     {
@@ -828,17 +1492,17 @@ public sealed partial class MainWindow : Window
             };
             if (artifact == "folder")
             {
-                var folder = await Windows.Storage.StorageFolder.GetFolderFromPathAsync(Path.GetDirectoryName(output)!);
+                var folder = await StorageFolder.GetFolderFromPathAsync(Path.GetDirectoryName(output)!);
                 if (await Windows.System.Launcher.LaunchFolderAsync(folder))
                     return;
             }
             else if (path is not null)
             {
-                var file = await Windows.Storage.StorageFile.GetFileFromPathAsync(path);
+                var file = await StorageFile.GetFileFromPathAsync(path);
                 if (await Windows.System.Launcher.LaunchFileAsync(file))
                     return;
 
-                var folder = await Windows.Storage.StorageFolder.GetFolderFromPathAsync(Path.GetDirectoryName(path)!);
+                var folder = await StorageFolder.GetFolderFromPathAsync(Path.GetDirectoryName(path)!);
                 var options = new Windows.System.FolderLauncherOptions();
                 WinRT.Interop.InitializeWithWindow.Initialize(options, WinRT.Interop.WindowNative.GetWindowHandle(this));
                 options.ItemsToSelect.Add(file);
@@ -928,26 +1592,119 @@ public sealed partial class MainWindow : Window
 
         recordingClock.Stop();
         UpdateRecordingIndicator(active: false);
-        RecordingClockLabel.Text = L("Elapsed");
         UpdateRecordingClock();
+    }
+
+    private void RecordingSweepTrack_SizeChanged(object sender, SizeChangedEventArgs e)
+    {
+        if (recordingClock.IsRunning)
+            StartRecordingSweepAnimation();
+    }
+
+    private void StartRecordingSweepAnimation()
+    {
+        var beamVisual = ElementCompositionPreview.GetElementVisual(RecordingSweepBeam);
+        beamVisual.StopAnimation(nameof(Visual.Offset));
+        if (!recordingClock.IsRunning || !new Windows.UI.ViewManagement.UISettings().AnimationsEnabled)
+        {
+            beamVisual.Offset = Vector3.Zero;
+            return;
+        }
+
+        var trackWidth = (float)Math.Max(300, RecordingSweepTrack.ActualWidth);
+        var beamWidth = (float)RecordingSweepBeam.Width;
+        var compositor = beamVisual.Compositor;
+        var linear = compositor.CreateLinearEasingFunction();
+        var sweep = compositor.CreateVector3KeyFrameAnimation();
+        sweep.InsertKeyFrame(0f, new Vector3(-beamWidth, 0f, 0f));
+        sweep.InsertKeyFrame(1f, new Vector3(trackWidth, 0f, 0f), linear);
+        sweep.Duration = TimeSpan.FromMilliseconds(2100);
+        sweep.IterationBehavior = AnimationIterationBehavior.Forever;
+        beamVisual.StartAnimation(nameof(Visual.Offset), sweep);
     }
 
     private void UpdateRecordingIndicator(bool active)
     {
-        var visual = ElementCompositionPreview.GetElementVisual(RecordingIndicator);
-        const string property = nameof(Visual.Opacity);
-        visual.StopAnimation(property);
-        visual.Opacity = 1;
-        if (!active || !new Windows.UI.ViewManagement.UISettings().AnimationsEnabled)
-            return;
+        var animationsEnabled = new Windows.UI.ViewManagement.UISettings().AnimationsEnabled;
 
-        var pulse = visual.Compositor.CreateScalarKeyFrameAnimation();
-        pulse.InsertKeyFrame(0, 1);
-        pulse.InsertKeyFrame(1, 0.45f);
-        pulse.Duration = TimeSpan.FromMilliseconds(850);
-        pulse.Direction = Microsoft.UI.Composition.AnimationDirection.Alternate;
-        pulse.IterationBehavior = AnimationIterationBehavior.Forever;
-        visual.StartAnimation(property, pulse);
+        // 1. Pulsing REC tally dots
+        foreach (var dot in new UIElement[] { RecordingIndicator, PreviewRecTallyDot })
+        {
+            var visual = ElementCompositionPreview.GetElementVisual(dot);
+            visual.StopAnimation(nameof(Visual.Opacity));
+            visual.Opacity = 1;
+            if (!active || !animationsEnabled)
+                continue;
+
+            var pulse = visual.Compositor.CreateScalarKeyFrameAnimation();
+            pulse.InsertKeyFrame(0, 1f);
+            pulse.InsertKeyFrame(1, 0.30f);
+            pulse.Duration = TimeSpan.FromMilliseconds(850);
+            pulse.Direction = Microsoft.UI.Composition.AnimationDirection.Alternate;
+            pulse.IterationBehavior = AnimationIterationBehavior.Forever;
+            visual.StartAnimation(nameof(Visual.Opacity), pulse);
+        }
+
+        // 2. Rotating precision tape reel next to timecode
+        var reelVisual = ElementCompositionPreview.GetElementVisual(RecordingReelRotor);
+        reelVisual.StopAnimation(nameof(Visual.RotationAngleInDegrees));
+        reelVisual.CenterPoint = new Vector3(7.5f, 7.5f, 0f);
+        reelVisual.RotationAngleInDegrees = 0f;
+        if (active && animationsEnabled)
+        {
+            var compositor = reelVisual.Compositor;
+            var spin = compositor.CreateScalarKeyFrameAnimation();
+            spin.InsertKeyFrame(0f, 0f);
+            spin.InsertKeyFrame(1f, 360f, compositor.CreateLinearEasingFunction());
+            spin.Duration = TimeSpan.FromMilliseconds(2200);
+            spin.IterationBehavior = AnimationIterationBehavior.Forever;
+            reelVisual.StartAnimation(nameof(Visual.RotationAngleInDegrees), spin);
+        }
+
+        // 3. 3-bar live write-activity equalizer inside top-right REC tally tag
+        var bars = new[] { (RecBar1, 460, 0), (RecBar2, 580, 150), (RecBar3, 410, 290) };
+        foreach (var (bar, durationMs, delayMs) in bars)
+        {
+            var visual = ElementCompositionPreview.GetElementVisual(bar);
+            visual.StopAnimation("Scale.Y");
+            visual.CenterPoint = new Vector3(1f, 10f, 0f);
+            visual.Scale = Vector3.One;
+            if (!active || !animationsEnabled)
+                continue;
+
+            var bounce = visual.Compositor.CreateScalarKeyFrameAnimation();
+            bounce.InsertKeyFrame(0f, 0.25f);
+            bounce.InsertKeyFrame(0.5f, 1.0f);
+            bounce.InsertKeyFrame(1f, 0.35f);
+            bounce.Duration = TimeSpan.FromMilliseconds(durationMs);
+            bounce.DelayTime = TimeSpan.FromMilliseconds(delayMs);
+            bounce.IterationBehavior = AnimationIterationBehavior.Forever;
+            visual.StartAnimation("Scale.Y", bounce);
+        }
+
+        // 4. Breathing crimson Tally border on Video Monitor
+        PreviewRecFrameGlow.Visibility = active && !previewFullscreen ? Visibility.Visible : Visibility.Collapsed;
+        var glowVisual = ElementCompositionPreview.GetElementVisual(PreviewRecFrameGlow);
+        glowVisual.StopAnimation(nameof(Visual.Opacity));
+        glowVisual.Opacity = 1f;
+        if (active && !previewFullscreen && animationsEnabled)
+        {
+            var breathe = glowVisual.Compositor.CreateScalarKeyFrameAnimation();
+            breathe.InsertKeyFrame(0f, 0.95f);
+            breathe.InsertKeyFrame(1f, 0.42f);
+            breathe.Duration = TimeSpan.FromMilliseconds(1300);
+            breathe.Direction = Microsoft.UI.Composition.AnimationDirection.Alternate;
+            breathe.IterationBehavior = AnimationIterationBehavior.Forever;
+            glowVisual.StartAnimation(nameof(Visual.Opacity), breathe);
+        }
+
+        // 5. Continuous 2px crimson stream sweep bar along top of Footer
+        RecordingSweepTrack.Visibility = active ? Visibility.Visible : Visibility.Collapsed;
+        StartRecordingSweepAnimation();
+
+        PreviewRecTally.Visibility = active ? Visibility.Visible : Visibility.Collapsed;
+        PreviewMonitorHousing.BorderBrush = active
+            ? ThemeBrush("StudioRecBrush") : ThemeBrush("StudioMonitorBezelBrush");
     }
 
     private static void RevealWorkspacePanel(UIElement panel)
@@ -956,11 +1713,35 @@ public sealed partial class MainWindow : Window
             return;
 
         var visual = ElementCompositionPreview.GetElementVisual(panel);
-        var fade = visual.Compositor.CreateScalarKeyFrameAnimation();
-        fade.InsertKeyFrame(0, 0.7f);
-        fade.InsertKeyFrame(1, 1);
-        fade.Duration = TimeSpan.FromMilliseconds(150);
+        var compositor = visual.Compositor;
+        var easing = compositor.CreateCubicBezierEasingFunction(new Vector2(0.1f, 0.9f), new Vector2(0.2f, 1.0f));
+
+        var fade = compositor.CreateScalarKeyFrameAnimation();
+        fade.InsertKeyFrame(0, 0.4f);
+        fade.InsertKeyFrame(1, 1f, easing);
+        fade.Duration = TimeSpan.FromMilliseconds(180);
+
+        var offset = compositor.CreateVector3KeyFrameAnimation();
+        offset.InsertKeyFrame(0, new Vector3(0f, 10f, 0f));
+        offset.InsertKeyFrame(1, Vector3.Zero, easing);
+        offset.Duration = TimeSpan.FromMilliseconds(180);
+
         visual.StartAnimation(nameof(Visual.Opacity), fade);
+        visual.StartAnimation(nameof(Visual.Offset), offset);
+    }
+
+    private static void PulseWarningChip(UIElement chip)
+    {
+        if (!new Windows.UI.ViewManagement.UISettings().AnimationsEnabled)
+            return;
+
+        var visual = ElementCompositionPreview.GetElementVisual(chip);
+        var pulse = visual.Compositor.CreateScalarKeyFrameAnimation();
+        pulse.InsertKeyFrame(0f, 1f);
+        pulse.InsertKeyFrame(0.35f, 0.55f);
+        pulse.InsertKeyFrame(1f, 1f);
+        pulse.Duration = TimeSpan.FromMilliseconds(340);
+        visual.StartAnimation(nameof(Visual.Opacity), pulse);
     }
 
     private void UpdateRecordingClock()
@@ -971,7 +1752,9 @@ public sealed partial class MainWindow : Window
             return;
 
         displayedRecordingSeconds = seconds;
-        RecordingElapsed.Text = $"{seconds / 3600:D2}:{elapsed.Minutes:D2}:{elapsed.Seconds:D2}";
+        var text = $"{seconds / 3600:D2}:{elapsed.Minutes:D2}:{elapsed.Seconds:D2}";
+        RecordingElapsed.Text = text;
+        FullscreenClockText.Text = text;
     }
 
     private void ResetPreview(PreviewFeed? feed)
@@ -985,7 +1768,9 @@ public sealed partial class MainWindow : Window
         PreviewImage.Source = null;
         previewCaption = null;
         PreviewPlaceholder.Visibility = Visibility.Visible;
-        PreviewDetail.Visibility = Visibility.Collapsed;
+        PreviewHudPill.Visibility = Visibility.Collapsed;
+        SafeAreaOverlay.Visibility = Visibility.Collapsed;
+        Ntsc480GuideOverlay.Visibility = Visibility.Collapsed;
     }
 
     private void PresentPreview()
@@ -1009,7 +1794,8 @@ public sealed partial class MainWindow : Window
         if (PreviewPlaceholder.Visibility == Visibility.Visible)
         {
             PreviewPlaceholder.Visibility = Visibility.Collapsed;
-            PreviewDetail.Visibility = previewFullscreen ? Visibility.Collapsed : Visibility.Visible;
+            PreviewHudPill.Visibility = previewFullscreen ? Visibility.Collapsed : Visibility.Visible;
+            ApplySafeAreaOverlay();
         }
         previewCaption = new(frame.NoInput, frame.SignalWidth, frame.SignalHeight,
             DeckLinkCapture.FormatFourCc((uint)frame.Format), feed.PresentedSequence);
@@ -1020,6 +1806,9 @@ public sealed partial class MainWindow : Window
     {
         displayedStats = stats;
         displayedPreviewSkips = preview?.SkippedFrames ?? displayedPreviewSkips;
+        if (stats.MissingVideoFrames > lastMissingFrames)
+            PulseWarningChip(MissingFramesChip);
+        lastMissingFrames = stats.MissingVideoFrames;
         RenderCounts(stats);
         ShowMonitoring(stats);
     }
@@ -1034,12 +1823,14 @@ public sealed partial class MainWindow : Window
         VideoInputPicker.IsEnabled = idle && VideoInputPicker.Items.Count != 0;
         AudioInputPicker.IsEnabled = idle && AudioInputPicker.Items.Count != 0;
         ModePicker.IsEnabled = idle && ModePicker.Items.Count != 0;
+        VideoFormat10Button.IsEnabled = idle;
+        VideoFormat8Button.IsEnabled = idle;
+        AudioFormat16Button.IsEnabled = idle;
+        AudioFormat32Button.IsEnabled = idle;
+        UpdateAnalogControlsState(idle);
         var canStart = idle && !recordingTransition && DevicePicker.SelectedItem is CaptureDevice &&
             VideoInputPicker.SelectedItem is VideoInputSource && AudioInputPicker.SelectedItem is AudioInputSource &&
-            ModePicker.SelectedItem is ModeOption && FormatPicker.SelectedItem is FormatOption &&
-            AudioFormatPicker.SelectedItem is AudioFormatOption;
-        FormatPicker.IsEnabled = idle;
-        AudioFormatPicker.IsEnabled = idle;
+            ModePicker.SelectedItem is ModeOption;
         var changingRecording = recordingSession || recordingTransition;
         var canChooseOutput = settingsReady && !closing && !loading && !pickingOutput && !changingRecording;
         OutputPath.IsEnabled = canChooseOutput;
@@ -1048,20 +1839,56 @@ public sealed partial class MainWindow : Window
             captureStop is { IsCancellationRequested: false };
         RenderCaptureActions();
         StartButton.IsEnabled = active ? previewCanStop : canStart;
-        RecordButton.IsEnabled = qcStop is null && !closing && active && !recordingTransition && (recordingSession ||
-                (previewReady && displayedStats?.CanStartRecording == true && previewRecorder is not null && !pickingOutput &&
-                    captureStop is { IsCancellationRequested: false } && !string.IsNullOrWhiteSpace(OutputPath.Text)));
+        PlaceholderStartButton.IsEnabled = canStart;
+        PlaceholderStartButton.Visibility = !active && canStart ? Visibility.Visible : Visibility.Collapsed;
+        var recordEnabled = qcStop is null && !closing && active && !recordingTransition && (recordingSession ||
+            (previewReady && displayedStats?.CanStartRecording == true && previewRecorder is not null && !pickingOutput &&
+                captureStop is { IsCancellationRequested: false } && !string.IsNullOrWhiteSpace(OutputPath.Text)));
+        RecordButton.IsEnabled = recordEnabled;
+        FullscreenRecordButton.IsEnabled = recordEnabled;
         CancelQcButton.IsEnabled = qcStop is { IsCancellationRequested: false };
-        CancelQcButton.Visibility = qcStop is null ? Visibility.Collapsed : Visibility.Visible;
+        QcCenterCancelButton.IsEnabled = CancelQcButton.IsEnabled;
+        FooterQcActivePill.Visibility = qcStop is null ? Visibility.Collapsed : Visibility.Visible;
+        QcCenterCancelButton.Visibility = qcStop is null ? Visibility.Collapsed : Visibility.Visible;
         RecordingModeHint.Visibility = ModePicker.SelectedItem is ModeOption { Id: null }
             ? Visibility.Visible : Visibility.Collapsed;
         RecordingClock.Visibility = recordingClock.IsRunning ? Visibility.Visible : Visibility.Collapsed;
-        QcResultsButton.Visibility = !changingRecording && qcStop is null && qcOutputPath is not null
+        FullscreenClockText.Visibility = recordingClock.IsRunning ? Visibility.Visible : Visibility.Collapsed;
+        QcResultsButton.Visibility = !changingRecording && qcStop is null && lastQcPresentation is not null
             ? Visibility.Visible : Visibility.Collapsed;
+        UpdateQcNavBadge();
         UpdateCaptureFooter();
         UpdateLivePreviewStatus();
         UpdatePreviewForSelection();
         UpdateConfigurationStatus();
+    }
+
+    private void UpdateQcNavBadge()
+    {
+        if (qcStop is not null)
+        {
+            QcNavBadgeDot.Visibility = Visibility.Visible;
+            QcNavBadgeDot.Fill = ThemeBrush("StudioInfoBrush");
+        }
+        else if (lastQcResult is { Status: QcStatus.Failed })
+        {
+            QcNavBadgeDot.Visibility = Visibility.Visible;
+            QcNavBadgeDot.Fill = ThemeBrush("StudioDangerBrush");
+        }
+        else if (lastQcResult is not null && QcWarningsPanel.Visibility == Visibility.Visible)
+        {
+            QcNavBadgeDot.Visibility = Visibility.Visible;
+            QcNavBadgeDot.Fill = ThemeBrush("StudioCautionBrush");
+        }
+        else if (lastQcResult is { Status: QcStatus.Passed })
+        {
+            QcNavBadgeDot.Visibility = Visibility.Visible;
+            QcNavBadgeDot.Fill = ThemeBrush("StudioSignalLockBrush");
+        }
+        else
+        {
+            QcNavBadgeDot.Visibility = Visibility.Collapsed;
+        }
     }
 
     private void UpdateLivePreviewStatus()
@@ -1094,8 +1921,6 @@ public sealed partial class MainWindow : Window
     }
 
     private sealed record ModeOption(string Label, uint? Id);
-    private sealed record FormatOption(string Label, string FileTag, CapturePixelFormat Id);
-    private sealed record AudioFormatOption(string Label, string FileTag, CaptureAudioFormat Id);
 
     private static bool IsSessionError(Exception ex) =>
         ex is COMException or InvalidOperationException or InvalidCastException or IOException or

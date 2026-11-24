@@ -597,4 +597,277 @@
   <data name="ExitPreviewFullScreen" xml:space="preserve">
     <value>Exit full screen</value>
   </data>
+  <data name="CaptureModeTab" xml:space="preserve">
+    <value>Capture</value>
+  </data>
+  <data name="QcCenterTab" xml:space="preserve">
+    <value>QC Center</value>
+  </data>
+  <data name="LayoutFocus" xml:space="preserve">
+    <value>Focus</value>
+  </data>
+  <data name="LayoutSplit" xml:space="preserve">
+    <value>Studio Split</value>
+  </data>
+  <data name="VectorShort" xml:space="preserve">
+    <value>Vector</value>
+  </data>
+  <data name="FilterAll" xml:space="preserve">
+    <value>All</value>
+  </data>
+  <data name="FilterDrops" xml:space="preserve">
+    <value>Drops</value>
+  </data>
+  <data name="FilterSignal" xml:space="preserve">
+    <value>Signal</value>
+  </data>
+  <data name="CopyEvents" xml:space="preserve">
+    <value>Copy event log</value>
+  </data>
+  <data name="SafeAreaGuides" xml:space="preserve">
+    <value>Safe area guides</value>
+  </data>
+  <data name="PinInspector" xml:space="preserve">
+    <value>Pin capture panel</value>
+  </data>
+  <data name="CloseInspector" xml:space="preserve">
+    <value>Hide capture panel</value>
+  </data>
+  <data name="AudioShort" xml:space="preserve">
+    <value>AUDIO</value>
+  </data>
+  <data name="MetricValidFrames" xml:space="preserve">
+    <value>Valid</value>
+  </data>
+  <data name="MetricNoInput" xml:space="preserve">
+    <value>No-input</value>
+  </data>
+  <data name="MetricMissing" xml:space="preserve">
+    <value>Missing</value>
+  </data>
+  <data name="MetricSkipped" xml:space="preserve">
+    <value>Skipped</value>
+  </data>
+  <data name="QcCenterTitle" xml:space="preserve">
+    <value>Quality Control Center</value>
+  </data>
+  <data name="QcCenterSubtitle" xml:space="preserve">
+    <value>Verify recorded MOV streams, FrameMD5 integrity, field order, and QCTools reports.</value>
+  </data>
+  <data name="QcStepInspect" xml:space="preserve">
+    <value>1. Inspect streams</value>
+  </data>
+  <data name="QcStepDecode" xml:space="preserve">
+    <value>2. Decode &amp; FrameMD5</value>
+  </data>
+  <data name="QcStepAnalyze" xml:space="preserve">
+    <value>3. QCTools analysis</value>
+  </data>
+  <data name="QcMetricVideo" xml:space="preserve">
+    <value>DECODED VIDEO FRAMES</value>
+  </data>
+  <data name="QcMetricAudio" xml:space="preserve">
+    <value>DECODED PCM SAMPLES</value>
+  </data>
+  <data name="QcArtifactsHeading" xml:space="preserve">
+    <value>GENERATED REPORTS &amp; FILES</value>
+  </data>
+  <data name="QcViewInlineLog" xml:space="preserve">
+    <value>Preview JSON log inline</value>
+  </data>
+  <data name="QcHideInlineLog" xml:space="preserve">
+    <value>Hide inline log</value>
+  </data>
+  <data name="QcDropPrompt" xml:space="preserve">
+    <value>Drop a MOV file here or select one to verify</value>
+  </data>
+  <data name="QcDropHint" xml:space="preserve">
+    <value>Post-recording QC results also appear here automatically after stopping a capture.</value>
+  </data>
+  <data name="RoutingHeading" xml:space="preserve">
+    <value>SIGNAL ROUTING</value>
+  </data>
+  <data name="ToolchainHeading" xml:space="preserve">
+    <value>QC TOOLCHAIN</value>
+  </data>
+  <data name="ShortcutsHeading" xml:space="preserve">
+    <value>KEYBOARD SHORTCUTS</value>
+  </data>
+  <data name="Theme" xml:space="preserve">
+    <value>Theme</value>
+  </data>
+  <data name="ThemeDescription" xml:space="preserve">
+    <value>Dark Studio is calibrated for neutral video monitoring.</value>
+  </data>
+  <data name="ThemeDark" xml:space="preserve">
+    <value>Dark Studio</value>
+  </data>
+  <data name="ThemeSystem" xml:space="preserve">
+    <value>Use system setting</value>
+  </data>
+  <data name="ThemeLight" xml:space="preserve">
+    <value>Light Studio</value>
+  </data>
+  <data name="DefaultLayout" xml:space="preserve">
+    <value>Default monitor layout</value>
+  </data>
+  <data name="DefaultLayoutDescription" xml:space="preserve">
+    <value>Choose whether to show scopes alongside preview on launch.</value>
+  </data>
+  <data name="ToolchainCardHeader" xml:space="preserve">
+    <value>FFmpeg &amp; FFprobe</value>
+  </data>
+  <data name="ToolchainReady" xml:space="preserve">
+    <value>Ready</value>
+  </data>
+  <data name="ToolchainMissing" xml:space="preserve">
+    <value>Not found</value>
+  </data>
+  <data name="OpenSettingsFolder" xml:space="preserve">
+    <value>Open settings folder</value>
+  </data>
+  <data name="ShortcutPreview" xml:space="preserve">
+    <value>Start / Stop preview</value>
+  </data>
+  <data name="ShortcutRecord" xml:space="preserve">
+    <value>Start / Stop recording</value>
+  </data>
+  <data name="ShortcutInspector" xml:space="preserve">
+    <value>Toggle capture panel</value>
+  </data>
+  <data name="ShortcutLayouts" xml:space="preserve">
+    <value>Switch monitor layouts</value>
+  </data>
+  <data name="Video10Short" xml:space="preserve">
+    <value>10-bit v210</value>
+  </data>
+  <data name="Video8Short" xml:space="preserve">
+    <value>8-bit 2vuy</value>
+  </data>
+  <data name="Audio16Short" xml:space="preserve">
+    <value>16-bit PCM</value>
+  </data>
+  <data name="Audio32Short" xml:space="preserve">
+    <value>32-bit PCM</value>
+  </data>
+  <data name="EventsCountBadge" xml:space="preserve">
+    <value>{0:N0} events</value>
+  </data>
+  <data name="AnalogSectionHeading" xml:space="preserve">
+    <value>ANALOG INPUT LEVELS</value>
+  </data>
+  <data name="AnalogIreLabel" xml:space="preserve">
+    <value>NTSC black setup (IRE)</value>
+  </data>
+  <data name="AnalogComponentLabel" xml:space="preserve">
+    <value>Component video levels</value>
+  </data>
+  <data name="AnalogAudioLevelLabel" xml:space="preserve">
+    <value>Analog audio level</value>
+  </data>
+  <data name="AnalogGainOverride" xml:space="preserve">
+    <value>Override hardware input gain</value>
+  </data>
+  <data name="AnalogGainConsumerNote" xml:space="preserve">
+    <value>Consumer level locks hardware input gain to maximum.</value>
+  </data>
+  <data name="AnalogGainLink" xml:space="preserve">
+    <value>Link left and right channel gain</value>
+  </data>
+  <data name="AnalogGainReset" xml:space="preserve">
+    <value>Reset input gain to 0.0 dB</value>
+  </data>
+  <data name="AnalogDriverDefault" xml:space="preserve">
+    <value>Follow driver default</value>
+  </data>
+  <data name="AnalogIre0" xml:space="preserve">
+    <value>0.0 IRE (NTSC-J)</value>
+  </data>
+  <data name="AnalogIre75" xml:space="preserve">
+    <value>7.5 IRE (NTSC-M)</value>
+  </data>
+  <data name="AnalogComponentSmpte" xml:space="preserve">
+    <value>SMPTE / Betacam SP</value>
+  </data>
+  <data name="AnalogComponentBetacam" xml:space="preserve">
+    <value>Betacam (Sony)</value>
+  </data>
+  <data name="AnalogAudioPro" xml:space="preserve">
+    <value>Pro (+4 dBu)</value>
+  </data>
+  <data name="AnalogAudioConsumer" xml:space="preserve">
+    <value>Consumer (-10 dBV)</value>
+  </data>
+  <data name="PreviewOptionsButton" xml:space="preserve">
+    <value>Preview</value>
+  </data>
+  <data name="PreviewOnlyNotice" xml:space="preserve">
+    <value>Preview only — does not alter the captured lossless MOV or PCM audio.</value>
+  </data>
+  <data name="PreviewDeinterlaceLabel" xml:space="preserve">
+    <value>Deinterlace (Preview only)</value>
+  </data>
+  <data name="PreviewDeinterlaceDesc" xml:space="preserve">
+    <value>Motion-adaptive Bob-Weave keeps static detail sharp while removing combing on motion.</value>
+  </data>
+  <data name="PreviewAspectLabel" xml:space="preserve">
+    <value>Display aspect ratio (Preview only)</value>
+  </data>
+  <data name="PreviewAspectDesc" xml:space="preserve">
+    <value>Override display aspect for anamorphic 16:9 SD tapes or 1:1 square pixels.</value>
+  </data>
+  <data name="PreviewMatrixLabel" xml:space="preserve">
+    <value>Color matrix (Preview only)</value>
+  </data>
+  <data name="PreviewMatrixDesc" xml:space="preserve">
+    <value>Select Y′CbCr to RGB matrix for on-screen monitoring.</value>
+  </data>
+  <data name="Ntsc480Guide" xml:space="preserve">
+    <value>NTSC 480 crop guide (4 top / 2 bottom lines)</value>
+  </data>
+  <data name="AudioMonitorTitle" xml:space="preserve">
+    <value>Local audio monitor</value>
+  </data>
+  <data name="AudioMonitorNotice" xml:space="preserve">
+    <value>Preview speaker output only — muting or volume never affects recorded PCM.</value>
+  </data>
+  <data name="AudioMonitorOnTooltip" xml:space="preserve">
+    <value>Local audio monitor ON (Preview only — click to mute)</value>
+  </data>
+  <data name="AudioMonitorOffTooltip" xml:space="preserve">
+    <value>Local audio monitor muted (Preview only — click to unmute)</value>
+  </data>
+  <data name="PreviewDefaultsHeading" xml:space="preserve">
+    <value>PREVIEW &amp; MONITORING (PREVIEW ONLY)</value>
+  </data>
+  <data name="DeinterlaceBobWeave" xml:space="preserve">
+    <value>Bob-Weave (Adaptive)</value>
+  </data>
+  <data name="DeinterlaceField" xml:space="preserve">
+    <value>Single-Field Bob</value>
+  </data>
+  <data name="DeinterlaceOff" xml:space="preserve">
+    <value>Off (Raw interlaced)</value>
+  </data>
+  <data name="AspectAuto" xml:space="preserve">
+    <value>Auto (SD 4:3 / HD native)</value>
+  </data>
+  <data name="Aspect4x3" xml:space="preserve">
+    <value>4:3</value>
+  </data>
+  <data name="Aspect16x9" xml:space="preserve">
+    <value>16:9 (Anamorphic)</value>
+  </data>
+  <data name="Aspect1x1" xml:space="preserve">
+    <value>1:1 (Square pixels)</value>
+  </data>
+  <data name="MatrixAuto" xml:space="preserve">
+    <value>Auto (SD 601 / HD 709)</value>
+  </data>
+  <data name="MatrixBt601" xml:space="preserve">
+    <value>BT.601</value>
+  </data>
+  <data name="MatrixBt709" xml:space="preserve">
+    <value>BT.709</value>
+  </data>
 </root>

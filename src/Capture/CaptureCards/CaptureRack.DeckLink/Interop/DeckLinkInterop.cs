@@ -112,6 +112,8 @@ internal interface IDeckLinkConfiguration
     [PreserveSig] int GetFlag(uint id, out int value);
     [PreserveSig] int SetInt(uint id, long value);
     [PreserveSig] int GetInt(uint id, out long value);
+    [PreserveSig] int SetFloat(uint id, double value);
+    [PreserveSig] int GetFloat(uint id, out double value);
 }
 
 [ComImport, Guid("2A04A635-ED42-41EF-9342-0E11F8CF6B5E"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]

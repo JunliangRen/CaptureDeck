@@ -597,4 +597,277 @@
   <data name="ExitPreviewFullScreen" xml:space="preserve">
     <value>全画面表示を終了</value>
   </data>
+  <data name="CaptureModeTab" xml:space="preserve">
+    <value>キャプチャ</value>
+  </data>
+  <data name="QcCenterTab" xml:space="preserve">
+    <value>品質チェック</value>
+  </data>
+  <data name="LayoutFocus" xml:space="preserve">
+    <value>フォーカス</value>
+  </data>
+  <data name="LayoutSplit" xml:space="preserve">
+    <value>スタジオ分割</value>
+  </data>
+  <data name="VectorShort" xml:space="preserve">
+    <value>ベクトル</value>
+  </data>
+  <data name="FilterAll" xml:space="preserve">
+    <value>すべて</value>
+  </data>
+  <data name="FilterDrops" xml:space="preserve">
+    <value>欠落</value>
+  </data>
+  <data name="FilterSignal" xml:space="preserve">
+    <value>信号</value>
+  </data>
+  <data name="CopyEvents" xml:space="preserve">
+    <value>イベントログをコピー</value>
+  </data>
+  <data name="SafeAreaGuides" xml:space="preserve">
+    <value>セーフエリアガイド</value>
+  </data>
+  <data name="PinInspector" xml:space="preserve">
+    <value>キャプチャ設定を固定</value>
+  </data>
+  <data name="CloseInspector" xml:space="preserve">
+    <value>キャプチャ設定を隠す</value>
+  </data>
+  <data name="AudioShort" xml:space="preserve">
+    <value>音声</value>
+  </data>
+  <data name="MetricValidFrames" xml:space="preserve">
+    <value>有効</value>
+  </data>
+  <data name="MetricNoInput" xml:space="preserve">
+    <value>無入力</value>
+  </data>
+  <data name="MetricMissing" xml:space="preserve">
+    <value>欠落</value>
+  </data>
+  <data name="MetricSkipped" xml:space="preserve">
+    <value>スキップ</value>
+  </data>
+  <data name="QcCenterTitle" xml:space="preserve">
+    <value>品質チェックセンター</value>
+  </data>
+  <data name="QcCenterSubtitle" xml:space="preserve">
+    <value>MOV トラックのデコード整合性、FrameMD5、フィールド順序、QCTools レポートを検証します。</value>
+  </data>
+  <data name="QcStepInspect" xml:space="preserve">
+    <value>1. ストリーム検査</value>
+  </data>
+  <data name="QcStepDecode" xml:space="preserve">
+    <value>2. デコードと FrameMD5</value>
+  </data>
+  <data name="QcStepAnalyze" xml:space="preserve">
+    <value>3. QCTools 信号解析</value>
+  </data>
+  <data name="QcMetricVideo" xml:space="preserve">
+    <value>デコード映像フレーム</value>
+  </data>
+  <data name="QcMetricAudio" xml:space="preserve">
+    <value>デコード PCM サンプル</value>
+  </data>
+  <data name="QcArtifactsHeading" xml:space="preserve">
+    <value>生成されたレポートとファイル</value>
+  </data>
+  <data name="QcViewInlineLog" xml:space="preserve">
+    <value>JSON ログをインライン表示</value>
+  </data>
+  <data name="QcHideInlineLog" xml:space="preserve">
+    <value>インラインログを閉じる</value>
+  </data>
+  <data name="QcDropPrompt" xml:space="preserve">
+    <value>MOV ファイルをここにドロップ、またはファイルを選択</value>
+  </data>
+  <data name="QcDropHint" xml:space="preserve">
+    <value>収録終了後の自動品質チェック結果もここに表示されます。</value>
+  </data>
+  <data name="RoutingHeading" xml:space="preserve">
+    <value>信号ルーティング</value>
+  </data>
+  <data name="ToolchainHeading" xml:space="preserve">
+    <value>品質チェックツール</value>
+  </data>
+  <data name="ShortcutsHeading" xml:space="preserve">
+    <value>キーボードショートカット</value>
+  </data>
+  <data name="Theme" xml:space="preserve">
+    <value>テーマ</value>
+  </data>
+  <data name="ThemeDescription" xml:space="preserve">
+    <value>ダークスタジオは映像モニタリング向けのニュートラル配色です。</value>
+  </data>
+  <data name="ThemeDark" xml:space="preserve">
+    <value>ダークスタジオ</value>
+  </data>
+  <data name="ThemeSystem" xml:space="preserve">
+    <value>システム設定に従う</value>
+  </data>
+  <data name="ThemeLight" xml:space="preserve">
+    <value>ライトスタジオ</value>
+  </data>
+  <data name="DefaultLayout" xml:space="preserve">
+    <value>既定のモニターレイアウト</value>
+  </data>
+  <data name="DefaultLayoutDescription" xml:space="preserve">
+    <value>起動時にスコープを並べて表示するか、映像を最大表示するか選択します。</value>
+  </data>
+  <data name="ToolchainCardHeader" xml:space="preserve">
+    <value>FFmpeg と FFprobe</value>
+  </data>
+  <data name="ToolchainReady" xml:space="preserve">
+    <value>準備完了</value>
+  </data>
+  <data name="ToolchainMissing" xml:space="preserve">
+    <value>未検出</value>
+  </data>
+  <data name="OpenSettingsFolder" xml:space="preserve">
+    <value>設定フォルダを開く</value>
+  </data>
+  <data name="ShortcutPreview" xml:space="preserve">
+    <value>プレビュー開始 / 停止</value>
+  </data>
+  <data name="ShortcutRecord" xml:space="preserve">
+    <value>収録開始 / 停止</value>
+  </data>
+  <data name="ShortcutInspector" xml:space="preserve">
+    <value>キャプチャ設定の表示切替</value>
+  </data>
+  <data name="ShortcutLayouts" xml:space="preserve">
+    <value>モニターレイアウト切替</value>
+  </data>
+  <data name="Video10Short" xml:space="preserve">
+    <value>10-bit v210</value>
+  </data>
+  <data name="Video8Short" xml:space="preserve">
+    <value>8-bit 2vuy</value>
+  </data>
+  <data name="Audio16Short" xml:space="preserve">
+    <value>16-bit PCM</value>
+  </data>
+  <data name="Audio32Short" xml:space="preserve">
+    <value>32-bit PCM</value>
+  </data>
+  <data name="EventsCountBadge" xml:space="preserve">
+    <value>{0:N0} 件</value>
+  </data>
+  <data name="AnalogSectionHeading" xml:space="preserve">
+    <value>アナログ入力レベル（ハードウェア）</value>
+  </data>
+  <data name="AnalogIreLabel" xml:space="preserve">
+    <value>NTSC 黒レベル (IRE)</value>
+  </data>
+  <data name="AnalogComponentLabel" xml:space="preserve">
+    <value>コンポーネント映像レベル</value>
+  </data>
+  <data name="AnalogAudioLevelLabel" xml:space="preserve">
+    <value>アナログ音声レベル</value>
+  </data>
+  <data name="AnalogGainOverride" xml:space="preserve">
+    <value>ハードウェア入力ゲインを上書き</value>
+  </data>
+  <data name="AnalogGainConsumerNote" xml:space="preserve">
+    <value>民生レベル時はハードウェア側で入力ゲインが最大に固定されます。</value>
+  </data>
+  <data name="AnalogGainLink" xml:space="preserve">
+    <value>L/R チャンネルのゲインを連動</value>
+  </data>
+  <data name="AnalogGainReset" xml:space="preserve">
+    <value>入力ゲインを 0.0 dB にリセット</value>
+  </data>
+  <data name="AnalogDriverDefault" xml:space="preserve">
+    <value>ドライバ既定に従う</value>
+  </data>
+  <data name="AnalogIre0" xml:space="preserve">
+    <value>0.0 IRE（日本 NTSC-J）</value>
+  </data>
+  <data name="AnalogIre75" xml:space="preserve">
+    <value>7.5 IRE（北米 NTSC-M）</value>
+  </data>
+  <data name="AnalogComponentSmpte" xml:space="preserve">
+    <value>SMPTE / Betacam SP</value>
+  </data>
+  <data name="AnalogComponentBetacam" xml:space="preserve">
+    <value>Betacam（旧 Sony）</value>
+  </data>
+  <data name="AnalogAudioPro" xml:space="preserve">
+    <value>業務用 (+4 dBu)</value>
+  </data>
+  <data name="AnalogAudioConsumer" xml:space="preserve">
+    <value>民生用 (-10 dBV)</value>
+  </data>
+  <data name="PreviewOptionsButton" xml:space="preserve">
+    <value>プレビュー</value>
+  </data>
+  <data name="PreviewOnlyNotice" xml:space="preserve">
+    <value>画面プレビュー専用の設定です。収録される無圧縮 MOV・PCM には一切影響しません。</value>
+  </data>
+  <data name="PreviewDeinterlaceLabel" xml:space="preserve">
+    <value>インターレース解除（プレビュー専用）</value>
+  </data>
+  <data name="PreviewDeinterlaceDesc" xml:space="preserve">
+    <value>動き適応 Bob-Weave で静止部の解像度を保ちつつ動きのコーミングを除去します。</value>
+  </data>
+  <data name="PreviewAspectLabel" xml:space="preserve">
+    <value>表示アスペクト比（プレビュー専用）</value>
+  </data>
+  <data name="PreviewAspectDesc" xml:space="preserve">
+    <value>スクイーズ 16:9 SD や 1:1 ピクセル等倍表示を切り替えられます。</value>
+  </data>
+  <data name="PreviewMatrixLabel" xml:space="preserve">
+    <value>カラーマトリクス（プレビュー専用）</value>
+  </data>
+  <data name="PreviewMatrixDesc" xml:space="preserve">
+    <value>モニタリング表示用の Y′CbCr → RGB 変換マトリクスを選択します。</value>
+  </data>
+  <data name="Ntsc480Guide" xml:space="preserve">
+    <value>NTSC 480 クロップガイド（上 4 / 下 2 ライン）</value>
+  </data>
+  <data name="AudioMonitorTitle" xml:space="preserve">
+    <value>ローカル音声モニター</value>
+  </data>
+  <data name="AudioMonitorNotice" xml:space="preserve">
+    <value>PC スピーカー出力専用です。ミュートや音量は収録 PCM に影響しません。</value>
+  </data>
+  <data name="AudioMonitorOnTooltip" xml:space="preserve">
+    <value>ローカル音声モニター ON（プレビュー専用 · クリックでミュート）</value>
+  </data>
+  <data name="AudioMonitorOffTooltip" xml:space="preserve">
+    <value>ローカル音声モニター ミュート中（プレビュー専用 · クリックで解除）</value>
+  </data>
+  <data name="PreviewDefaultsHeading" xml:space="preserve">
+    <value>プレビュー表示（プレビュー専用・収録に影響なし）</value>
+  </data>
+  <data name="DeinterlaceBobWeave" xml:space="preserve">
+    <value>Bob-Weave（動き適応）</value>
+  </data>
+  <data name="DeinterlaceField" xml:space="preserve">
+    <value>片フィールド補間（Field Bob）</value>
+  </data>
+  <data name="DeinterlaceOff" xml:space="preserve">
+    <value>オフ（生インターレース）</value>
+  </data>
+  <data name="AspectAuto" xml:space="preserve">
+    <value>自動（SD 4:3 / HD 等比）</value>
+  </data>
+  <data name="Aspect4x3" xml:space="preserve">
+    <value>4:3</value>
+  </data>
+  <data name="Aspect16x9" xml:space="preserve">
+    <value>16:9（アナモフィック）</value>
+  </data>
+  <data name="Aspect1x1" xml:space="preserve">
+    <value>1:1（正方形ピクセル）</value>
+  </data>
+  <data name="MatrixAuto" xml:space="preserve">
+    <value>自動（SD 601 / HD 709）</value>
+  </data>
+  <data name="MatrixBt601" xml:space="preserve">
+    <value>BT.601</value>
+  </data>
+  <data name="MatrixBt709" xml:space="preserve">
+    <value>BT.709</value>
+  </data>
 </root>

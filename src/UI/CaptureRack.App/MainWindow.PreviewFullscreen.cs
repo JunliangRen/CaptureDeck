@@ -4,6 +4,7 @@ using Microsoft.UI.Input;
 using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Automation;
+using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
 using Windows.UI.ViewManagement;
@@ -15,23 +16,32 @@ public sealed partial class MainWindow
     private bool previewFullscreen;
     private bool restoreMaximizedWindow;
     private readonly DispatcherQueueTimer previewHoverTimer;
-    private readonly ScalarTransition previewFullscreenFade = new() { Duration = TimeSpan.FromMilliseconds(150) };
+    private readonly DispatcherQueueTimer fullscreenIdleTimer;
+    private readonly ScalarTransition previewFullscreenFade = new() { Duration = TimeSpan.FromMilliseconds(160) };
     private bool previewHoverReady;
     private bool previewTouchControlsVisible;
+    private bool fullscreenBarVisible;
     private Thickness windowedWorkspacePadding;
-    private double windowedWorkspaceRowSpacing;
+    private double windowedWorkspaceColumnSpacing;
 
     private void PreviewSurface_PointerEntered(object sender, PointerRoutedEventArgs e)
     {
         if (e.Pointer.PointerDeviceType != PointerDeviceType.Mouse)
             return;
 
-        // Keep the icon visible when switching from a tap to the mouse.
         previewHoverReady |= previewTouchControlsVisible;
         previewTouchControlsVisible = false;
         if (!previewHoverReady && !previewHoverTimer.IsRunning)
             previewHoverTimer.Start();
         UpdatePreviewFullscreenButton();
+        if (previewFullscreen)
+            WakeFullscreenMiniBar();
+    }
+
+    private void PreviewSurface_PointerMoved(object sender, PointerRoutedEventArgs e)
+    {
+        if (previewFullscreen && e.Pointer.PointerDeviceType == PointerDeviceType.Mouse)
+            WakeFullscreenMiniBar();
     }
 
     private void PreviewSurface_PointerExited(object sender, PointerRoutedEventArgs e)
@@ -51,6 +61,11 @@ public sealed partial class MainWindow
 
         previewTouchControlsVisible = !previewTouchControlsVisible;
         UpdatePreviewFullscreenButton();
+        if (previewFullscreen)
+        {
+            fullscreenBarVisible = previewTouchControlsVisible;
+            UpdateFullscreenMiniBar();
+        }
     }
 
     private void PreviewSurface_DoubleTapped(object sender, DoubleTappedRoutedEventArgs e)
@@ -67,7 +82,8 @@ public sealed partial class MainWindow
 
     private void PreviewFullscreen_Invoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
     {
-        if (WorkspacePage.Visibility != Visibility.Visible || MonitorSelector.SelectedItem != PreviewTab)
+        if (activePage != ActiveAppPage.Capture ||
+            workspaceLayout is not (WorkspaceLayoutMode.Focus or WorkspaceLayoutMode.Split))
             return;
 
         SetPreviewFullscreen(!previewFullscreen);
@@ -83,10 +99,32 @@ public sealed partial class MainWindow
         args.Handled = true;
     }
 
+    private void WakeFullscreenMiniBar()
+    {
+        fullscreenBarVisible = true;
+        UpdateFullscreenMiniBar();
+        fullscreenIdleTimer.Stop();
+        fullscreenIdleTimer.Start();
+    }
+
+    private void UpdateFullscreenMiniBar()
+    {
+        var visible = previewFullscreen && fullscreenBarVisible;
+        FullscreenMiniBar.Visibility = previewFullscreen ? Visibility.Visible : Visibility.Collapsed;
+        var opacity = visible ? 1 : 0;
+        if (FullscreenMiniBar.Opacity != opacity)
+        {
+            FullscreenMiniBar.OpacityTransition = new UISettings().AnimationsEnabled
+                ? previewFullscreenFade : null;
+            FullscreenMiniBar.Opacity = opacity;
+        }
+        FullscreenMiniBar.IsHitTestVisible = visible;
+    }
+
     private void UpdatePreviewFullscreenButton()
     {
-        var visible = previewHoverReady || previewTouchControlsVisible ||
-            PreviewFullscreenButton.FocusState == FocusState.Keyboard;
+        var visible = !previewFullscreen && (previewHoverReady || previewTouchControlsVisible ||
+            PreviewFullscreenButton.FocusState == FocusState.Keyboard);
         var opacity = visible ? 1 : 0;
         if (PreviewFullscreenButton.Opacity != opacity)
         {
@@ -102,6 +140,8 @@ public sealed partial class MainWindow
         PreviewFullscreenIcon.Glyph = previewFullscreen ? "\uE73F" : "\uE740";
         AutomationProperties.SetName(PreviewFullscreenButton,
             L(previewFullscreen ? "ExitPreviewFullScreen" : "PreviewFullScreen"));
+        ToolTipService.SetToolTip(PreviewFullscreenButton,
+            L(previewFullscreen ? "ExitPreviewFullScreen" : "PreviewFullScreen"));
     }
 
     private void SetPreviewFullscreen(bool fullscreen)
@@ -110,30 +150,45 @@ public sealed partial class MainWindow
         {
             restoreMaximizedWindow = AppWindow.Presenter is OverlappedPresenter { State: OverlappedPresenterState.Maximized };
             windowedWorkspacePadding = WorkspacePage.Padding;
-            windowedWorkspaceRowSpacing = WorkspacePage.RowSpacing;
+            windowedWorkspaceColumnSpacing = WorkspacePage.ColumnSpacing;
             AppWindow.SetPresenter(AppWindowPresenterKind.FullScreen);
         }
         else
         {
+            fullscreenIdleTimer.Stop();
             AppWindow.SetPresenter(AppWindowPresenterKind.Default);
             if (restoreMaximizedWindow && AppWindow.Presenter is OverlappedPresenter { State: not OverlappedPresenterState.Maximized } window)
                 window.Maximize();
         }
 
         previewFullscreen = fullscreen;
+        TitleBarGrid.Visibility = fullscreen ? Visibility.Collapsed : Visibility.Visible;
+        StageToolbar.Visibility = fullscreen ? Visibility.Collapsed : Visibility.Visible;
         WorkspacePage.Background = fullscreen ? new SolidColorBrush(Colors.Black) : null;
         WorkspacePage.Padding = fullscreen ? new Thickness(0) : windowedWorkspacePadding;
-        WorkspacePage.RowSpacing = fullscreen ? 0 : windowedWorkspaceRowSpacing;
-        MonitorHeader.Visibility = fullscreen ? Visibility.Collapsed : Visibility.Visible;
-        StereoMeter.Visibility = fullscreen ? Visibility.Collapsed : Visibility.Visible;
-        PreviewDetail.Visibility = !fullscreen && previewCaption is not null ? Visibility.Visible : Visibility.Collapsed;
-        PreviewView.VerticalAlignment = fullscreen ? VerticalAlignment.Center : VerticalAlignment.Stretch;
+        WorkspacePage.ColumnSpacing = fullscreen ? 0 : windowedWorkspaceColumnSpacing;
+        PreviewMonitorHousing.CornerRadius = fullscreen ? new CornerRadius(0) : new CornerRadius(4);
+        PreviewMonitorHousing.BorderThickness = fullscreen ? new Thickness(0) : new Thickness(1.5);
+        PreviewRecFrameGlow.Visibility = !fullscreen && recordingClock.IsRunning ? Visibility.Visible : Visibility.Collapsed;
+        PreviewSurface.BorderThickness = fullscreen ? new Thickness(0) : new Thickness(1);
+        PreviewSurface.CornerRadius = new CornerRadius(0);
+        PreviewHudPill.Visibility = !fullscreen && previewCaption is not null ? Visibility.Visible : Visibility.Collapsed;
+        StereoMeter.Visibility = !fullscreen && lastWindowWidth >= 680 ? Visibility.Visible : Visibility.Collapsed;
+
+        UpdateInspectorLayout();
+        ApplyWorkspaceLayout();
         UpdateCaptureFooter();
         UpdateMonitorLayout();
 
-        PreviewFullscreenButton.Focus(FocusState.Programmatic);
         previewTouchControlsVisible = false;
         UpdatePreviewFullscreenIcon();
         UpdatePreviewFullscreenButton();
+        if (fullscreen)
+            WakeFullscreenMiniBar();
+        else
+        {
+            fullscreenBarVisible = false;
+            UpdateFullscreenMiniBar();
+        }
     }
 }

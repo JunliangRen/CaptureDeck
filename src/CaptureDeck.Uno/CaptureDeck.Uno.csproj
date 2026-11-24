@@ -14,4 +14,29 @@
     <UnoIcon Include="Assets/qc_icon.png" />
     <ProjectReference Include="../CaptureDeck.QualityControl/CaptureDeck.QualityControl.csproj" />
   </ItemGroup>
+
+  <!-- Uno's Skia Desktop resizer emits Windows icons. Its macOS bundle task expects PNG iconset sizes. -->
+  <Target Name="PrepareMacBundleIcons" BeforeTargets="_UnoPublishAppBundle"
+          Condition="'$(PackageFormat)' == 'app' and $([MSBuild]::IsOSPlatform('OSX'))">
+    <PropertyGroup>
+      <_MacIconDirectory>$([MSBuild]::NormalizeDirectory('$(IntermediateOutputPath)', 'CaptureDeckIcon'))</_MacIconDirectory>
+    </PropertyGroup>
+    <MakeDir Directories="$(_MacIconDirectory)" />
+    <ItemGroup>
+      <_MacIcon Include="icon16x16@1x" Pixels="16" />
+      <_MacIcon Include="icon16x16@2x" Pixels="32" />
+      <_MacIcon Include="icon32x32@1x" Pixels="32" />
+      <_MacIcon Include="icon32x32@2x" Pixels="64" />
+      <_MacIcon Include="icon128x128@1x" Pixels="128" />
+      <_MacIcon Include="icon128x128@2x" Pixels="256" />
+      <_MacIcon Include="icon256x256@1x" Pixels="256" />
+      <_MacIcon Include="icon256x256@2x" Pixels="512" />
+      <_MacIcon Include="icon512x512@1x" Pixels="512" />
+      <_MacIcon Include="icon512x512@2x" Pixels="1024" />
+    </ItemGroup>
+    <Exec Command="/usr/bin/sips -z %(_MacIcon.Pixels) %(_MacIcon.Pixels) &quot;$(MSBuildProjectDirectory)/Assets/qc_icon.png&quot; --out &quot;$(_MacIconDirectory)%(_MacIcon.Identity).png&quot;" />
+    <ItemGroup>
+      <_UnoResizetizerCollectedImages Include="@(_MacIcon->'$(_MacIconDirectory)%(Identity).png')" />
+    </ItemGroup>
+  </Target>
 </Project>

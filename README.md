@@ -24,7 +24,11 @@ CaptureDeck/
 |   |   |-- CaptureDeck.Core             # Shared capture contracts and backend registry
 |   |   |-- CaptureCards/
 |   |   |   `-- CaptureDeck.DeckLink     # Blackmagic DeckLink SDK capture, preview, and MOV recording
-|   |   |-- CaptureDeck.DirectShow       # Windows DirectShow capture and shared interop
+|   |   |-- CaptureDeck.DirectShow/      # Windows DirectShow capture
+|   |   |   `-- Windows/
+|   |   |       |-- FireWire/           # IEEE 1394 / i.LINK capture sources
+|   |   |       |   `-- MsTape/         # D-VHS device discovery and MPEG-TS capture
+|   |   |       `-- Interop/            # Shared COM bindings, media types, and sample delivery
 |   |   |-- CaptureDeck.SignalCapture    # Sampled-signal capture devices and diagnostics
 |   |   `-- CaptureDeck.Audio            # Reserved for standalone audio capture
 |   |-- Processing/

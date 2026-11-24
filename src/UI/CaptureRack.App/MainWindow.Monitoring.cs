@@ -14,6 +14,8 @@ public sealed partial class MainWindow
     private IReadOnlyList<CaptureEvent>? visibleEvents;
     private VideoScopes? visibleScopes;
     private StereoLevels? visibleAudio;
+    private readonly SolidColorBrush spectrumGridBrush = new(Windows.UI.Color.FromArgb(255, 57, 60, 66));
+    private readonly SolidColorBrush spectrumAxisBrush = new(Windows.UI.Color.FromArgb(255, 204, 211, 220));
 
     private void ResetMonitoring()
     {
@@ -29,6 +31,7 @@ public sealed partial class MainWindow
         AutomationProperties.SetName(WaveformPlot, L("LumaHeading"));
         VectorPlot.Source = null;
         SpectrumTrace.Points.Clear();
+        PaintSpectrumScale(null);
         SpectrumTitle.Text = L("SpectrumTitle");
         SpectrumMidFrequency.Text = SpectrumMaxFrequency.Text = "—";
         LeftMeterFill.ScaleY = RightMeterFill.ScaleY = 0;
@@ -50,8 +53,11 @@ public sealed partial class MainWindow
         if (stats.AudioLevels is not { } audio || ReferenceEquals(visibleAudio, audio))
             return;
 
+        var spectrumScaleChanged = visibleAudio?.SpectrumFloorDbfs != audio.SpectrumFloorDbfs;
         visibleAudio = audio;
         RenderStereoLevels(audio);
+        if (spectrumScaleChanged)
+            PaintSpectrumScale(audio.SpectrumFloorDbfs);
     }
 
     private void RenderEvents()
@@ -70,7 +76,7 @@ public sealed partial class MainWindow
 
     private void RenderStereoLevels(StereoLevels audio)
     {
-        SpectrumTitle.Text = LocalFormat("SpectrumRange", audio.SampleBits, audio.SpectrumFloorDbfs);
+        SpectrumTitle.Text = LocalFormat("SpectrumInput", audio.SampleBits, audio.SampleRate / 1000d);
         SpectrumMidFrequency.Text = (audio.SampleRate / 4000d).ToString("0.##", settingsCulture) + " kHz";
         SpectrumMaxFrequency.Text = (audio.SampleRate / 2000d).ToString("0.##", settingsCulture) + " kHz";
         ShowLevel("LeftChannel", audio.LeftPeak, audio.LeftClips, LeftMeterFill, LeftLevel, LeftClip);
@@ -95,7 +101,10 @@ public sealed partial class MainWindow
             AutomationProperties.SetName(WaveformPlot, L("LumaHeading"));
         }
         if (visibleAudio is { } audio)
+        {
             RenderStereoLevels(audio);
+            PaintSpectrumScale(audio.SpectrumFloorDbfs);
+        }
         else
         {
             SpectrumTitle.Text = L("SpectrumTitle");
@@ -149,9 +158,55 @@ public sealed partial class MainWindow
 
     private void SpectrumPlot_SizeChanged(object sender, SizeChangedEventArgs e)
     {
+        PaintSpectrumScale(visibleAudio?.SpectrumFloorDbfs);
         if (visibleAudio is { Spectrum: { } spectrum } audio)
             PaintSpectrum(spectrum, audio.SpectrumFloorDbfs);
     }
+
+    private void PaintSpectrumScale(double? floorDbfs)
+    {
+        SpectrumLevelAxis.Children.Clear();
+        SpectrumGridLines.Children.Clear();
+        var width = SpectrumPlot.ActualWidth - 2;
+        var height = SpectrumPlot.ActualHeight - 2;
+        if (floorDbfs is not < 0 || width <= 0 || height <= 0)
+            return;
+
+        // Use round intermediate ticks and preserve the actual one-LSB floor.
+        var floor = floorDbfs.Value;
+        var step = Math.Max(1, Math.Round(-floor / 30) * 10);
+        var levels = new[] { 0, -step, -2 * step, floor };
+        var labels = levels.Select(level => new TextBlock
+        {
+            Text = level.ToString("0.#", settingsCulture),
+            FontSize = 12,
+            Foreground = spectrumAxisBrush,
+            TextAlignment = TextAlignment.Right
+        }).ToArray();
+        foreach (var label in labels)
+            label.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+
+        var labelWidth = Math.Ceiling(labels.Max(label => label.DesiredSize.Width));
+        // Include the axis canvas margins and enough space for the dBFS unit underneath.
+        SpectrumLevelColumn.Width = new GridLength(Math.Max(32, labelWidth + 10));
+
+        for (var i = 0; i < levels.Length; i++)
+        {
+            var y = SpectrumLevelY(levels[i], floor, height);
+            SpectrumGridLines.Children.Add(new Microsoft.UI.Xaml.Shapes.Line
+            {
+                X1 = 1, X2 = 1 + width, Y1 = y, Y2 = y, Stroke = spectrumGridBrush
+            });
+
+            var label = labels[i];
+            label.Width = SpectrumLevelColumn.Width.Value - 10;
+            Canvas.SetTop(label, y - label.DesiredSize.Height / 2);
+            SpectrumLevelAxis.Children.Add(label);
+        }
+    }
+
+    private static double SpectrumLevelY(double dbfs, double floorDbfs, double height) =>
+        1 + Math.Clamp(dbfs / floorDbfs, 0, 1) * height;
 
     private void PaintSpectrum(IReadOnlyList<float> spectrum, double floorDbfs)
     {
@@ -164,7 +219,7 @@ public sealed partial class MainWindow
         for (var bin = 0; bin < spectrum.Count; bin++)
         {
             var x = 1 + bin * width / (spectrum.Count - 1);
-            var y = 1 + Math.Clamp(spectrum[bin] / floorDbfs, 0, 1) * height;
+            var y = SpectrumLevelY(spectrum[bin], floorDbfs, height);
             points.Add(new Point(x, y));
         }
         SpectrumTrace.Points = points;

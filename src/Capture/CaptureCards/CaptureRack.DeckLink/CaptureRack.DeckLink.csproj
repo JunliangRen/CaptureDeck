@@ -7,5 +7,6 @@
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="../../CaptureRack.Core/CaptureRack.Core.csproj" />
+    <InternalsVisibleTo Include="CaptureRack.UT" />
   </ItemGroup>
 </Project>

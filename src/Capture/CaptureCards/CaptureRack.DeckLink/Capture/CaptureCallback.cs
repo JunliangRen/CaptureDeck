@@ -5,7 +5,7 @@ namespace CaptureRack.DeckLink;
 [ComVisible(true)]
 [ClassInterface(ClassInterfaceType.None)]
 internal sealed class CaptureCallback(PreviewFeed? preview, CapturePixelFormat pixelFormat,
-    CaptureAudioFormat audioFormat, VideoMode mode, MovRecording? recording) : IDeckLinkInputCallback
+    CaptureAudioFormat audioFormat, VideoMode mode, MovRecording? recording, bool automaticMode) : IDeckLinkInputCallback
 {
     private const uint NoInput = 1u << 31;
     private const uint BufferRead = 1;
@@ -21,6 +21,8 @@ internal sealed class CaptureCallback(PreviewFeed? preview, CapturePixelFormat p
     private FrameTimeline? recordingTimeline;
     private CaptureStats? recordingBaseline;
     private (long Left, long Right) recordingClips;
+    private bool recordingModeChanged;
+    private bool hasRecordableFrame;
     private long? recordingAudioTime;
     private long? recordingVideoTime;
     private long recordingRegressions;
@@ -34,12 +36,17 @@ internal sealed class CaptureCallback(PreviewFeed? preview, CapturePixelFormat p
 
     internal MovRecording AttachRecording(string path)
     {
-        var writer = new MovRecording(path, mode, pixelFormat, outputAudioFormat);
         lock (gate)
+            EnsureRecordingReady();
+
+        var writer = new MovRecording(path, mode, pixelFormat, outputAudioFormat);
+        try
         {
-            if (stats.Error is null)
+            lock (gate)
             {
+                EnsureRecordingReady();
                 recordingBaseline = stats.Clone();
+                recordingModeChanged = false;
                 recordingTimeline = new FrameTimeline(mode);
                 recordingClips = audioMonitor?.ClipCounts ?? default;
                 recordingAudioTime = recordingVideoTime = null;
@@ -48,9 +55,36 @@ internal sealed class CaptureCallback(PreviewFeed? preview, CapturePixelFormat p
                 return writer;
             }
         }
+        catch
+        {
+            writer.Dispose();
+            throw;
+        }
+    }
 
-        writer.Dispose();
-        throw new InvalidOperationException("The preview has already failed.");
+    private bool CanAttachRecording => stats.Error is null && recording is null && stats.NextMode is null &&
+        (!automaticMode || (hasRecordableFrame && !HasDifferentInputMode));
+
+    private bool HasDifferentInputMode => stats.DetectedMode != 0 && stats.DetectedMode != mode.Id;
+
+    private void EnsureRecordingReady()
+    {
+        if (!CanAttachRecording)
+            throw new InvalidOperationException(automaticMode
+                ? "Wait for a readable preview frame in the current mode before recording."
+                : "The preview is no longer ready to record.");
+    }
+
+    internal bool TryBeginModeChange()
+    {
+        lock (gate)
+        {
+            if (stats.Error is not null || recording is not null || !HasDifferentInputMode)
+                return false;
+
+            stats.NextMode = stats.DetectedMode;
+            return true;
+        }
     }
 
     internal CaptureStats DetachRecording()
@@ -70,10 +104,12 @@ internal sealed class CaptureCallback(PreviewFeed? preview, CapturePixelFormat p
                 Events = recordingTimeline.Events(),
                 AudioLevels = new StereoLevels(0, 0, clips.Left - recordingClips.Left,
                     clips.Right - recordingClips.Right, null, null),
+                RecordingModeChanged = recordingModeChanged,
                 Error = stats.Error
             };
             recordingBaseline = null;
             recordingTimeline = null;
+            recordingModeChanged = false;
             return result;
         }
     }
@@ -87,6 +123,8 @@ internal sealed class CaptureCallback(PreviewFeed? preview, CapturePixelFormat p
         {
             audioWindow = publishMonitor ? audioMonitor?.Read() : null;
             snapshot = stats.Clone();
+            snapshot.CanStartRecording = CanAttachRecording;
+            snapshot.RecordingModeChanged = recordingModeChanged;
             if (publishMonitor && timeline is not null)
             {
                 snapshot.Events = timeline.Events();
@@ -111,7 +149,7 @@ internal sealed class CaptureCallback(PreviewFeed? preview, CapturePixelFormat p
                     var displayMode = (IDeckLinkDisplayMode)Marshal.GetObjectForIUnknown(mode);
                     try
                     {
-                        stats.DetectedMode = displayMode.GetDisplayMode();
+                        ObserveDetectedMode(displayMode.GetDisplayMode());
                     }
                     finally
                     {
@@ -128,11 +166,29 @@ internal sealed class CaptureCallback(PreviewFeed? preview, CapturePixelFormat p
         return 0;
     }
 
+    internal void ObserveDetectedMode(uint detectedMode)
+    {
+        lock (gate)
+        {
+            if (stats.NextMode is not null || detectedMode == stats.DetectedMode)
+                return;
+
+            stats.DetectedMode = detectedMode;
+            if (!HasDifferentInputMode)
+                return;
+
+            hasRecordableFrame = false;
+            if (automaticMode && recording is not null)
+                recordingModeChanged = true;
+        }
+    }
+
     public int VideoInputFrameArrived(IntPtr video, IntPtr audio)
     {
         lock (gate)
         {
-            if (stats.Error is not null)
+            // Keep the clip in its original mode. The UI finishes it before the worker switches inputs.
+            if (stats.Error is not null || recordingModeChanged || (automaticMode && HasDifferentInputMode))
                 return 0;
 
             try
@@ -172,13 +228,15 @@ internal sealed class CaptureCallback(PreviewFeed? preview, CapturePixelFormat p
         return 0;
     }
 
-    private void CountVideo(IDeckLinkVideoInputFrame video)
+    // Called under the callback gate. Managed frame fixtures can exercise this path without the driver.
+    internal void CountVideo(IDeckLinkVideoInputFrame video)
     {
         var noInput = (video.GetFlags() & NoInput) != 0;
         if (timeline is not null && video.GetStreamTime(out var monitorTime, out _, mode.TimeScale) == 0)
             timeline.Observe(monitorTime, noInput);
         if (noInput)
         {
+            hasRecordableFrame = false;
             stats.Signal = VideoSignal.NoInput;
             stats.NoInputFrames++;
             if (preview is not null || recording is not null || stats.NoInputVideoPayload is null)
@@ -233,6 +291,8 @@ internal sealed class CaptureCallback(PreviewFeed? preview, CapturePixelFormat p
                 throw new InvalidOperationException("Invalid video buffer.");
 
             var width = video.GetWidth();
+            hasRecordableFrame = width == mode.Width && height == mode.Height &&
+                rowBytes >= MovRecording.StoredRowBytes(mode.Width, pixelFormat);
             if (recording is not null)
             {
                 DeckLinkCapture.Check(video.GetStreamTime(out var time, out var duration, recording.VideoTimeScale),
@@ -255,7 +315,7 @@ internal sealed class CaptureCallback(PreviewFeed? preview, CapturePixelFormat p
         }
     }
 
-    private unsafe void CountAudio(IDeckLinkAudioInputPacket audio)
+    internal unsafe void CountAudio(IDeckLinkAudioInputPacket audio)
     {
         var sampleFrames = audio.GetSampleFrameCount();
         if (sampleFrames <= 0)
@@ -310,6 +370,8 @@ internal sealed class CaptureCallback(PreviewFeed? preview, CapturePixelFormat p
 public sealed class CaptureStats
 {
     public VideoSignal Signal { get; internal set; }
+    public bool CanStartRecording { get; internal set; }
+    public bool RecordingModeChanged { get; internal set; }
     public long VideoFrames { get; internal set; }
     public long NoInputFrames { get; internal set; }
     public long AudioPackets { get; internal set; }
@@ -324,6 +386,7 @@ public sealed class CaptureStats
     public long? AudioTime { get; internal set; }
     public long TimestampRegressions { get; internal set; }
     internal uint DetectedMode;
+    internal uint? NextMode;
     public string? VideoPayload { get; internal set; }
     public string? NoInputVideoPayload { get; internal set; }
     public string? AudioPayload { get; internal set; }

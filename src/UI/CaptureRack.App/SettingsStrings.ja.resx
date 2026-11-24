@@ -30,9 +30,6 @@
   <data name="Appearance" xml:space="preserve">
     <value>表示</value>
   </data>
-  <data name="FollowSystem" xml:space="preserve">
-    <value>システムに従う</value>
-  </data>
   <data name="Language" xml:space="preserve">
     <value>言語</value>
   </data>
@@ -81,8 +78,8 @@
   <data name="Auto" xml:space="preserve">
     <value>自動検出</value>
   </data>
-  <data name="FixedMode" xml:space="preserve">
-    <value>録画するには、プレビュー開始前に固定の入力モードを選択してください。</value>
+  <data name="AutoRecordingHint" xml:space="preserve">
+    <value>読み取り可能なプレビューフレームを待っています。自動検出でも現在の方式で無信号フレームを収録できます。</value>
   </data>
   <data name="OutputHelp" xml:space="preserve">
     <value>MOV ファイル名には録画開始時刻（現地時間）と録画形式が入ります。</value>
@@ -124,7 +121,7 @@
     <value>録画可能時間 約 {0}</value>
   </data>
   <data name="StorageNeedsMode" xml:space="preserve">
-    <value>固定モードを選択すると録画可能時間を見積もれます。</value>
+    <value>入力方式を選ぶと、収録可能な時間を推定します。</value>
   </data>
   <data name="HoursMinutes" xml:space="preserve">
     <value>{0} 時間 {1} 分</value>
@@ -177,8 +174,8 @@
   <data name="SpectrumTitle" xml:space="preserve">
     <value>ステレオスペクトラム</value>
   </data>
-  <data name="SpectrumRange" xml:space="preserve">
-    <value>ステレオスペクトラム · {0} ビット PCM 入力 · {1:0.#} ～ 0 dBFS</value>
+  <data name="SpectrumInput" xml:space="preserve">
+    <value>ステレオスペクトラム · {0} ビット PCM 入力 · サンプリング周波数 {1:0.##} kHz</value>
   </data>
   <data name="EventTimeline" xml:space="preserve">
     <value>キャプチャイベントのタイムライン</value>
@@ -541,7 +538,7 @@
     <value>品質チェック結果 · 警告 1 件</value>
   </data>
   <data name="CaptureCounts" xml:space="preserve">
-    <value>有効フレーム {0:N0} · 入力なし {1:N0} · PCM パケット {2:N0} · 欠落フレーム {3:N0}</value>
+    <value>有効フレーム {0:N0} · 入力なし {1:N0} · PCM パケット {2:N0} · 欠落フレーム {3:N0} · プレビューのスキップ {4:N0}</value>
   </data>
   <data name="CheckMov" xml:space="preserve">
     <value>MOV を検査…</value>
@@ -560,5 +557,44 @@
   </data>
   <data name="QcFinishing" xml:space="preserve">
     <value>検査を停止し、結果を保存しています。</value>
+  </data>
+  <data name="RecordingFormats" xml:space="preserve">
+    <value>収録形式</value>
+  </data>
+  <data name="RecordingActive" xml:space="preserve">
+    <value>収録中</value>
+  </data>
+  <data name="WritingMov" xml:space="preserve">
+    <value>MOV ファイルに書き込み中です。</value>
+  </data>
+  <data name="RecordingSaved" xml:space="preserve">
+    <value>ファイルを保存しました</value>
+  </data>
+  <data name="SavedQcProgress" xml:space="preserve">
+    <value>品質チェック中 · {0}</value>
+  </data>
+  <data name="SavedQcOutcome" xml:space="preserve">
+    <value>MOV を保存しました。{0}</value>
+  </data>
+  <data name="OpenRecordedMov" xml:space="preserve">
+    <value>MOV を開く</value>
+  </data>
+  <data name="StorageWaitingForAutoMode" xml:space="preserve">
+    <value>プレビュー方式が確定すると、残りの収録時間を推定します。</value>
+  </data>
+  <data name="QcWarnInputModeChange" xml:space="preserve">
+    <value>入力方式が変わりました。新しい方式のフレームを書き込む前に収録を終了しました。</value>
+  </data>
+  <data name="AutoNoInputRecordable" xml:space="preserve">
+    <value>信号がありません。現在のプレビュー方式で収録できます。</value>
+  </data>
+  <data name="AutoFallbackMode" xml:space="preserve">
+    <value>{0}（暫定方式：{1}）</value>
+  </data>
+  <data name="PreviewFullScreen" xml:space="preserve">
+    <value>全画面プレビュー</value>
+  </data>
+  <data name="ExitPreviewFullScreen" xml:space="preserve">
+    <value>全画面表示を終了</value>
   </data>
 </root>

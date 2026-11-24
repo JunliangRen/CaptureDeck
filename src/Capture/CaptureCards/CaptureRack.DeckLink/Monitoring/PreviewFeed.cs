@@ -15,6 +15,7 @@ public sealed class PreviewFeed
     private long lastScopeUpdate;
 
     public long PresentedSequence { get; private set; }
+    public long SkippedFrames => incoming.SkippedFrames + outgoing.SkippedFrames;
     public VideoScopes? Scopes => Volatile.Read(ref scopes);
 
     internal void Offer(IntPtr bytes, int width, int height, int stride, ulong size, bool noInput, CapturePixelFormat format)
@@ -123,11 +124,17 @@ public sealed class PreviewFeed
         private readonly object gate = new();
         private PreviewFrame? slot;
         private bool ready;
+        private long skippedFrames;
+
+        public long SkippedFrames => Interlocked.Read(ref skippedFrames);
 
         public void Offer(IntPtr bytes, int width, int height, int stride, bool noInput, CapturePixelFormat format)
         {
             if (!Monitor.TryEnter(gate))
+            {
+                Interlocked.Increment(ref skippedFrames);
                 return;
+            }
 
             try
             {
@@ -138,6 +145,8 @@ public sealed class PreviewFeed
                 slot.NoInput = noInput;
                 slot.Format = format;
                 Marshal.Copy(bytes, slot.Pixels, 0, checked(stride * height));
+                if (ready)
+                    Interlocked.Increment(ref skippedFrames);
                 ready = true;
             }
             finally
@@ -150,6 +159,8 @@ public sealed class PreviewFeed
         {
             lock (gate)
             {
+                if (ready)
+                    Interlocked.Increment(ref skippedFrames);
                 (slot, frame) = (frame, slot);
                 ready = true;
             }

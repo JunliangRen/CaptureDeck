@@ -6,13 +6,13 @@ using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Input;
 
 namespace CaptureRack.App;
 
 public sealed partial class MainWindow
 {
     private static readonly ResourceManager SettingsText = new("CaptureRack.App.SettingsStrings", typeof(MainWindow).Assembly);
-    private static readonly string[] Languages = ["en", "zh-Hans", "zh-Hant", "ja"];
     private CaptureSettings settings = new();
     private CultureInfo settingsCulture = CultureInfo.GetCultureInfo("en");
     private DispatcherQueueTimer settingsSaveTimer = null!;
@@ -33,16 +33,18 @@ public sealed partial class MainWindow
         storageTimer = DispatcherQueue.CreateTimer();
         storageTimer.Interval = TimeSpan.FromSeconds(10);
         storageTimer.Tick += async (_, _) => await RefreshStorageAsync();
-        ApplySettingsLanguage(null, (uint)CapturePixelFormat.V210, (uint)CaptureAudioFormat.Pcm16);
+        ApplySettingsLanguage(settingsCulture.Name, (uint)CapturePixelFormat.V210, (uint)CaptureAudioFormat.Pcm16);
         UpdateConfigurationStatus();
     }
 
     private async Task RestoreSettingsAsync()
     {
         loading = true;
+        var loaded = false;
         try
         {
             settings = await Task.Run(CaptureSettingsStore.Load);
+            loaded = true;
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException)
         {
@@ -52,8 +54,11 @@ public sealed partial class MainWindow
         if (closing)
             return;
 
-        ApplySettingsLanguage(settings.LanguageOverride, settings.DeckLink.VideoFormat, settings.DeckLink.AudioFormat);
+        var language = SettingsLanguage.Resolve(settings.LanguageOverride, CultureInfo.CurrentUICulture.Name);
+        ApplySettingsLanguage(language, settings.DeckLink.VideoFormat, settings.DeckLink.AudioFormat);
         OutputPath.Text = settings.OutputFolder ?? "";
+        if (loaded && settings.LanguageOverride != language)
+            SaveSettings(settings with { LanguageOverride = language });
         settingsReady = true;
         loading = false;
     }
@@ -122,13 +127,19 @@ public sealed partial class MainWindow
             VideoFormat = FormatPicker.SelectedItem is FormatOption format ? (uint)format.Id : deckLink.VideoFormat,
             AudioFormat = AudioFormatPicker.SelectedItem is AudioFormatOption pcm ? (uint)pcm.Id : deckLink.AudioFormat
         };
-        var updated = settings with
+        SaveSettings(settings with
         {
             DeckLink = deckLink,
             OutputFolder = OutputPath.Text.Trim(),
-            LanguageOverride = LanguagePicker.SelectedItem is ComboBoxItem { Tag: string language } &&
-                Languages.Contains(language) ? language : null
-        };
+            LanguageOverride = settingsCulture.Name
+        });
+        UpdateConfigurationStatus();
+        if (!closing && !string.Equals(checkedFolder, OutputPath.Text.Trim(), StringComparison.Ordinal))
+            _ = RefreshStorageAsync();
+    }
+
+    private void SaveSettings(CaptureSettings updated)
+    {
         try
         {
             CaptureSettingsStore.Save(updated);
@@ -139,39 +150,54 @@ public sealed partial class MainWindow
         {
             ShowSettingsError("SaveError", ex.Message);
         }
-        UpdateConfigurationStatus();
-        if (!closing && !string.Equals(checkedFolder, OutputPath.Text.Trim(), StringComparison.Ordinal))
-            _ = RefreshStorageAsync();
     }
 
     private void OpenSettings_Click(object sender, RoutedEventArgs e)
     {
         WorkspacePage.Visibility = Visibility.Collapsed;
         SettingsPage.Visibility = Visibility.Visible;
+        StartSettingsWheelFallback();
+        UpdateCaptureFooter();
+        RevealWorkspacePanel(SettingsPage);
         BackButton.Focus(FocusState.Programmatic);
     }
 
-    private void BackToWorkspace_Click(object sender, RoutedEventArgs e)
+    private void BackToWorkspace_Click(object sender, RoutedEventArgs e) => TryBackFromSettings();
+
+    private void SettingsBack_Invoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args) =>
+        args.Handled = TryBackFromSettings();
+
+    private bool TryBackFromSettings()
     {
+        if (SettingsPage.Visibility != Visibility.Visible)
+            return false;
+
         SavePendingSettings();
+        StopSettingsWheelFallback();
         SettingsPage.Visibility = Visibility.Collapsed;
         WorkspacePage.Visibility = Visibility.Visible;
+        UpdateCaptureFooter();
+        RevealWorkspacePanel(WorkspacePage);
         OpenSettingsButton.Focus(FocusState.Programmatic);
+        return true;
+    }
+
+    private void UpdateCaptureFooter()
+    {
+        var sessionActive = captureTask is not null || recordingTransition || qcStop is not null;
+        CaptureFooter.Visibility = !previewFullscreen && (SettingsPage.Visibility == Visibility.Collapsed || sessionActive)
+            ? Visibility.Visible : Visibility.Collapsed;
     }
 
     private string L(string key) => SettingsText.GetString(key, settingsCulture) ?? key;
 
     private string LocalFormat(string key, params object[] args) => string.Format(settingsCulture, L(key), args);
 
-    private void ApplySettingsLanguage(string? language, uint? videoFormat, uint? audioFormat)
+    private void ApplySettingsLanguage(string language, uint? videoFormat, uint? audioFormat)
     {
-        var useOverride = language is not null && Languages.Contains(language);
-        var languageName = useOverride ? language! : SettingsLanguage.FromWindowsCulture(CultureInfo.CurrentUICulture.Name);
-        settingsCulture = CultureInfo.GetCultureInfo(languageName);
-        SystemLanguageOption.Content = L("FollowSystem");
-        LanguagePicker.SelectedItem = useOverride
-            ? LanguagePicker.Items.OfType<ComboBoxItem>().First(item => (string)item.Tag == languageName)
-            : SystemLanguageOption;
+        settingsCulture = CultureInfo.GetCultureInfo(language);
+        LanguagePicker.SelectedItem = LanguagePicker.Items.OfType<ComboBoxItem>()
+            .First(item => (string)item.Tag == language);
         SettingsHeading.Text = L("Settings");
         AutomationProperties.SetName(OpenSettingsButton, L("Settings"));
         ToolTipService.SetToolTip(OpenSettingsButton, L("Settings"));
@@ -181,19 +207,28 @@ public sealed partial class MainWindow
         OutputHeading.Text = L("Output");
         AppearanceHeading.Text = L("Appearance");
         AboutHeading.Text = L("About");
-        DevicePicker.Header = L("Device");
+        DeviceCard.Header = L("Device");
+        AutomationProperties.SetName(DevicePicker, L("Device"));
         RefreshButton.Content = L("Refresh");
-        VideoInputPicker.Header = L("VideoSource");
-        AudioInputPicker.Header = L("AudioSource");
-        ModePicker.Header = L("Mode");
-        FormatPicker.Header = L("VideoFormat");
-        AudioFormatPicker.Header = L("AudioFormat");
-        OutputPath.Header = L("Folder");
+        VideoInputCard.Header = L("VideoSource");
+        AutomationProperties.SetName(VideoInputPicker, L("VideoSource"));
+        AudioInputCard.Header = L("AudioSource");
+        AutomationProperties.SetName(AudioInputPicker, L("AudioSource"));
+        ModeCard.Header = L("Mode");
+        AutomationProperties.SetName(ModePicker, L("Mode"));
+        FormatExpander.Header = L("RecordingFormats");
+        VideoFormatCard.Header = L("VideoFormat");
+        AutomationProperties.SetName(FormatPicker, L("VideoFormat"));
+        AudioFormatCard.Header = L("AudioFormat");
+        AutomationProperties.SetName(AudioFormatPicker, L("AudioFormat"));
+        OutputCard.Header = L("Folder");
+        OutputCard.Description = L("OutputHelp");
+        AutomationProperties.SetName(OutputPath, L("Folder"));
         OutputPath.PlaceholderText = L("ChooseFolder");
         BrowseButton.Content = L("Browse");
-        RecordingModeHint.Text = L("FixedMode");
-        OutputHelp.Text = L("OutputHelp");
-        LanguagePicker.Header = L("Language");
+        RecordingModeHint.Text = L("AutoRecordingHint");
+        LanguageCard.Header = L("Language");
+        AutomationProperties.SetName(LanguagePicker, L("Language"));
         ApplyWorkspaceLanguage();
 
         var mode = ModePicker.SelectedItem as ModeOption;
@@ -273,8 +308,11 @@ public sealed partial class MainWindow
         var mode = ModePicker.SelectedItem as ModeOption;
         var format = FormatPicker.SelectedItem as FormatOption;
         var pcm = AudioFormatPicker.SelectedItem as AudioFormatOption;
+        FormatExpander.Description = format is not null && pcm is not null ? $"{format.Label} · {pcm.Label}" : "";
         var modeLabel = mode is { Id: null } && observedPreviewMode is { } activeMode
-            ? $"{mode.Label} ({activeMode.Description})"
+            ? observedPreviewModeIsFallback
+                ? LocalFormat("AutoFallbackMode", mode.Label, activeMode.Description)
+                : $"{mode.Label} ({activeMode.Description})"
             : mode?.Label;
         var text = device is null || video is null || audio is null || mode is null || format is null || pcm is null
             ? L("Configure")
@@ -338,9 +376,11 @@ public sealed partial class MainWindow
         else
         {
             var free = LocalFormat("StorageCapacity", (bytes / (double)(1L << 30)).ToString("N1", settingsCulture));
-            var selectedMode = format is null || mode?.Id is not { } id ? null :
-                source?.ModesFor(format.Id).FirstOrDefault(option => option.Id == id);
-            var estimate = selectedMode is null || format is null || pcm is null ? L("StorageNeedsMode") :
+            var selectedMode = format is null ? null : mode?.Id is { } id
+                ? source?.ModesFor(format.Id).FirstOrDefault(option => option.Id == id)
+                : mode is not null ? observedPreviewMode : null;
+            var estimate = selectedMode is null || format is null || pcm is null
+                ? L(mode is { Id: null } ? "StorageWaitingForAutoMode" : "StorageNeedsMode") :
                 LocalFormat("StorageDuration", FormatRecordingTime(bytes /
                     DeckLinkCapture.EstimateRecordingBytesPerSecond(selectedMode, format.Id, pcm.Id)));
             StorageStatus.Text = $"{free} · {estimate}";

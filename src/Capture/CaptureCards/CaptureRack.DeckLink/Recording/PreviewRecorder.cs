@@ -1,7 +1,6 @@
 namespace CaptureRack.DeckLink;
 
-// Each instance belongs to one fixed-mode preview. The callback gate defines the clip's
-// start and end boundaries between complete SDK callbacks.
+// Each instance belongs to one preview. Each clip uses the mode of its attached callback.
 public sealed class PreviewRecorder
 {
     private readonly object gate = new();
@@ -32,7 +31,7 @@ public sealed class PreviewRecorder
     {
         lock (gate)
         {
-            var input = callback ?? throw new InvalidOperationException("Start a fixed-mode preview before recording.");
+            var input = callback ?? throw new InvalidOperationException("Wait for the preview input to be ready before recording.");
             if (recording is not null)
                 throw new InvalidOperationException("A recording is already running.");
 

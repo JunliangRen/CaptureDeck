@@ -7,9 +7,11 @@ using Microsoft.UI.Xaml.Media.Imaging;
 using CaptureRack.Core;
 using CaptureRack.DeckLink;
 using CaptureRack.QualityControl;
+using Microsoft.UI.Composition;
 using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Hosting;
 using Microsoft.Windows.Storage.Pickers;
 
 namespace CaptureRack.App;
@@ -26,7 +28,9 @@ public sealed partial class MainWindow : Window
     private bool checkingDetectedMode;
     private readonly Stopwatch recordingClock = new();
     private long displayedRecordingSeconds;
+    private long displayedPreviewSkips;
     private string? qcOutputPath;
+    private string? statusFilePath;
     private QcResult? lastQcResult;
     private PreviewFeed? preview;
     private PreviewFrame? previewFrame;
@@ -36,6 +40,7 @@ public sealed partial class MainWindow : Window
     private const double StereoMeterGap = 12;
     private double previewAspectRatio = DefaultPreviewAspectRatio;
     private VideoMode? observedPreviewMode;
+    private bool observedPreviewModeIsFallback;
     private (long? DeviceId, int? DeviceIndex, uint? Source, uint? Mode, CapturePixelFormat? Format) previewSelection;
     private double previewAvailableWidth;
     private double previewHeightLimit;
@@ -51,15 +56,26 @@ public sealed partial class MainWindow : Window
 
     public MainWindow()
     {
+        previewHoverTimer = DispatcherQueue.CreateTimer();
+        previewHoverTimer.Interval = TimeSpan.FromMilliseconds(200);
+        previewHoverTimer.IsRepeating = false;
+        previewHoverTimer.Tick += (_, _) =>
+        {
+            previewHoverReady = true;
+            UpdatePreviewFullscreenButton();
+        };
         InitializeComponent();
         MonitorSelector.SelectedItem = PreviewTab;
         InitializeSettings();
+        InitializeSettingsInput();
         previewTimer = DispatcherQueue.CreateTimer();
         previewTimer.Interval = TimeSpan.FromMilliseconds(1000d / 60);
         previewTimer.Tick += (_, _) =>
         {
             PresentPreview();
             ShowVideoScopes();
+            if (recordingClock.IsRunning)
+                UpdateRecordingClock();
         };
         detectedModeTimer = DispatcherQueue.CreateTimer();
         detectedModeTimer.Interval = TimeSpan.FromSeconds(2);
@@ -73,23 +89,34 @@ public sealed partial class MainWindow : Window
     {
         var padding = WorkspacePage.Padding;
         var availableWidth = e.NewSize.Width - padding.Left - padding.Right;
-        var narrow = availableWidth < 600;
-        SettingsContent.Width = Math.Min(e.NewSize.Width, 960);
-        SettingsRightColumn.Width = narrow ? new GridLength(0) : new GridLength(1, GridUnitType.Star);
-        SettingsSections.ColumnSpacing = narrow ? 0 : 32;
-        SettingsSections.RowSpacing = narrow ? 20 : 0;
-        Grid.SetColumn(OutputAndAppearance, narrow ? 0 : 1);
-        Grid.SetRow(OutputAndAppearance, narrow ? 1 : 0);
-        var stackFooter = availableWidth < 860;
-        var stackQcButton = availableWidth < 425;
+        var wideSettings = availableWidth >= 800;
+        SettingsRightColumn.Width = wideSettings ? new GridLength(1, GridUnitType.Star) : new GridLength(0);
+        SettingsColumns.ColumnSpacing = wideSettings ? 24 : 0;
+        SettingsColumns.RowSpacing = wideSettings ? 0 : 20;
+        Grid.SetColumn(SettingsSecondaryGroup, wideSettings ? 1 : 0);
+        Grid.SetRow(SettingsSecondaryGroup, wideSettings ? 0 : 1);
+        var stackFooter = availableWidth < 630;
+        var stackAuxiliary = availableWidth < 460;
+        var stackTelemetry = availableWidth < 810;
         FooterActionsColumn.Width = stackFooter ? new GridLength(1, GridUnitType.Star) : GridLength.Auto;
         FooterStatusColumn.Width = stackFooter ? new GridLength(0) : new GridLength(1, GridUnitType.Star);
         FooterLayout.ColumnSpacing = stackFooter ? 0 : 12;
-        Grid.SetColumn(FooterStatusPanel, stackFooter ? 0 : 1);
-        Grid.SetRow(FooterStatusPanel, stackFooter ? 1 : 0);
-        Grid.SetColumn(QcResultsButton, stackQcButton ? 0 : 1);
-        Grid.SetRow(QcResultsButton, stackQcButton ? 1 : 0);
-        StartActions.Orientation = availableWidth < 260 ? Orientation.Vertical : Orientation.Horizontal;
+        FooterLayout.RowSpacing = stackFooter ? 4 : 0;
+        FooterActionCluster.RowSpacing = stackAuxiliary ? 4 : 0;
+        Grid.SetColumn(StatusDetailsButton, stackFooter ? 0 : 1);
+        Grid.SetRow(StatusDetailsButton, stackFooter ? 1 : 0);
+        StatusDetailsButton.HorizontalAlignment = stackFooter ? HorizontalAlignment.Left : HorizontalAlignment.Right;
+        foreach (var control in new FrameworkElement[] { RecordingClock, CancelQcButton, QcResultsButton })
+        {
+            Grid.SetColumn(control, stackAuxiliary ? 0 : 1);
+            Grid.SetRow(control, stackAuxiliary ? 1 : 0);
+        }
+        TelemetryStorageColumn.Width = stackTelemetry ? new GridLength(0) : GridLength.Auto;
+        FooterTelemetry.ColumnSpacing = stackTelemetry ? 0 : 16;
+        FooterTelemetry.RowSpacing = stackTelemetry ? 2 : 0;
+        Grid.SetColumn(StorageStatus, stackTelemetry ? 0 : 1);
+        Grid.SetRow(StorageStatus, stackTelemetry ? 1 : 0);
+        StartActions.Orientation = availableWidth < 310 ? Orientation.Vertical : Orientation.Horizontal;
 
     }
 
@@ -110,15 +137,20 @@ public sealed partial class MainWindow : Window
         WaveformPlot.Height = VectorPlot.Height = Math.Max(104, previewHeightLimit - 88);
         SpectrumPlot.Height = Math.Max(104, previewHeightLimit - 66);
 
-        var meterSpace = StereoMeter.Width + StereoMeterGap;
+        var meterSpace = previewFullscreen ? 0 : StereoMeter.Width + StereoMeterGap;
+        var captionSpace = previewFullscreen ? 0 : 28;
         const double border = 2;
-        var videoSpace = Math.Max(0, previewAvailableWidth - 2 * meterSpace - border);
-        var height = Math.Min(videoSpace / previewAspectRatio, Math.Max(0, previewHeightLimit - 28 - border));
-        PreviewView.Width = PreviewSurface.Width = height * previewAspectRatio + border;
+        var videoSpace = Math.Max(0, previewAvailableWidth - meterSpace - border);
+        var height = Math.Min(videoSpace / previewAspectRatio, Math.Max(0, previewHeightLimit - captionSpace - border));
+        var videoWidth = height * previewAspectRatio + border;
+        PreviewView.Width = PreviewSurface.Width = videoWidth;
         PreviewSurface.Height = height + border;
 
-        var rightMargin = Math.Max(0, (previewAvailableWidth - PreviewSurface.Width) / 2 - meterSpace);
-        StereoMeter.Margin = new Thickness(0, 0, rightMargin, 0);
+        // Center the video when the meter fits beside it. Shift left only as far as needed.
+        var unusedWidth = Math.Max(0, previewAvailableWidth - videoWidth - meterSpace);
+        var leftMargin = Math.Clamp((previewAvailableWidth - videoWidth) / 2, 0, unusedWidth);
+        PreviewView.Margin = new Thickness(leftMargin, 0, 0, 0);
+        StereoMeter.Margin = new Thickness(0, 0, unusedWidth - leftMargin, 0);
         StereoMeter.Height = Math.Max(174, PreviewSurface.Height);
     }
 
@@ -170,9 +202,9 @@ public sealed partial class MainWindow : Window
         try
         {
             var id = await Task.Run(() => DeckLinkCapture.GetLockedVideoInputMode(device, source.Id));
-            if (id is not null && !closing && captureTask is null && previewSelection == selection &&
-                source.ModesFor(format.Id).FirstOrDefault(candidate => candidate.Id == id) is { } mode)
-                UpdateObservedPreviewMode(mode);
+            if (!closing && captureTask is null && previewSelection == selection)
+                UpdateObservedPreviewMode(id is null ? null :
+                    source.ModesFor(format.Id).FirstOrDefault(candidate => candidate.Id == id));
         }
         catch (COMException)
         {
@@ -188,7 +220,7 @@ public sealed partial class MainWindow : Window
     {
         var selected = sender.SelectedItem;
         PreviewView.Visibility = selected == PreviewTab ? Visibility.Visible : Visibility.Collapsed;
-        StereoMeter.Visibility = PreviewView.Visibility;
+        StereoMeter.Visibility = previewFullscreen ? Visibility.Collapsed : PreviewView.Visibility;
         ScopesView.Visibility = selected == ScopesTab ? Visibility.Visible : Visibility.Collapsed;
         SpectrumView.Visibility = selected == SpectrumTab ? Visibility.Visible : Visibility.Collapsed;
         EventsView.Visibility = selected == EventsTab ? Visibility.Visible : Visibility.Collapsed;
@@ -400,13 +432,8 @@ public sealed partial class MainWindow : Window
 
     private async void RecordButton_Click(object sender, RoutedEventArgs e)
     {
-        if (qcStop is { } stop)
-        {
-            stop.Cancel();
-            SetStatus("CancellingQc", "QcFinishing");
-            UpdateControls();
+        if (qcStop is not null)
             return;
-        }
 
         if (recordingSession)
             await FinishRecordingAsync();
@@ -414,9 +441,20 @@ public sealed partial class MainWindow : Window
             await BeginRecordingAsync();
     }
 
+    private void CancelQcButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (qcStop is { IsCancellationRequested: false } stop)
+        {
+            stop.Cancel();
+            SetStatus("CancellingQc", "QcFinishing");
+            UpdateControls();
+        }
+    }
+
     private async Task BeginRecordingAsync()
     {
-        if (!previewReady || previewRecorder is not { } recorder || recordingTransition ||
+        if (!previewReady || displayedStats?.CanStartRecording != true ||
+            previewRecorder is not { } recorder || recordingTransition ||
             FormatPicker.SelectedItem is not FormatOption videoFormat ||
             AudioFormatPicker.SelectedItem is not AudioFormatOption audioFormat)
             return;
@@ -438,23 +476,26 @@ public sealed partial class MainWindow : Window
             var timestamp = DateTime.Now.ToString("yyyyMMdd_HHmmss_fff", CultureInfo.InvariantCulture);
             var prefix = $"CaptureRack_{timestamp}";
             var formats = $"{videoFormat.FileTag}_{audioFormat.FileTag}";
-            recordingStarted = await Task.Run(() =>
+            var opened = await Task.Run(() =>
             {
                 var path = Path.Combine(directory, $"{prefix}_{formats}.mov");
                 for (var suffix = 2; File.Exists(path); suffix++)
                     path = Path.Combine(directory, $"{prefix}_{suffix}_{formats}.mov");
-                return recorder.Start(path);
+                return (Path: path, Started: recorder.Start(path));
             });
             if (captureTask is null)
                 throw new InvalidOperationException(L("PreviewStoppedOpening"));
             qcOutputPath = null;
             lastQcResult = null;
+            recordingStarted = opened.Started;
+            statusFilePath = opened.Path;
             recordingSession = true;
             displayedRecordingSeconds = 0;
             RecordingElapsed.Text = "00:00:00";
             RecordingClockLabel.Text = L("RecordingClock");
             recordingClock.Restart();
-            ShowLiveSignal();
+            UpdateRecordingIndicator(active: true);
+            SetStatus("RecordingActive", "WritingMov");
         }
         catch (Exception ex) when (IsSessionError(ex))
         {
@@ -499,7 +540,10 @@ public sealed partial class MainWindow : Window
                 recordingStarted, stopped, expected, stats.VideoFrames, stats.NoInputFrames,
                 stats.MissingVideoFrames, stats.TimestampRegressions, stats.AudioPackets,
                 stats.AudioLevels?.LeftClips, stats.AudioLevels?.RightClips,
-                stats.Events.Select(item => new QcEvent(item.Elapsed, item.Description)).ToArray());
+                stats.Events.Select(item => new QcEvent(item.Elapsed, item.Description)).ToArray())
+            {
+                InputModeChanged = stats.RecordingModeChanged
+            };
             if (!await RunQcAsync(saved.Path, log))
                 closeAfterQc = false;
         }
@@ -539,7 +583,7 @@ public sealed partial class MainWindow : Window
 
         using var stop = new CancellationTokenSource();
         captureStop = stop;
-        var recorder = mode.Id is null ? null : new PreviewRecorder();
+        var recorder = new PreviewRecorder();
         previewRecorder = recorder;
         holdRecordingStatus = false;
         liveSignal = default;
@@ -703,7 +747,14 @@ public sealed partial class MainWindow : Window
     {
         using var cancellation = new CancellationTokenSource();
         qcStop = cancellation;
-        SetStatus("QcChecking", "QcStarting");
+        statusFilePath = path;
+        void SetQcProgress(string stage) => SetStatus(log is null ? "QcChecking" : "RecordingSaved",
+            () => log is null ? L(stage) : WithModeChangeNotice(LocalFormat("SavedQcProgress", L(stage))),
+            log is { InputModeChanged: true } ? InfoBarSeverity.Warning : InfoBarSeverity.Informational);
+        string WithModeChangeNotice(string detail) => log is { InputModeChanged: true }
+            ? $"{L("QcWarnInputModeChange")} {detail}" : detail;
+        string QcDetail(string detail) => log is null ? detail : WithModeChangeNotice(LocalFormat("SavedQcOutcome", detail));
+        SetQcProgress("QcStarting");
         UpdateControls();
         var dispatcher = DispatcherQueue;
         try
@@ -713,7 +764,7 @@ public sealed partial class MainWindow : Window
                 dispatcher.TryEnqueue(() =>
                 {
                     if (ReferenceEquals(qcStop, cancellation) && !cancellation.IsCancellationRequested)
-                        SetStatus("QcChecking", $"Qc{stage}");
+                        SetQcProgress($"Qc{stage}");
                 });
             }));
             var (title, severity) = result.Status switch
@@ -723,15 +774,17 @@ public sealed partial class MainWindow : Window
                 QcStatus.ToolsUnavailable => ("QcUnavailable", InfoBarSeverity.Warning),
                 _ => ("QcFailed", InfoBarSeverity.Error)
             };
+            if (severity == InfoBarSeverity.Success && log is { InputModeChanged: true })
+                severity = InfoBarSeverity.Warning;
             ShowQcResult(path, result, log, title, () => DescribeQcResult(result));
-            SetStatus(title, () => DescribeQcResult(result), severity);
+            SetStatus(title, () => QcDetail(DescribeQcResult(result)), severity);
             return result.Status is QcStatus.Passed or QcStatus.Cancelled;
         }
         catch (Exception ex) when (IsSessionError(ex))
         {
             const string title = "QcWriteFailed";
             ShowQcResult(path, null, log, title, () => ex.Message);
-            SetStatus(title, () => ex.Message, InfoBarSeverity.Error);
+            SetStatus(title, () => QcDetail(ex.Message), InfoBarSeverity.Error);
             return false;
         }
         finally
@@ -767,6 +820,7 @@ public sealed partial class MainWindow : Window
             QcOpenStatus.IsOpen = false;
             var path = artifact switch
             {
+                "video" => output,
                 "log" => lastQcResult?.CaptureLog,
                 "hash" => lastQcResult?.FrameMd5,
                 "report" => lastQcResult?.QcToolsReport,
@@ -804,35 +858,45 @@ public sealed partial class MainWindow : Window
     private VideoSignal liveSignal;
     private bool holdRecordingStatus;
 
-    private void UpdateObservedPreviewMode(VideoMode mode)
+    private void UpdateObservedPreviewMode(VideoMode? mode, bool isFallback = false)
     {
-        if (observedPreviewMode != mode)
+        if (observedPreviewMode != mode || observedPreviewModeIsFallback != isFallback)
         {
             observedPreviewMode = mode;
+            observedPreviewModeIsFallback = isFallback;
             UpdateConfigurationStatus();
         }
 
-        UpdatePreviewAspectRatio(mode.Width, mode.Height);
+        if (mode is not null)
+            UpdatePreviewAspectRatio(mode.Width, mode.Height);
     }
 
     private void ShowCapture(VideoMode mode, CaptureStats stats)
     {
-        UpdateObservedPreviewMode(mode);
+        var autoMode = ModePicker.SelectedItem is ModeOption { Id: null };
+        var recordingAvailabilityChanged = displayedStats?.CanStartRecording != stats.CanStartRecording;
+        var recordingInCurrentMode = recordingClock.IsRunning && !stats.RecordingModeChanged;
+        var activeMode = !autoMode || stats.CanStartRecording || recordingInCurrentMode ? mode : null;
+        UpdateObservedPreviewMode(activeMode, autoMode && activeMode is not null && stats.Signal != VideoSignal.Present);
         ShowCounts(stats);
         if (liveSignal != stats.Signal)
         {
             liveSignal = stats.Signal;
             UpdateLivePreviewStatus();
         }
-        if (!previewReady)
+        if (!previewReady || recordingAvailabilityChanged)
         {
             previewReady = true;
             UpdateControls();
         }
 
-        if (recordingClock.IsRunning)
-            UpdateRecordingClock();
-        if (!recordingTransition && (recordingSession || !holdRecordingStatus))
+        if (recordingSession && !recordingTransition && stats.RecordingModeChanged)
+        {
+            _ = FinishRecordingAsync();
+            return;
+        }
+
+        if (!recordingTransition && !recordingSession && !holdRecordingStatus && qcStop is null)
             ShowLiveSignal();
     }
 
@@ -841,12 +905,15 @@ public sealed partial class MainWindow : Window
         switch (liveSignal)
         {
             case VideoSignal.NoInput:
-                SetStatus("NoInputSignal", recordingSession
-                    ? "RecordingNoInput"
+                SetStatus("NoInputSignal", ModePicker.SelectedItem is ModeOption { Id: null }
+                    ? displayedStats?.CanStartRecording == true ? "AutoNoInputRecordable" : "AutoRecordingHint"
                     : "PreviewingNoInput", InfoBarSeverity.Warning);
                 break;
             case VideoSignal.Present:
-                SetStatus("SignalPresent", "ReceivingVideo", InfoBarSeverity.Success);
+                if (displayedStats?.CanStartRecording == true)
+                    SetStatus("SignalPresent", "ReceivingVideo", InfoBarSeverity.Success);
+                else
+                    SetStatus("WaitingFrames", "AutoRecordingHint");
                 break;
             default:
                 SetStatus("WaitingFrames", "WaitingFirstFrame");
@@ -860,8 +927,40 @@ public sealed partial class MainWindow : Window
             return;
 
         recordingClock.Stop();
+        UpdateRecordingIndicator(active: false);
         RecordingClockLabel.Text = L("Elapsed");
         UpdateRecordingClock();
+    }
+
+    private void UpdateRecordingIndicator(bool active)
+    {
+        var visual = ElementCompositionPreview.GetElementVisual(RecordingIndicator);
+        const string property = nameof(Visual.Opacity);
+        visual.StopAnimation(property);
+        visual.Opacity = 1;
+        if (!active || !new Windows.UI.ViewManagement.UISettings().AnimationsEnabled)
+            return;
+
+        var pulse = visual.Compositor.CreateScalarKeyFrameAnimation();
+        pulse.InsertKeyFrame(0, 1);
+        pulse.InsertKeyFrame(1, 0.45f);
+        pulse.Duration = TimeSpan.FromMilliseconds(850);
+        pulse.Direction = Microsoft.UI.Composition.AnimationDirection.Alternate;
+        pulse.IterationBehavior = AnimationIterationBehavior.Forever;
+        visual.StartAnimation(property, pulse);
+    }
+
+    private static void RevealWorkspacePanel(UIElement panel)
+    {
+        if (!new Windows.UI.ViewManagement.UISettings().AnimationsEnabled)
+            return;
+
+        var visual = ElementCompositionPreview.GetElementVisual(panel);
+        var fade = visual.Compositor.CreateScalarKeyFrameAnimation();
+        fade.InsertKeyFrame(0, 0.7f);
+        fade.InsertKeyFrame(1, 1);
+        fade.Duration = TimeSpan.FromMilliseconds(150);
+        visual.StartAnimation(nameof(Visual.Opacity), fade);
     }
 
     private void UpdateRecordingClock()
@@ -882,6 +981,7 @@ public sealed partial class MainWindow : Window
         previewBitmap = null;
         previewFrame = null;
         preview = feed;
+        displayedPreviewSkips = 0;
         PreviewImage.Source = null;
         previewCaption = null;
         PreviewPlaceholder.Visibility = Visibility.Visible;
@@ -909,7 +1009,7 @@ public sealed partial class MainWindow : Window
         if (PreviewPlaceholder.Visibility == Visibility.Visible)
         {
             PreviewPlaceholder.Visibility = Visibility.Collapsed;
-            PreviewDetail.Visibility = Visibility.Visible;
+            PreviewDetail.Visibility = previewFullscreen ? Visibility.Collapsed : Visibility.Visible;
         }
         previewCaption = new(frame.NoInput, frame.SignalWidth, frame.SignalHeight,
             DeckLinkCapture.FormatFourCc((uint)frame.Format), feed.PresentedSequence);
@@ -919,6 +1019,7 @@ public sealed partial class MainWindow : Window
     private void ShowCounts(CaptureStats stats)
     {
         displayedStats = stats;
+        displayedPreviewSkips = preview?.SkippedFrames ?? displayedPreviewSkips;
         RenderCounts(stats);
         ShowMonitoring(stats);
     }
@@ -945,17 +1046,19 @@ public sealed partial class MainWindow : Window
         BrowseButton.IsEnabled = canChooseOutput;
         var previewCanStop = active && !closing && !changingRecording &&
             captureStop is { IsCancellationRequested: false };
-        StartButton.Content = L(active ? "StopPreview" : "StartPreview");
+        RenderCaptureActions();
         StartButton.IsEnabled = active ? previewCanStop : canStart;
-        RecordButton.Content = L(qcStop is not null ? "CancelQc" : recordingSession ? "StopRecording" : "StartRecording");
-        RecordButton.IsEnabled = qcStop is { } qc ? !qc.IsCancellationRequested :
-            !closing && active && !recordingTransition && (recordingSession ||
-                (previewReady && previewRecorder is not null && !pickingOutput &&
+        RecordButton.IsEnabled = qcStop is null && !closing && active && !recordingTransition && (recordingSession ||
+                (previewReady && displayedStats?.CanStartRecording == true && previewRecorder is not null && !pickingOutput &&
                     captureStop is { IsCancellationRequested: false } && !string.IsNullOrWhiteSpace(OutputPath.Text)));
+        CancelQcButton.IsEnabled = qcStop is { IsCancellationRequested: false };
+        CancelQcButton.Visibility = qcStop is null ? Visibility.Collapsed : Visibility.Visible;
         RecordingModeHint.Visibility = ModePicker.SelectedItem is ModeOption { Id: null }
             ? Visibility.Visible : Visibility.Collapsed;
-        RecordingClock.Visibility = recordingSession ? Visibility.Visible : Visibility.Collapsed;
-        QcResultsButton.Visibility = !changingRecording && qcOutputPath is not null ? Visibility.Visible : Visibility.Collapsed;
+        RecordingClock.Visibility = recordingClock.IsRunning ? Visibility.Visible : Visibility.Collapsed;
+        QcResultsButton.Visibility = !changingRecording && qcStop is null && qcOutputPath is not null
+            ? Visibility.Visible : Visibility.Collapsed;
+        UpdateCaptureFooter();
         UpdateLivePreviewStatus();
         UpdatePreviewForSelection();
         UpdateConfigurationStatus();
@@ -963,7 +1066,7 @@ public sealed partial class MainWindow : Window
 
     private void UpdateLivePreviewStatus()
     {
-        var show = previewReady && (recordingTransition || (holdRecordingStatus && !recordingSession));
+        var show = previewReady && (recordingSession || recordingTransition || holdRecordingStatus || qcStop is not null);
         LivePreviewStatus.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
         if (show)
         {
@@ -973,7 +1076,10 @@ public sealed partial class MainWindow : Window
                 VideoSignal.Present => "SignalPresent",
                 _ => "WaitingFrames"
             }));
+            if (recordingClock.IsRunning && liveSignal == VideoSignal.NoInput)
+                LivePreviewStatus.Text += " · " + L("RecordingNoInput");
         }
+        RenderCompactStatus();
     }
 
     private void SetStatus(string title, string message, InfoBarSeverity severity = InfoBarSeverity.Informational) =>

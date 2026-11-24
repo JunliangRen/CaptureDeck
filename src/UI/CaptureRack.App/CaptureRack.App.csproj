@@ -11,6 +11,7 @@
   </PropertyGroup>
   <Import Project="../../../WindowsExecutables.props" />
   <ItemGroup>
+    <PackageReference Include="CommunityToolkit.WinUI.Controls.SettingsControls" Version="8.2.251219" />
     <PackageReference Include="Microsoft.WindowsAppSDK" Version="2.7.0" />
     <ProjectReference Include="../../Capture/CaptureCards/CaptureRack.DeckLink/CaptureRack.DeckLink.csproj" />
     <ProjectReference Include="../../Processing/CaptureRack.QualityControl/CaptureRack.QualityControl.csproj" />

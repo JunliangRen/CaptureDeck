@@ -56,8 +56,8 @@ public static class DeckLinkCapture
     {
         if (recordingPath is not null && requestedMode is null)
             throw new InvalidOperationException("Choose a fixed input mode before recording.");
-        if (previewRecorder is not null && (preview is null || requestedMode is null || recordingPath is not null))
-            throw new ArgumentException("Live recording requires a fixed-mode preview.", nameof(previewRecorder));
+        if (previewRecorder is not null && (preview is null || recordingPath is not null))
+            throw new ArgumentException("Live recording requires a preview.", nameof(previewRecorder));
         if (audioFormat is not (CaptureAudioFormat.Pcm16 or CaptureAudioFormat.Pcm32))
             throw new ArgumentOutOfRangeException(nameof(audioFormat));
 
@@ -266,22 +266,25 @@ public static class DeckLinkCapture
             throw new InvalidOperationException("Input mode was not detected. Pass a mode code from the list command.");
 
         mode ??= modes.FirstOrDefault(mode => mode.Id == Ntsc) ?? modes[0];
-        var stats = Capture(input, mode, duration, useDetection, progress, stop, preview, format, recordingPath, audioFormat, previewRecorder, videoConnection);
-        if (useDetection && stats.Error is null && stats.DetectedMode != 0 &&
-            stats.DetectedMode != mode.Id && !stop.IsCancellationRequested)
+        var detect = useDetection;
+        while (true)
         {
-            var next = modes.FirstOrDefault(candidate => candidate.Id == stats.DetectedMode)
-                ?? throw new InvalidOperationException($"Detected mode '{FormatFourCc(stats.DetectedMode)}' is unavailable in the selected pixel format.");
-            stats = Capture(input, next, duration, false, progress, stop, preview, format, recordingPath, audioFormat, previewRecorder, videoConnection);
-        }
+            var stats = Capture(input, mode, duration, detect, progress, stop, preview, format, recordingPath,
+                audioFormat, previewRecorder, videoConnection, automaticMode: requestedMode is null);
+            if (stats.Error is not null || stats.NextMode is not { } next || stop.IsCancellationRequested)
+                return stats;
 
-        return stats;
+            mode = modes.FirstOrDefault(candidate => candidate.Id == next)
+                ?? throw new InvalidOperationException($"Detected mode '{FormatFourCc(next)}' is unavailable in the selected pixel format.");
+            // The live UI keeps tracking input changes. The duration-based probe runs its resolved mode.
+            detect = useDetection && previewRecorder is not null;
+        }
     }
 
     private static CaptureStats Capture(IDeckLinkInput input, VideoMode mode, TimeSpan? duration,
         bool detect, Action<VideoMode, CaptureStats> progress, CancellationToken stop, PreviewFeed? preview,
         CapturePixelFormat format, string? recordingPath, CaptureAudioFormat audioFormat,
-        PreviewRecorder? previewRecorder, uint videoConnection)
+        PreviewRecorder? previewRecorder, uint videoConnection, bool automaticMode)
     {
         var empty = new CaptureStats();
         if (stop.IsCancellationRequested)
@@ -289,7 +292,7 @@ public static class DeckLinkCapture
 
         using var recording = recordingPath is null ? null : new MovRecording(recordingPath, mode, format, audioFormat);
         var lumaScaleBits = preview is null ? 0 : ReadMaximumVideoBits(input, videoConnection, mode.Id, format);
-        var callback = new CaptureCallback(preview, format, audioFormat, mode, recording);
+        var callback = new CaptureCallback(preview, format, audioFormat, mode, recording, automaticMode);
         Check(input.SetCallback(callback), "SetCallback");
         try
         {
@@ -322,14 +325,14 @@ public static class DeckLinkCapture
                             recording?.CheckWriter();
                             preview?.ConvertLatest(lumaScaleBits);
                             var report = clock.Elapsed >= nextReport;
-                            var snapshot = callback.Snapshot(report);
-                            if (report)
+                            var switchMode = detect && callback.TryBeginModeChange();
+                            var snapshot = callback.Snapshot(report || switchMode);
+                            if (report || switchMode)
                             {
                                 progress(mode, snapshot);
                                 nextReport = clock.Elapsed + TimeSpan.FromMilliseconds(250);
                             }
-                            if (snapshot.Error is not null || (detect && snapshot.DetectedMode != 0 &&
-                                snapshot.DetectedMode != mode.Id))
+                            if (snapshot.Error is not null || switchMode)
                                 break;
 
                             var interval = TimeSpan.FromMilliseconds(preview is null ? 250 : 16);

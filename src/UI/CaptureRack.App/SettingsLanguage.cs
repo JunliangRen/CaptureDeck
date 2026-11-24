@@ -2,6 +2,9 @@ namespace CaptureRack.App
 {
     internal static class SettingsLanguage
     {
+        internal static string Resolve(string? saved, string windowsCulture) =>
+            saved is "en" or "zh-Hans" or "zh-Hant" or "ja" ? saved : FromWindowsCulture(windowsCulture);
+
         internal static string FromWindowsCulture(string name)
         {
             var tags = name.ToLowerInvariant().Split('-');

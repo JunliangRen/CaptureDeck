@@ -16,7 +16,10 @@ public sealed record QcCaptureLog(
     string Device, string Driver, string VideoSource, string AudioSource, string InputMode,
     DateTimeOffset StartedUtc, DateTimeOffset StoppedUtc, QcExpectedMedia Expected,
     long ValidVideoFrames, long NoInputFrames, long MissingVideoFrames, long TimestampRegressions,
-    long AudioPackets, long? LeftClips, long? RightClips, IReadOnlyList<QcEvent> RecentEvents);
+    long AudioPackets, long? LeftClips, long? RightClips, IReadOnlyList<QcEvent> RecentEvents)
+{
+    public bool InputModeChanged { get; init; }
+}
 
 public enum QcStage { Inspecting, Decoding, Analyzing }
 
@@ -169,6 +172,8 @@ public static class QcReports
             return warnings;
         }
 
+        if (capture.InputModeChanged)
+            warnings.Add("The input mode changed. Recording stopped before writing frames in the new mode.");
         if (capture.NoInputFrames > 0)
             warnings.Add($"{capture.NoInputFrames:N0} recorded frames were marked no input by DeckLink.");
         if (capture.MissingVideoFrames > 0)

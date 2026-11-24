@@ -30,9 +30,6 @@
   <data name="Appearance" xml:space="preserve">
     <value>Appearance</value>
   </data>
-  <data name="FollowSystem" xml:space="preserve">
-    <value>Follow system</value>
-  </data>
   <data name="Language" xml:space="preserve">
     <value>Language</value>
   </data>
@@ -81,8 +78,8 @@
   <data name="Auto" xml:space="preserve">
     <value>Auto detect</value>
   </data>
-  <data name="FixedMode" xml:space="preserve">
-    <value>Choose a fixed input mode before starting preview to enable recording.</value>
+  <data name="AutoRecordingHint" xml:space="preserve">
+    <value>Waiting for a readable preview frame. Auto can record no-input frames in the current preview mode.</value>
   </data>
   <data name="OutputHelp" xml:space="preserve">
     <value>MOV files are named from the local start time and recording formats.</value>
@@ -124,7 +121,7 @@
     <value>≈ {0} recording time remaining</value>
   </data>
   <data name="StorageNeedsMode" xml:space="preserve">
-    <value>Select a fixed mode to estimate recording time.</value>
+    <value>Select an input mode to estimate recording time.</value>
   </data>
   <data name="HoursMinutes" xml:space="preserve">
     <value>{0} h {1} min</value>
@@ -177,8 +174,8 @@
   <data name="SpectrumTitle" xml:space="preserve">
     <value>Stereo spectrum</value>
   </data>
-  <data name="SpectrumRange" xml:space="preserve">
-    <value>Stereo spectrum · {0}-bit PCM input · {1:0.#} to 0 dBFS</value>
+  <data name="SpectrumInput" xml:space="preserve">
+    <value>Stereo spectrum · {0}-bit PCM input · {1:0.##} kHz sample rate</value>
   </data>
   <data name="EventTimeline" xml:space="preserve">
     <value>Capture event timeline</value>
@@ -541,7 +538,7 @@
     <value>QC results · 1 warning</value>
   </data>
   <data name="CaptureCounts" xml:space="preserve">
-    <value>Valid frames {0:N0} · No-input frames {1:N0} · PCM packets {2:N0} · Missing frames {3:N0}</value>
+    <value>Valid frames {0:N0} · No-input frames {1:N0} · PCM packets {2:N0} · Missing frames {3:N0} · Preview skips {4:N0}</value>
   </data>
   <data name="CheckMov" xml:space="preserve">
     <value>Check MOV…</value>
@@ -560,5 +557,44 @@
   </data>
   <data name="QcFinishing" xml:space="preserve">
     <value>Stopping the check and saving its results.</value>
+  </data>
+  <data name="RecordingFormats" xml:space="preserve">
+    <value>Recording formats</value>
+  </data>
+  <data name="RecordingActive" xml:space="preserve">
+    <value>Recording</value>
+  </data>
+  <data name="WritingMov" xml:space="preserve">
+    <value>Writing the MOV file.</value>
+  </data>
+  <data name="RecordingSaved" xml:space="preserve">
+    <value>File saved</value>
+  </data>
+  <data name="SavedQcProgress" xml:space="preserve">
+    <value>QC in progress · {0}</value>
+  </data>
+  <data name="SavedQcOutcome" xml:space="preserve">
+    <value>MOV saved. {0}</value>
+  </data>
+  <data name="OpenRecordedMov" xml:space="preserve">
+    <value>Open MOV</value>
+  </data>
+  <data name="StorageWaitingForAutoMode" xml:space="preserve">
+    <value>Waiting for the preview mode to estimate recording time.</value>
+  </data>
+  <data name="QcWarnInputModeChange" xml:space="preserve">
+    <value>The input mode changed. CaptureRack stopped the clip before writing frames in the new mode.</value>
+  </data>
+  <data name="AutoNoInputRecordable" xml:space="preserve">
+    <value>No signal. Recording is available in the current preview mode.</value>
+  </data>
+  <data name="AutoFallbackMode" xml:space="preserve">
+    <value>{0} (fallback: {1})</value>
+  </data>
+  <data name="PreviewFullScreen" xml:space="preserve">
+    <value>Full screen preview</value>
+  </data>
+  <data name="ExitPreviewFullScreen" xml:space="preserve">
+    <value>Exit full screen</value>
   </data>
 </root>

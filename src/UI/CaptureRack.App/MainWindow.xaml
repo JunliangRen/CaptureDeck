@@ -2,18 +2,23 @@
     x:Class="CaptureRack.App.MainWindow"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:toolkit="using:CommunityToolkit.WinUI.Controls"
     Title="CaptureRack">
     <Grid Background="{ThemeResource ApplicationPageBackgroundThemeBrush}" SizeChanged="Viewport_SizeChanged">
         <Grid.RowDefinitions>
             <RowDefinition Height="*" />
             <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
-        <Grid x:Name="WorkspacePage" RowSpacing="10" Padding="24,16,24,10">
+        <Grid.KeyboardAccelerators>
+            <KeyboardAccelerator Key="F11" Invoked="PreviewFullscreen_Invoked" />
+            <KeyboardAccelerator Key="Escape" Invoked="ExitPreviewFullscreen_Invoked" />
+        </Grid.KeyboardAccelerators>
+        <Grid x:Name="WorkspacePage" RowSpacing="12" Padding="24,12,24,10">
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="*" />
             </Grid.RowDefinitions>
-            <Grid ColumnSpacing="12">
+            <Grid x:Name="MonitorHeader" ColumnSpacing="12">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*" />
                     <ColumnDefinition Width="Auto" />
@@ -31,8 +36,14 @@
                     </SelectorBar>
                 </ScrollViewer>
                 <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
-                    <Button x:Name="CheckMovButton" Content="Check MOV…" Click="CheckMovButton_Click" IsEnabled="False" />
-                    <Button x:Name="OpenSettingsButton" Click="OpenSettings_Click"
+                    <Button x:Name="CheckMovButton" Style="{StaticResource SubtleButtonStyle}"
+                            Click="CheckMovButton_Click" IsEnabled="False">
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <FontIcon Glyph="&#xE8A5;" FontSize="14" />
+                            <TextBlock x:Name="CheckMovLabel" />
+                        </StackPanel>
+                    </Button>
+                    <Button x:Name="OpenSettingsButton" Style="{StaticResource SubtleButtonStyle}" Click="OpenSettings_Click"
                             AutomationProperties.Name="Settings" ToolTipService.ToolTip="Settings">
                         <SymbolIcon Symbol="Setting" />
                     </Button>
@@ -42,15 +53,29 @@
                           VerticalScrollBarVisibility="Auto" HorizontalScrollMode="Disabled"
                           HorizontalScrollBarVisibility="Disabled">
                 <Grid x:Name="MonitorBody">
-                    <StackPanel x:Name="PreviewView" HorizontalAlignment="Center" Spacing="8">
+                    <StackPanel x:Name="PreviewView" HorizontalAlignment="Left" Spacing="8">
                         <Border x:Name="PreviewSurface" Width="392" Height="294" HorizontalAlignment="Center"
-                                Background="#111317" CornerRadius="8" BorderBrush="#343842" BorderThickness="1">
+                                Background="#111317" CornerRadius="8" BorderBrush="#343842" BorderThickness="1"
+                                PointerEntered="PreviewSurface_PointerEntered" PointerExited="PreviewSurface_PointerExited">
                             <Grid>
-                                <Image x:Name="PreviewImage" Stretch="Fill"
-                                       AutomationProperties.Name="DeckLink video preview" />
-                                <TextBlock x:Name="PreviewPlaceholder" Text="Waiting for preview"
-                                           Foreground="#E0E3E9" HorizontalAlignment="Center" VerticalAlignment="Center"
-                                           TextWrapping="Wrap" TextAlignment="Center" />
+                                <Grid Background="Transparent" Tapped="PreviewSurface_Tapped"
+                                      DoubleTapped="PreviewSurface_DoubleTapped">
+                                    <Image x:Name="PreviewImage" Stretch="Fill"
+                                           AutomationProperties.Name="DeckLink video preview" />
+                                    <StackPanel x:Name="PreviewPlaceholder" HorizontalAlignment="Center"
+                                                VerticalAlignment="Center" Spacing="10" Margin="12">
+                                        <SymbolIcon Symbol="Video" Foreground="#AEB7C5" />
+                                        <TextBlock x:Name="PreviewPlaceholderText" Text="Waiting for preview"
+                                                   Foreground="#E0E3E9" TextWrapping="Wrap" TextAlignment="Center" />
+                                    </StackPanel>
+                                </Grid>
+                                <Button x:Name="PreviewFullscreenButton" HorizontalAlignment="Right" VerticalAlignment="Bottom"
+                                        Width="44" Height="44" Padding="0" Margin="6" Opacity="0" IsHitTestVisible="False"
+                                        RequestedTheme="Dark" Style="{StaticResource SubtleButtonStyle}"
+                                        Click="PreviewFullscreen_Click" GotFocus="PreviewFullscreen_FocusChanged"
+                                        LostFocus="PreviewFullscreen_FocusChanged">
+                                    <FontIcon x:Name="PreviewFullscreenIcon" Glyph="&#xE740;" FontSize="18" />
+                                </Button>
                             </Grid>
                         </Border>
                         <TextBlock x:Name="PreviewDetail" Visibility="Collapsed" TextAlignment="Center"
@@ -65,42 +90,42 @@
                             </Grid.ColumnDefinitions>
                             <StackPanel Spacing="4">
                                 <TextBlock x:Name="LumaHeading" Text="Luma waveform" Style="{StaticResource BodyStrongTextBlockStyle}" />
-                                <Grid ColumnSpacing="6">
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="Auto" />
-                                        <ColumnDefinition Width="*" />
-                                    </Grid.ColumnDefinitions>
-                                    <Grid AutomationProperties.AccessibilityView="Raw">
-                                        <Grid.Resources>
-                                            <Style TargetType="TextBlock" BasedOn="{StaticResource CaptionTextBlockStyle}">
-                                                <Setter Property="HorizontalAlignment" Value="Right" />
-                                                <Setter Property="VerticalAlignment" Value="Top" />
-                                                <Setter Property="Foreground" Value="{ThemeResource TextFillColorSecondaryBrush}" />
-                                            </Style>
-                                        </Grid.Resources>
-                                        <Grid.RowDefinitions>
-                                            <RowDefinition Height="*" />
-                                            <RowDefinition Height="*" />
-                                            <RowDefinition Height="*" />
-                                            <RowDefinition Height="*" />
-                                        </Grid.RowDefinitions>
-                                        <TextBlock x:Name="LumaScaleTop" Text="—" />
-                                        <TextBlock x:Name="LumaScaleHigh" Grid.Row="1" Text="—" Margin="0,-8,0,0" />
-                                        <TextBlock x:Name="LumaScaleMid" Grid.Row="2" Text="—" Margin="0,-8,0,0" />
-                                        <TextBlock x:Name="LumaScaleLow" Grid.Row="3" Text="—" Margin="0,-8,0,0" />
-                                        <TextBlock Grid.Row="3" Text="0" VerticalAlignment="Bottom" />
-                                    </Grid>
-                                    <Border Grid.Column="1" Background="#121212" CornerRadius="6">
-                                        <Image x:Name="WaveformPlot" Height="200" Stretch="Fill"
+                                <Border Background="#121212" CornerRadius="6" Padding="6,8">
+                                    <Grid ColumnSpacing="4">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <Grid AutomationProperties.AccessibilityView="Raw">
+                                            <Grid.Resources>
+                                                <Style TargetType="TextBlock" BasedOn="{StaticResource CaptionTextBlockStyle}">
+                                                    <Setter Property="HorizontalAlignment" Value="Right" />
+                                                    <Setter Property="VerticalAlignment" Value="Top" />
+                                                    <Setter Property="Foreground" Value="#CCD3DC" />
+                                                </Style>
+                                            </Grid.Resources>
+                                            <Grid.RowDefinitions>
+                                                <RowDefinition Height="*" />
+                                                <RowDefinition Height="*" />
+                                                <RowDefinition Height="*" />
+                                                <RowDefinition Height="*" />
+                                            </Grid.RowDefinitions>
+                                            <TextBlock x:Name="LumaScaleTop" Text="—" Margin="0,-8,0,0" />
+                                            <TextBlock x:Name="LumaScaleHigh" Grid.Row="1" Text="—" Margin="0,-8,0,0" />
+                                            <TextBlock x:Name="LumaScaleMid" Grid.Row="2" Text="—" Margin="0,-8,0,0" />
+                                            <TextBlock x:Name="LumaScaleLow" Grid.Row="3" Text="—" Margin="0,-8,0,0" />
+                                            <TextBlock Grid.Row="3" Text="0" VerticalAlignment="Bottom" Margin="0,0,0,-8" />
+                                        </Grid>
+                                        <Image x:Name="WaveformPlot" Grid.Column="1" Height="200" Stretch="Fill"
                                                AutomationProperties.Name="Luma waveform" />
-                                    </Border>
-                                </Grid>
+                                    </Grid>
+                                </Border>
                                 <TextBlock x:Name="LumaScaleDescription" Text="Y′ · Waiting for input format"
                                            Style="{StaticResource CaptionTextBlockStyle}" TextWrapping="Wrap" />
                             </StackPanel>
                             <StackPanel Grid.Column="1" Spacing="4">
                                 <TextBlock x:Name="VectorHeading" Text="Vectorscope" Style="{StaticResource BodyStrongTextBlockStyle}" />
-                                <Border Background="#121212" CornerRadius="6">
+                                <Border Background="#121212" CornerRadius="6" Padding="6,8">
                                     <Image x:Name="VectorPlot" Height="200" Stretch="Uniform"
                                            AutomationProperties.Name="Chroma vectorscope plot" />
                                 </Border>
@@ -113,32 +138,32 @@
                     </StackPanel>
                     <StackPanel x:Name="SpectrumView" Visibility="Collapsed" Spacing="8">
                         <TextBlock x:Name="SpectrumTitle" Text="Stereo spectrum" TextWrapping="Wrap" Style="{StaticResource BodyStrongTextBlockStyle}" />
-                        <Border Background="#121212" CornerRadius="6" Padding="6">
-                            <Grid x:Name="SpectrumPlot" Height="200" SizeChanged="SpectrumPlot_SizeChanged"
-                                  AutomationProperties.Name="Stereo frequency spectrum">
-                                <Grid RowSpacing="0">
-                                    <Grid.RowDefinitions>
-                                        <RowDefinition Height="*" />
-                                        <RowDefinition Height="*" />
-                                        <RowDefinition Height="*" />
-                                    </Grid.RowDefinitions>
-                                    <Border BorderBrush="#393C42" BorderThickness="0,1,0,0" />
-                                    <Border Grid.Row="1" BorderBrush="#393C42" BorderThickness="0,1,0,0" />
-                                    <Border Grid.Row="2" BorderBrush="#393C42" BorderThickness="0,1,0,1" />
-                                </Grid>
+                        <Grid RowSpacing="6">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition x:Name="SpectrumLevelColumn" Width="32" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                            </Grid.RowDefinitions>
+                            <Border x:Name="SpectrumBackground" Grid.ColumnSpan="2" Background="#121212" CornerRadius="6" />
+                            <Canvas x:Name="SpectrumLevelAxis" Margin="6,8,4,8" IsHitTestVisible="False" />
+                            <Grid x:Name="SpectrumPlot" Grid.Column="1" Height="200" Margin="0,8,6,8"
+                                  SizeChanged="SpectrumPlot_SizeChanged" AutomationProperties.Name="Stereo frequency spectrum">
+                                <Canvas x:Name="SpectrumGridLines" IsHitTestVisible="False" />
                                 <Polyline x:Name="SpectrumTrace" Stroke="#79E2AF" StrokeThickness="1.5"
                                           StrokeLineJoin="Round" IsHitTestVisible="False" />
                             </Grid>
-                        </Border>
-                        <Grid ColumnSpacing="4">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*" />
-                                <ColumnDefinition Width="*" />
-                                <ColumnDefinition Width="*" />
-                            </Grid.ColumnDefinitions>
-                            <TextBlock Text="0 Hz" />
-                            <TextBlock x:Name="SpectrumMidFrequency" Grid.Column="1" Text="—" HorizontalAlignment="Center" />
-                            <TextBlock x:Name="SpectrumMaxFrequency" Grid.Column="2" Text="—" HorizontalAlignment="Right" />
+                            <TextBlock Grid.Row="1" Text="dBFS" HorizontalAlignment="Right"
+                                       Margin="0,0,4,0"
+                                       Style="{StaticResource CaptionTextBlockStyle}"
+                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                            <Grid Grid.Row="1" Grid.Column="1" Margin="1,0,7,0">
+                                <TextBlock Text="0 Hz" />
+                                <TextBlock x:Name="SpectrumMidFrequency" Text="—" HorizontalAlignment="Center" />
+                                <TextBlock x:Name="SpectrumMaxFrequency" Text="—" HorizontalAlignment="Right" />
+                            </Grid>
                         </Grid>
                     </StackPanel>
                     <Grid x:Name="EventsView" Height="334" Visibility="Collapsed" RowSpacing="8">
@@ -250,85 +275,119 @@
                 </Grid>
             </ScrollViewer>
         </Grid>
-        <ScrollViewer x:Name="SettingsPage" Visibility="Collapsed" VerticalScrollBarVisibility="Auto"
-                      HorizontalScrollMode="Disabled" HorizontalScrollBarVisibility="Disabled">
-            <StackPanel x:Name="SettingsContent" Padding="24,16,24,24" HorizontalAlignment="Left" Spacing="18">
-                <StackPanel Orientation="Horizontal" Spacing="12">
-                    <Button x:Name="BackButton" Click="BackToWorkspace_Click" AutomationProperties.Name="Back">
-                        <SymbolIcon Symbol="Back" />
-                    </Button>
-                    <TextBlock x:Name="SettingsHeading" Style="{StaticResource SubtitleTextBlockStyle}"
-                               VerticalAlignment="Center" />
-                </StackPanel>
-                <InfoBar x:Name="SettingsNotice" IsOpen="False" IsClosable="False" />
-                <Grid x:Name="SettingsSections" ColumnSpacing="32" RowSpacing="20">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*" />
-                        <ColumnDefinition x:Name="SettingsRightColumn" Width="*" />
-                    </Grid.ColumnDefinitions>
-                    <Grid.RowDefinitions>
-                        <RowDefinition Height="Auto" />
-                        <RowDefinition Height="Auto" />
-                    </Grid.RowDefinitions>
-                    <StackPanel Spacing="8">
-                        <TextBlock x:Name="InputHeading" Style="{StaticResource SubtitleTextBlockStyle}" />
-                        <ComboBox x:Name="DevicePicker" DisplayMemberPath="Name" IsEnabled="False" HorizontalAlignment="Stretch"
-                                  SelectionChanged="DevicePicker_SelectionChanged" />
-                        <Button x:Name="RefreshButton" Click="RefreshButton_Click" />
-                        <ComboBox x:Name="VideoInputPicker" DisplayMemberPath="Name" HorizontalAlignment="Stretch"
-                                  SelectionChanged="VideoInputPicker_SelectionChanged" />
-                        <ComboBox x:Name="AudioInputPicker" DisplayMemberPath="Name" HorizontalAlignment="Stretch"
-                                  SelectionChanged="InputPicker_SelectionChanged" />
-                        <ComboBox x:Name="ModePicker" DisplayMemberPath="Label" HorizontalAlignment="Stretch"
-                                  SelectionChanged="InputPicker_SelectionChanged" />
-                        <ComboBox x:Name="FormatPicker" DisplayMemberPath="Label" HorizontalAlignment="Stretch"
-                                  SelectionChanged="FormatPicker_SelectionChanged" />
-                        <ComboBox x:Name="AudioFormatPicker" DisplayMemberPath="Label" HorizontalAlignment="Stretch"
-                                  SelectionChanged="InputPicker_SelectionChanged" />
-                        <TextBlock x:Name="RecordingModeHint" TextWrapping="Wrap" Style="{StaticResource CaptionTextBlockStyle}"
-                                   Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-                    </StackPanel>
-                    <StackPanel x:Name="OutputAndAppearance" Grid.Column="1" Spacing="22">
-                        <StackPanel Spacing="8">
-                            <TextBlock x:Name="OutputHeading" Style="{StaticResource SubtitleTextBlockStyle}" />
-                            <Grid ColumnSpacing="8">
+        <Grid x:Name="SettingsPage" Visibility="Collapsed" Background="Transparent" RowSpacing="12">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+            </Grid.RowDefinitions>
+            <Grid.KeyboardAccelerators>
+                <KeyboardAccelerator Key="Left" Modifiers="Menu" Invoked="SettingsBack_Invoked" />
+            </Grid.KeyboardAccelerators>
+            <StackPanel Orientation="Horizontal" Spacing="12" Padding="24,14,24,0">
+                <Button x:Name="BackButton" Click="BackToWorkspace_Click" AutomationProperties.Name="Back">
+                    <SymbolIcon Symbol="Back" />
+                </Button>
+                <TextBlock x:Name="SettingsHeading" Style="{StaticResource TitleTextBlockStyle}"
+                           VerticalAlignment="Center" />
+            </StackPanel>
+            <ScrollView x:Name="SettingsScroller" Grid.Row="1" Background="Transparent"
+                        ContentOrientation="Vertical" VerticalScrollMode="Enabled" VerticalScrollBarVisibility="Auto"
+                        HorizontalScrollMode="Disabled" HorizontalScrollBarVisibility="Hidden"
+                        HorizontalContentAlignment="Stretch">
+                <StackPanel Padding="24,4,24,24" Spacing="12">
+                    <InfoBar x:Name="SettingsNotice" IsOpen="False" IsClosable="False" />
+                    <Grid x:Name="SettingsColumns">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition x:Name="SettingsRightColumn" Width="0" />
+                        </Grid.ColumnDefinitions>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+                        <StackPanel Spacing="4">
+                            <Grid Margin="0,0,0,4" ColumnSpacing="8">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="*" />
                                     <ColumnDefinition Width="Auto" />
                                 </Grid.ColumnDefinitions>
-                                <TextBox x:Name="OutputPath" IsSpellCheckEnabled="False" IsTextPredictionEnabled="False"
-                                         TextChanged="OutputPath_TextChanged" />
-                                <Button x:Name="BrowseButton" Grid.Column="1" VerticalAlignment="Bottom" Click="BrowseButton_Click" />
+                                <TextBlock x:Name="InputHeading" Style="{StaticResource SubtitleTextBlockStyle}" />
+                                <Button x:Name="RefreshButton" Grid.Column="1" Click="RefreshButton_Click" />
                             </Grid>
-                            <TextBlock x:Name="OutputHelp" Style="{StaticResource CaptionTextBlockStyle}" TextWrapping="Wrap"
+                            <toolkit:SettingsCard x:Name="DeviceCard">
+                                <ComboBox x:Name="DevicePicker" DisplayMemberPath="Name" IsEnabled="False" MinWidth="152" MaxWidth="320"
+                                          SelectionChanged="DevicePicker_SelectionChanged" />
+                            </toolkit:SettingsCard>
+                            <toolkit:SettingsCard x:Name="VideoInputCard">
+                                <ComboBox x:Name="VideoInputPicker" DisplayMemberPath="Name" MinWidth="152" MaxWidth="320"
+                                          SelectionChanged="VideoInputPicker_SelectionChanged" />
+                            </toolkit:SettingsCard>
+                            <toolkit:SettingsCard x:Name="AudioInputCard">
+                                <ComboBox x:Name="AudioInputPicker" DisplayMemberPath="Name" MinWidth="152" MaxWidth="320"
+                                          SelectionChanged="InputPicker_SelectionChanged" />
+                            </toolkit:SettingsCard>
+                            <toolkit:SettingsCard x:Name="ModeCard">
+                                <ComboBox x:Name="ModePicker" DisplayMemberPath="Label" MinWidth="152" MaxWidth="320"
+                                          SelectionChanged="InputPicker_SelectionChanged" />
+                            </toolkit:SettingsCard>
+                            <TextBlock x:Name="RecordingModeHint" TextWrapping="Wrap" Style="{StaticResource CaptionTextBlockStyle}"
                                        Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
                         </StackPanel>
-                        <StackPanel Spacing="8">
-                            <TextBlock x:Name="AppearanceHeading" Style="{StaticResource SubtitleTextBlockStyle}" />
-                            <ComboBox x:Name="LanguagePicker" SelectionChanged="LanguagePicker_SelectionChanged">
-                                <ComboBoxItem x:Name="SystemLanguageOption" Tag="system" Content="Follow system" />
-                                <ComboBoxItem Tag="en" Content="English" />
-                                <ComboBoxItem Tag="zh-Hans" Content="简体中文" />
-                                <ComboBoxItem Tag="zh-Hant" Content="繁體中文" />
-                                <ComboBoxItem Tag="ja" Content="日本語" />
-                            </ComboBox>
+                        <StackPanel x:Name="SettingsSecondaryGroup" Grid.Row="1" Spacing="18">
+                            <StackPanel Spacing="8">
+                                <TextBlock x:Name="OutputHeading" Style="{StaticResource SubtitleTextBlockStyle}" />
+                                <toolkit:SettingsCard x:Name="OutputCard" ContentAlignment="Vertical" HorizontalContentAlignment="Stretch">
+                                    <Grid ColumnSpacing="8">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+                                        <TextBox x:Name="OutputPath" IsSpellCheckEnabled="False" IsTextPredictionEnabled="False"
+                                                 TextChanged="OutputPath_TextChanged" />
+                                        <Button x:Name="BrowseButton" Grid.Column="1" VerticalAlignment="Bottom" Click="BrowseButton_Click" />
+                                    </Grid>
+                                </toolkit:SettingsCard>
+                                <toolkit:SettingsExpander x:Name="FormatExpander" IsExpanded="False">
+                                    <toolkit:SettingsExpander.Items>
+                                        <toolkit:SettingsCard x:Name="VideoFormatCard">
+                                            <ComboBox x:Name="FormatPicker" DisplayMemberPath="Label" MinWidth="152" MaxWidth="320"
+                                                      SelectionChanged="FormatPicker_SelectionChanged" />
+                                        </toolkit:SettingsCard>
+                                        <toolkit:SettingsCard x:Name="AudioFormatCard">
+                                            <ComboBox x:Name="AudioFormatPicker" DisplayMemberPath="Label" MinWidth="152" MaxWidth="320"
+                                                      SelectionChanged="InputPicker_SelectionChanged" />
+                                        </toolkit:SettingsCard>
+                                    </toolkit:SettingsExpander.Items>
+                                </toolkit:SettingsExpander>
+                            </StackPanel>
+                            <StackPanel Spacing="8">
+                                <TextBlock x:Name="AppearanceHeading" Style="{StaticResource SubtitleTextBlockStyle}" />
+                                <toolkit:SettingsCard x:Name="LanguageCard">
+                                    <ComboBox x:Name="LanguagePicker" MinWidth="152" MaxWidth="320" SelectionChanged="LanguagePicker_SelectionChanged">
+                                        <ComboBoxItem Tag="en" Content="English" />
+                                        <ComboBoxItem Tag="zh-Hans" Content="简体中文" />
+                                        <ComboBoxItem Tag="zh-Hant" Content="繁體中文" />
+                                        <ComboBoxItem Tag="ja" Content="日本語" />
+                                    </ComboBox>
+                                </toolkit:SettingsCard>
+                            </StackPanel>
+                            <StackPanel Spacing="4">
+                                <TextBlock x:Name="AboutHeading" Style="{StaticResource SubtitleTextBlockStyle}" />
+                                <TextBlock Text="CaptureRack" Style="{StaticResource BodyStrongTextBlockStyle}" />
+                                <TextBlock x:Name="ApiVersion" Text="Checking DeckLink SDK…"
+                                           Style="{StaticResource CaptionTextBlockStyle}" TextWrapping="Wrap"
+                                           Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                            </StackPanel>
                         </StackPanel>
-                        <StackPanel Spacing="4">
-                            <TextBlock x:Name="AboutHeading" Style="{StaticResource SubtitleTextBlockStyle}" />
-                            <TextBlock Text="CaptureRack" Style="{StaticResource BodyStrongTextBlockStyle}" />
-                            <TextBlock x:Name="ApiVersion" Text="Checking DeckLink SDK…"
-                                       Style="{StaticResource CaptionTextBlockStyle}" TextWrapping="Wrap"
-                                       Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-                        </StackPanel>
-                    </StackPanel>
-                </Grid>
-            </StackPanel>
-        </ScrollViewer>
-        <Border x:Name="CaptureFooter" Grid.Row="1" Padding="24,10,24,10" BorderThickness="0,1,0,0"
-                Background="{ThemeResource CardBackgroundFillColorDefaultBrush}"
+                    </Grid>
+                </StackPanel>
+            </ScrollView>
+        </Grid>
+        <Border x:Name="CaptureFooter" Grid.Row="1" Padding="24,8,24,10" BorderThickness="0,1,0,0"
+                Background="{ThemeResource LayerFillColorDefaultBrush}"
                 BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}">
-            <StackPanel Spacing="6">
-                <Grid x:Name="FooterLayout" ColumnSpacing="12" RowSpacing="8">
+            <StackPanel Spacing="4">
+                <Grid x:Name="FooterLayout" ColumnSpacing="12" RowSpacing="4">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition x:Name="FooterActionsColumn" Width="Auto" />
                         <ColumnDefinition x:Name="FooterStatusColumn" Width="*" />
@@ -337,7 +396,7 @@
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="Auto" />
                     </Grid.RowDefinitions>
-                    <Grid VerticalAlignment="Center" ColumnSpacing="10" RowSpacing="8">
+                    <Grid x:Name="FooterActionCluster" VerticalAlignment="Center" ColumnSpacing="10">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="Auto" />
                             <ColumnDefinition Width="Auto" />
@@ -347,18 +406,32 @@
                             <RowDefinition Height="Auto" />
                         </Grid.RowDefinitions>
                         <StackPanel x:Name="StartActions" Orientation="Horizontal" Spacing="8">
-                            <Button x:Name="StartButton" Content="Start preview" MinWidth="112" IsEnabled="False"
-                                    Click="StartButton_Click" />
-                            <Button x:Name="RecordButton" Content="Start recording" IsEnabled="False"
-                                    Style="{StaticResource AccentButtonStyle}" Click="RecordButton_Click" />
+                            <Button x:Name="StartButton" MinHeight="36" Padding="12,4" IsEnabled="False"
+                                    Click="StartButton_Click">
+                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                    <FontIcon x:Name="PreviewActionIcon" FontSize="14" />
+                                    <TextBlock x:Name="PreviewActionLabel" />
+                                </StackPanel>
+                            </Button>
+                            <Button x:Name="RecordButton" MinHeight="36" Padding="12,4" IsEnabled="False"
+                                    Style="{StaticResource AccentButtonStyle}" Click="RecordButton_Click">
+                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                    <FontIcon x:Name="RecordActionIcon" FontSize="14" />
+                                    <TextBlock x:Name="RecordActionLabel" />
+                                </StackPanel>
+                            </Button>
                         </StackPanel>
                         <StackPanel x:Name="RecordingClock" Grid.Column="1" Orientation="Horizontal"
-                                    Spacing="8" VerticalAlignment="Center" Visibility="Collapsed">
+                                    Spacing="6" VerticalAlignment="Center" Visibility="Collapsed">
+                            <Ellipse x:Name="RecordingIndicator" Width="8" Height="8" VerticalAlignment="Center"
+                                     Fill="{ThemeResource SystemFillColorCriticalBrush}" />
                             <TextBlock x:Name="RecordingClockLabel" Text="Elapsed"
                                        Style="{StaticResource BodyStrongTextBlockStyle}" VerticalAlignment="Center" />
                             <TextBlock x:Name="RecordingElapsed" Text="00:00:00" FontFamily="Consolas"
                                        VerticalAlignment="Center" ToolTipService.ToolTip="Recording elapsed time" />
                         </StackPanel>
+                        <Button x:Name="CancelQcButton" Grid.Column="1" Click="CancelQcButton_Click"
+                                Visibility="Collapsed" Style="{StaticResource SubtleButtonStyle}" />
                         <Button x:Name="QcResultsButton" Grid.Column="1" Content="QC results" Visibility="Collapsed">
                             <Button.Flyout>
                                 <Flyout Placement="Top" Opened="QcResultsFlyout_Opened">
@@ -381,6 +454,7 @@
                                                 </ItemsControl>
                                             </StackPanel>
                                             <Button x:Name="QcFolderButton" Content="Open output folder" Tag="folder" Click="OpenQcArtifact_Click" />
+                                            <Button x:Name="QcVideoButton" Tag="video" Click="OpenQcArtifact_Click" />
                                             <Button x:Name="QcLogButton" Content="Open recording log" Tag="log" Click="OpenQcArtifact_Click" />
                                             <Button x:Name="QcHashButton" Content="Open FrameMD5" Tag="hash" Click="OpenQcArtifact_Click" />
                                             <Button x:Name="QcReportButton" Content="Open QCTools report" Tag="report" Click="OpenQcArtifact_Click" />
@@ -391,22 +465,61 @@
                             </Button.Flyout>
                         </Button>
                     </Grid>
-                    <StackPanel x:Name="FooterStatusPanel" Grid.Column="1" VerticalAlignment="Center" Spacing="4">
-                        <InfoBar x:Name="SignalStatus" Title="Idle" IsOpen="True" IsClosable="False"
-                                 Message="Select a video and audio source to start." />
-                        <TextBlock x:Name="LivePreviewStatus" Visibility="Collapsed"
-                                   Style="{StaticResource CaptionTextBlockStyle}" TextWrapping="Wrap" />
-                    </StackPanel>
+                    <Button x:Name="StatusDetailsButton" Grid.Column="1" HorizontalAlignment="Right"
+                            HorizontalContentAlignment="Stretch" VerticalAlignment="Center" Padding="8,4"
+                            Style="{StaticResource SubtleButtonStyle}">
+                        <Grid ColumnSpacing="6">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <FontIcon x:Name="StatusGlyph" FontSize="14" />
+                            <TextBlock x:Name="StatusTitleText" Grid.Column="1" MaxWidth="230" TextTrimming="CharacterEllipsis"
+                                       AutomationProperties.LiveSetting="Polite" />
+                            <FontIcon Grid.Column="2" Glyph="&#xE70E;" FontSize="10" />
+                        </Grid>
+                        <Button.Flyout>
+                            <Flyout Placement="Top">
+                                <StackPanel Spacing="6" MaxWidth="380">
+                                    <InfoBar x:Name="SignalStatus" Title="Idle" IsOpen="True" IsClosable="False"
+                                             Message="Select a video and audio source to start." />
+                                    <TextBlock x:Name="StatusFileName" Visibility="Collapsed" TextWrapping="Wrap"
+                                               Style="{StaticResource CaptionTextBlockStyle}" />
+                                    <TextBlock x:Name="LivePreviewStatus" Visibility="Collapsed" TextWrapping="Wrap"
+                                               Style="{StaticResource CaptionTextBlockStyle}" />
+                                </StackPanel>
+                            </Flyout>
+                        </Button.Flyout>
+                    </Button>
                 </Grid>
                 <Button x:Name="ConfigurationButton" Click="OpenSettings_Click" HorizontalAlignment="Stretch"
-                        HorizontalContentAlignment="Left">
-                    <TextBlock x:Name="ConfigurationSummary" TextWrapping="Wrap" />
+                        Style="{StaticResource SubtleButtonStyle}" Padding="4,4" HorizontalContentAlignment="Stretch">
+                    <Grid ColumnSpacing="8">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <FontIcon Glyph="&#xE713;" FontSize="14" />
+                        <TextBlock x:Name="ConfigurationSummary" Grid.Column="1" TextTrimming="CharacterEllipsis" />
+                        <FontIcon Grid.Column="2" Glyph="&#xE76C;" FontSize="10" />
+                    </Grid>
                 </Button>
-                <TextBlock x:Name="CaptureCountsStatus" Style="{StaticResource CaptionTextBlockStyle}"
-                           Foreground="{ThemeResource TextFillColorSecondaryBrush}"
-                           TextWrapping="NoWrap" TextTrimming="CharacterEllipsis" />
-                <TextBlock x:Name="StorageStatus" Style="{StaticResource CaptionTextBlockStyle}"
-                           Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextWrapping="Wrap" />
+                <Grid x:Name="FooterTelemetry" ColumnSpacing="16" RowSpacing="2" Margin="4,0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition x:Name="TelemetryStorageColumn" Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <Grid.RowDefinitions>
+                        <RowDefinition Height="Auto" />
+                        <RowDefinition Height="Auto" />
+                    </Grid.RowDefinitions>
+                    <TextBlock x:Name="CaptureCountsStatus" Style="{StaticResource CaptionTextBlockStyle}"
+                               Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextTrimming="CharacterEllipsis" />
+                    <TextBlock x:Name="StorageStatus" Grid.Column="1" Style="{StaticResource CaptionTextBlockStyle}"
+                               Foreground="{ThemeResource TextFillColorSecondaryBrush}" TextTrimming="CharacterEllipsis" />
+                </Grid>
             </StackPanel>
         </Border>
     </Grid>

@@ -8,6 +8,23 @@ namespace CaptureRack.UT;
 
 public sealed class CaptureSettingsTests
 {
+    [Theory]
+    [InlineData(null, "zh-HK", "zh-Hant")]
+    [InlineData(null, "zh-MY", "zh-Hans")]
+    [InlineData(null, "ja-JP", "ja")]
+    [InlineData(null, "de-DE", "en")]
+    [InlineData("system", "zh-SG", "zh-Hans")]
+    [InlineData("en", "zh-TW", "en")]
+    [InlineData("ja", "en-US", "ja")]
+    public void UsesWindowsLanguageOnlyUntilAnExplicitLanguageIsSaved(
+        string? savedLanguage, string windowsCulture, string expected)
+    {
+        var settings = new CaptureSettings { LanguageOverride = SettingsLanguage.Resolve(savedLanguage, windowsCulture) };
+        var restored = Read(CaptureSettingsStore.Serialize(settings));
+
+        Assert.Equal(expected, SettingsLanguage.Resolve(restored.LanguageOverride, "fr-FR"));
+    }
+
     [Fact]
     public void LoadsLegacyDeckLinkSettingsAndPreservesAutoMode()
     {

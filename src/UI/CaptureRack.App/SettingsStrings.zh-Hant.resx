@@ -30,9 +30,6 @@
   <data name="Appearance" xml:space="preserve">
     <value>外觀</value>
   </data>
-  <data name="FollowSystem" xml:space="preserve">
-    <value>跟隨系統</value>
-  </data>
   <data name="Language" xml:space="preserve">
     <value>語言</value>
   </data>
@@ -81,8 +78,8 @@
   <data name="Auto" xml:space="preserve">
     <value>自動偵測</value>
   </data>
-  <data name="FixedMode" xml:space="preserve">
-    <value>開始預覽前請選取固定輸入制式，才能錄製。</value>
+  <data name="AutoRecordingHint" xml:space="preserve">
+    <value>正在等待可讀的預覽影格。Auto 可以按目前預覽制式錄製無訊號影格。</value>
   </data>
   <data name="OutputHelp" xml:space="preserve">
     <value>MOV 檔案依本機錄製開始時間與錄製格式命名。</value>
@@ -124,7 +121,7 @@
     <value>預估還可錄製 {0}</value>
   </data>
   <data name="StorageNeedsMode" xml:space="preserve">
-    <value>選取固定制式後可估算錄製時間。</value>
+    <value>選擇輸入制式後可估算剩餘錄製時間。</value>
   </data>
   <data name="HoursMinutes" xml:space="preserve">
     <value>{0} 小時 {1} 分鐘</value>
@@ -177,8 +174,8 @@
   <data name="SpectrumTitle" xml:space="preserve">
     <value>立體聲音訊頻譜</value>
   </data>
-  <data name="SpectrumRange" xml:space="preserve">
-    <value>立體聲音訊頻譜 · {0} 位元 PCM 輸入 · {1:0.#} 至 0 dBFS</value>
+  <data name="SpectrumInput" xml:space="preserve">
+    <value>立體聲音訊頻譜 · {0} 位元 PCM 輸入 · 取樣率 {1:0.##} kHz</value>
   </data>
   <data name="EventTimeline" xml:space="preserve">
     <value>擷取事件時間軸</value>
@@ -541,7 +538,7 @@
     <value>品管結果 · 1 則警告</value>
   </data>
   <data name="CaptureCounts" xml:space="preserve">
-    <value>有效影格 {0:N0} · 無輸入影格 {1:N0} · PCM 音訊封包 {2:N0} · 遺失影格 {3:N0}</value>
+    <value>有效影格 {0:N0} · 無輸入影格 {1:N0} · PCM 音訊封包 {2:N0} · 遺失影格 {3:N0} · 預覽跳格 {4:N0}</value>
   </data>
   <data name="CheckMov" xml:space="preserve">
     <value>檢查 MOV…</value>
@@ -560,5 +557,44 @@
   </data>
   <data name="QcFinishing" xml:space="preserve">
     <value>正在停止檢查並儲存結果。</value>
+  </data>
+  <data name="RecordingFormats" xml:space="preserve">
+    <value>錄製格式</value>
+  </data>
+  <data name="RecordingActive" xml:space="preserve">
+    <value>正在錄製</value>
+  </data>
+  <data name="WritingMov" xml:space="preserve">
+    <value>正在寫入 MOV 檔案。</value>
+  </data>
+  <data name="RecordingSaved" xml:space="preserve">
+    <value>檔案已儲存</value>
+  </data>
+  <data name="SavedQcProgress" xml:space="preserve">
+    <value>品管檢查進行中 · {0}</value>
+  </data>
+  <data name="SavedQcOutcome" xml:space="preserve">
+    <value>MOV 已儲存。{0}</value>
+  </data>
+  <data name="OpenRecordedMov" xml:space="preserve">
+    <value>開啟 MOV</value>
+  </data>
+  <data name="StorageWaitingForAutoMode" xml:space="preserve">
+    <value>等待目前預覽制式後估算剩餘錄製時間。</value>
+  </data>
+  <data name="QcWarnInputModeChange" xml:space="preserve">
+    <value>輸入制式已變更。CaptureRack 已停止本段錄製，未寫入新制式的畫面。</value>
+  </data>
+  <data name="AutoNoInputRecordable" xml:space="preserve">
+    <value>目前無訊號，可以按預覽制式錄製。</value>
+  </data>
+  <data name="AutoFallbackMode" xml:space="preserve">
+    <value>{0}（備用制式：{1}）</value>
+  </data>
+  <data name="PreviewFullScreen" xml:space="preserve">
+    <value>全螢幕預覽</value>
+  </data>
+  <data name="ExitPreviewFullScreen" xml:space="preserve">
+    <value>離開全螢幕</value>
   </data>
 </root>

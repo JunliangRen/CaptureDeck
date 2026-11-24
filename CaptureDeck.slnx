@@ -1,0 +1,6 @@
+<Solution>
+  <Project Path="src/CaptureDeck.App/CaptureDeck.App.csproj" />
+  <Project Path="src/CaptureDeck.DeckLink/CaptureDeck.DeckLink.csproj" />
+  <Project Path="src/CaptureDeck.Probe/CaptureDeck.Probe.csproj" />
+  <Project Path="src/CaptureDeck.QualityControl/CaptureDeck.QualityControl.csproj" />
+</Solution>

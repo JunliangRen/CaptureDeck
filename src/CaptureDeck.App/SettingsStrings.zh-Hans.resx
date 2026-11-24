@@ -1,0 +1,546 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <resheader name="resmimetype">
+    <value>text/microsoft-resx</value>
+  </resheader>
+  <resheader name="version">
+    <value>2.0</value>
+  </resheader>
+  <resheader name="reader">
+    <value>System.Resources.ResXResourceReader, System.Windows.Forms</value>
+  </resheader>
+  <resheader name="writer">
+    <value>System.Resources.ResXResourceWriter, System.Windows.Forms</value>
+  </resheader>
+  <data name="Settings" xml:space="preserve">
+    <value>设置</value>
+  </data>
+  <data name="Back" xml:space="preserve">
+    <value>返回采集</value>
+  </data>
+  <data name="Capture" xml:space="preserve">
+    <value>采集</value>
+  </data>
+  <data name="Output" xml:space="preserve">
+    <value>输出</value>
+  </data>
+  <data name="About" xml:space="preserve">
+    <value>关于</value>
+  </data>
+  <data name="Appearance" xml:space="preserve">
+    <value>外观</value>
+  </data>
+  <data name="FollowSystem" xml:space="preserve">
+    <value>跟随系统</value>
+  </data>
+  <data name="Language" xml:space="preserve">
+    <value>语言</value>
+  </data>
+  <data name="Device" xml:space="preserve">
+    <value>设备</value>
+  </data>
+  <data name="Refresh" xml:space="preserve">
+    <value>刷新设备</value>
+  </data>
+  <data name="VideoSource" xml:space="preserve">
+    <value>视频源</value>
+  </data>
+  <data name="AudioSource" xml:space="preserve">
+    <value>音频源</value>
+  </data>
+  <data name="Mode" xml:space="preserve">
+    <value>输入制式</value>
+  </data>
+  <data name="VideoFormat" xml:space="preserve">
+    <value>视频格式</value>
+  </data>
+  <data name="AudioFormat" xml:space="preserve">
+    <value>音频格式</value>
+  </data>
+  <data name="Video10" xml:space="preserve">
+    <value>10 位未压缩 (v210)</value>
+  </data>
+  <data name="Video8" xml:space="preserve">
+    <value>8 位未压缩 (2vuy)</value>
+  </data>
+  <data name="Audio16" xml:space="preserve">
+    <value>16 位有符号 PCM</value>
+  </data>
+  <data name="Audio32" xml:space="preserve">
+    <value>32 位有符号 PCM</value>
+  </data>
+  <data name="Folder" xml:space="preserve">
+    <value>输出目录</value>
+  </data>
+  <data name="ChooseFolder" xml:space="preserve">
+    <value>选择目录</value>
+  </data>
+  <data name="Browse" xml:space="preserve">
+    <value>浏览…</value>
+  </data>
+  <data name="Auto" xml:space="preserve">
+    <value>自动检测</value>
+  </data>
+  <data name="FixedMode" xml:space="preserve">
+    <value>开始预览前请选择固定输入制式，才能录制。</value>
+  </data>
+  <data name="OutputHelp" xml:space="preserve">
+    <value>MOV 文件按本地录制开始时间和录制格式命名。</value>
+  </data>
+  <data name="Configure" xml:space="preserve">
+    <value>选择设备和输入源</value>
+  </data>
+  <data name="ChangeCapture" xml:space="preserve">
+    <value>停止预览后可修改设备、输入源或格式。</value>
+  </data>
+  <data name="MissingDevice" xml:space="preserve">
+    <value>找不到已保存的设备：{0}</value>
+  </data>
+  <data name="MissingSelection" xml:space="preserve">
+    <value>已保存的输入源或制式不可用，请检查采集设置。</value>
+  </data>
+  <data name="SaveError" xml:space="preserve">
+    <value>无法保存设置</value>
+  </data>
+  <data name="ReadError" xml:space="preserve">
+    <value>无法读取已保存的设置</value>
+  </data>
+  <data name="FolderError" xml:space="preserve">
+    <value>无法选择输出目录</value>
+  </data>
+  <data name="ChooseStorage" xml:space="preserve">
+    <value>选择输出目录后可查看剩余空间。</value>
+  </data>
+  <data name="StorageChecking" xml:space="preserve">
+    <value>正在检查剩余空间…</value>
+  </data>
+  <data name="StorageUnavailable" xml:space="preserve">
+    <value>输出目录不可用</value>
+  </data>
+  <data name="StorageCapacity" xml:space="preserve">
+    <value>剩余 {0} GiB</value>
+  </data>
+  <data name="StorageDuration" xml:space="preserve">
+    <value>预计还可录制 {0}</value>
+  </data>
+  <data name="StorageNeedsMode" xml:space="preserve">
+    <value>选择固定制式后可估算录制时长。</value>
+  </data>
+  <data name="HoursMinutes" xml:space="preserve">
+    <value>{0} 小时 {1} 分钟</value>
+  </data>
+  <data name="Minutes" xml:space="preserve">
+    <value>{0} 分钟</value>
+  </data>
+  <data name="UnderMinute" xml:space="preserve">
+    <value>少于 1 分钟</value>
+  </data>
+  <data name="PreviewTab" xml:space="preserve">
+    <value>预览</value>
+  </data>
+  <data name="ScopesTab" xml:space="preserve">
+    <value>示波器</value>
+  </data>
+  <data name="SpectrumTab" xml:space="preserve">
+    <value>频谱</value>
+  </data>
+  <data name="EventsTab" xml:space="preserve">
+    <value>事件</value>
+  </data>
+  <data name="Monitoring" xml:space="preserve">
+    <value>采集监看</value>
+  </data>
+  <data name="VideoScopes" xml:space="preserve">
+    <value>视频示波器</value>
+  </data>
+  <data name="AudioSpectrum" xml:space="preserve">
+    <value>音频频谱</value>
+  </data>
+  <data name="PreviewImage" xml:space="preserve">
+    <value>DeckLink 视频预览</value>
+  </data>
+  <data name="WaitingPreview" xml:space="preserve">
+    <value>等待预览</value>
+  </data>
+  <data name="LumaHeading" xml:space="preserve">
+    <value>亮度波形</value>
+  </data>
+  <data name="VectorHeading" xml:space="preserve">
+    <value>矢量示波器</value>
+  </data>
+  <data name="VectorAxes" xml:space="preserve">
+    <value>横轴 Cb · 纵轴 Cr</value>
+  </data>
+  <data name="VectorPlot" xml:space="preserve">
+    <value>色度矢量图</value>
+  </data>
+  <data name="SpectrumTitle" xml:space="preserve">
+    <value>立体声音频频谱</value>
+  </data>
+  <data name="SpectrumRange" xml:space="preserve">
+    <value>立体声音频频谱 · {0} 位 PCM 输入 · {1:0.#} 至 0 dBFS</value>
+  </data>
+  <data name="EventTimeline" xml:space="preserve">
+    <value>采集事件时间线</value>
+  </data>
+  <data name="EventsEmpty" xml:space="preserve">
+    <value>暂无信号或时间戳事件。</value>
+  </data>
+  <data name="EventsRecent" xml:space="preserve">
+    <value>最近事件 · 从第一帧起计时</value>
+  </data>
+  <data name="ScopeWaiting" xml:space="preserve">
+    <value>等待视频帧。</value>
+  </data>
+  <data name="LumaWaiting" xml:space="preserve">
+    <value>Y′ · 等待输入格式</value>
+  </data>
+  <data name="LumaNative" xml:space="preserve">
+    <value>Y′ 0–{0}（{1} 位）</value>
+  </data>
+  <data name="LumaScaled" xml:space="preserve">
+    <value>Y′ 0–{0}（{1} 位刻度 · {2} 位输入）</value>
+  </data>
+  <data name="LumaPlotRange" xml:space="preserve">
+    <value>亮度波形，0 至 {0}</value>
+  </data>
+  <data name="ScopeNoInput" xml:space="preserve">
+    <value>DeckLink 无输入帧</value>
+  </data>
+  <data name="ScopeLive" xml:space="preserve">
+    <value>实时输入</value>
+  </data>
+  <data name="StereoHeading" xml:space="preserve">
+    <value>立体声峰值</value>
+  </data>
+  <data name="StereoMeter" xml:space="preserve">
+    <value>立体声峰值电平表</value>
+  </data>
+  <data name="LeftChannel" xml:space="preserve">
+    <value>左声道</value>
+  </data>
+  <data name="RightChannel" xml:space="preserve">
+    <value>右声道</value>
+  </data>
+  <data name="LeftPeak" xml:space="preserve">
+    <value>左声道峰值（dBFS）</value>
+  </data>
+  <data name="RightPeak" xml:space="preserve">
+    <value>右声道峰值（dBFS）</value>
+  </data>
+  <data name="PeakUnavailable" xml:space="preserve">
+    <value>{0}峰值不可用</value>
+  </data>
+  <data name="PeakValue" xml:space="preserve">
+    <value>{0}峰值：{1} dBFS</value>
+  </data>
+  <data name="Phase" xml:space="preserve">
+    <value>相位 {0}</value>
+  </data>
+  <data name="PhaseHelp" xml:space="preserve">
+    <value>立体声相位相关性</value>
+  </data>
+  <data name="ClipCount" xml:space="preserve">
+    <value>{0}削波：{1:N0}</value>
+  </data>
+  <data name="StartPreview" xml:space="preserve">
+    <value>开始预览</value>
+  </data>
+  <data name="StopPreview" xml:space="preserve">
+    <value>停止预览</value>
+  </data>
+  <data name="StartRecording" xml:space="preserve">
+    <value>开始录制</value>
+  </data>
+  <data name="StopRecording" xml:space="preserve">
+    <value>停止录制</value>
+  </data>
+  <data name="CancelQc" xml:space="preserve">
+    <value>取消质检</value>
+  </data>
+  <data name="Elapsed" xml:space="preserve">
+    <value>已用时</value>
+  </data>
+  <data name="ElapsedHelp" xml:space="preserve">
+    <value>录制已用时</value>
+  </data>
+  <data name="RecordingClock" xml:space="preserve">
+    <value>录制中</value>
+  </data>
+  <data name="QcHeading" xml:space="preserve">
+    <value>录后质检</value>
+  </data>
+  <data name="QcWarningsHeading" xml:space="preserve">
+    <value>告警</value>
+  </data>
+  <data name="QcFolder" xml:space="preserve">
+    <value>打开输出目录</value>
+  </data>
+  <data name="QcLog" xml:space="preserve">
+    <value>打开录制日志</value>
+  </data>
+  <data name="QcHash" xml:space="preserve">
+    <value>打开 FrameMD5</value>
+  </data>
+  <data name="QcReport" xml:space="preserve">
+    <value>打开 QCTools 报告</value>
+  </data>
+  <data name="QcResults" xml:space="preserve">
+    <value>质检结果</value>
+  </data>
+  <data name="QcWarningCount" xml:space="preserve">
+    <value>质检结果 · {0:N0} 条告警</value>
+  </data>
+  <data name="QcOpenError" xml:space="preserve">
+    <value>Windows 无法打开此项。</value>
+  </data>
+  <data name="CheckingDevices" xml:space="preserve">
+    <value>正在检查设备</value>
+  </data>
+  <data name="CheckingDeckLink" xml:space="preserve">
+    <value>正在通过 DeckLink SDK 枚举输入。</value>
+  </data>
+  <data name="NoDevice" xml:space="preserve">
+    <value>未找到 DeckLink 设备</value>
+  </data>
+  <data name="ConnectDevice" xml:space="preserve">
+    <value>连接 Blackmagic 采集设备后刷新。</value>
+  </data>
+  <data name="ScanFailed" xml:space="preserve">
+    <value>设备扫描失败</value>
+  </data>
+  <data name="ApiWaiting" xml:space="preserve">
+    <value>正在检查 DeckLink SDK…</value>
+  </data>
+  <data name="ApiUnavailable" xml:space="preserve">
+    <value>Blackmagic DeckLink API 不可用</value>
+  </data>
+  <data name="InputsUnavailable" xml:space="preserve">
+    <value>输入不可选</value>
+  </data>
+  <data name="NoInputRoutes" xml:space="preserve">
+    <value>DeckLink 驱动未提供可选的视频和音频输入。</value>
+  </data>
+  <data name="NoModes" xml:space="preserve">
+    <value>没有支持的制式</value>
+  </data>
+  <data name="ChooseModeSource" xml:space="preserve">
+    <value>请选择其他视频源或视频格式。</value>
+  </data>
+  <data name="Idle" xml:space="preserve">
+    <value>待机</value>
+  </data>
+  <data name="SelectInputs" xml:space="preserve">
+    <value>先选择视频源和音频源。</value>
+  </data>
+  <data name="PreviewBeforeRecording" xml:space="preserve">
+    <value>录制前请先开启预览检查输入。</value>
+  </data>
+  <data name="StoppingPreview" xml:space="preserve">
+    <value>正在停止预览</value>
+  </data>
+  <data name="ReleasingInput" xml:space="preserve">
+    <value>正在释放 DeckLink 输入。</value>
+  </data>
+  <data name="CancellingQc" xml:space="preserve">
+    <value>正在取消质检</value>
+  </data>
+  <data name="MovSaved" xml:space="preserve">
+    <value>录制的 MOV 已保存。</value>
+  </data>
+  <data name="ChooseOutput" xml:space="preserve">
+    <value>选择输出目录</value>
+  </data>
+  <data name="ExistingOutput" xml:space="preserve">
+    <value>请选择现有目录来保存 MOV。</value>
+  </data>
+  <data name="StartingRecording" xml:space="preserve">
+    <value>正在开始录制</value>
+  </data>
+  <data name="OpeningMov" xml:space="preserve">
+    <value>正在所选目录创建 MOV。</value>
+  </data>
+  <data name="RecordingStartFailed" xml:space="preserve">
+    <value>无法开始录制</value>
+  </data>
+  <data name="PreviewStoppedOpening" xml:space="preserve">
+    <value>创建录制文件时预览已停止。</value>
+  </data>
+  <data name="FinalizingMov" xml:space="preserve">
+    <value>正在封装 MOV</value>
+  </data>
+  <data name="WritingIndex" xml:space="preserve">
+    <value>正在写入文件索引，预览继续。</value>
+  </data>
+  <data name="RecordingFailed" xml:space="preserve">
+    <value>录制失败</value>
+  </data>
+  <data name="PreviewFailed" xml:space="preserve">
+    <value>预览失败</value>
+  </data>
+  <data name="StartingPreview" xml:space="preserve">
+    <value>正在启动预览</value>
+  </data>
+  <data name="OpeningInput" xml:space="preserve">
+    <value>正在打开选中的 DeckLink 输入。</value>
+  </data>
+  <data name="PreviewStopped" xml:space="preserve">
+    <value>预览已停止</value>
+  </data>
+  <data name="LastCounters" xml:space="preserve">
+    <value>计数显示上一次采集的数据。</value>
+  </data>
+  <data name="QcChecking" xml:space="preserve">
+    <value>MOV 已保存 · 正在检查</value>
+  </data>
+  <data name="QcStarting" xml:space="preserve">
+    <value>正在启动录后质检。</value>
+  </data>
+  <data name="QcInspecting" xml:space="preserve">
+    <value>正在检查 MOV 音视频轨。</value>
+  </data>
+  <data name="QcDecoding" xml:space="preserve">
+    <value>正在解码视频与 PCM 并写入 FrameMD5。</value>
+  </data>
+  <data name="QcAnalyzing" xml:space="preserve">
+    <value>正在分析音视频以生成 QCTools 报告。</value>
+  </data>
+  <data name="QcPassed" xml:space="preserve">
+    <value>文件质检通过</value>
+  </data>
+  <data name="QcCancelled" xml:space="preserve">
+    <value>质检已取消 · MOV 已保存</value>
+  </data>
+  <data name="QcUnavailable" xml:space="preserve">
+    <value>质检工具不可用 · MOV 已保存</value>
+  </data>
+  <data name="QcFailed" xml:space="preserve">
+    <value>文件质检失败 · MOV 已保存</value>
+  </data>
+  <data name="QcWriteFailed" xml:space="preserve">
+    <value>无法写入质检报告 · MOV 已保存</value>
+  </data>
+  <data name="QcDecoded" xml:space="preserve">
+    <value>已解码 {0:N0} 个视频帧和 {1:N0} 个 PCM 样本帧。</value>
+  </data>
+  <data name="QcCancelledDetail" xml:space="preserve">
+    <value>文件检查已停止。</value>
+  </data>
+  <data name="QcToolsDetail" xml:space="preserve">
+    <value>请将 ffmpeg.exe 和 ffprobe.exe 放到 PATH 或 CaptureDeck 同一目录。</value>
+  </data>
+  <data name="QcLogDetail" xml:space="preserve">
+    <value>技术详情请查看录制日志。</value>
+  </data>
+  <data name="QcWarnNoInput" xml:space="preserve">
+    <value>DeckLink 将 {0:N0} 个录制帧标记为无输入。</value>
+  </data>
+  <data name="QcWarnMissing" xml:space="preserve">
+    <value>采集检测到相当于丢失 {0:N0} 个视频帧的间隔。</value>
+  </data>
+  <data name="QcWarnTimestamp" xml:space="preserve">
+    <value>采集检测到 {0:N0} 次音频或视频时间戳回退。</value>
+  </data>
+  <data name="QcWarnClipping" xml:space="preserve">
+    <value>音频达到监看的削波阈值。</value>
+  </data>
+  <data name="QcWarnFieldFlags" xml:space="preserve">
+    <value>有 {0:N0} 个解码帧未提供场标记。</value>
+  </data>
+  <data name="NoInputSignal" xml:space="preserve">
+    <value>无输入信号</value>
+  </data>
+  <data name="RecordingNoInput" xml:space="preserve">
+    <value>正在将采集卡的无输入帧写入 MOV。</value>
+  </data>
+  <data name="PreviewingNoInput" xml:space="preserve">
+    <value>正在预览采集卡的无输入帧。</value>
+  </data>
+  <data name="SignalPresent" xml:space="preserve">
+    <value>有输入信号</value>
+  </data>
+  <data name="ReceivingVideo" xml:space="preserve">
+    <value>正在接收有效视频。</value>
+  </data>
+  <data name="WaitingFrames" xml:space="preserve">
+    <value>等待采集帧</value>
+  </data>
+  <data name="WaitingFirstFrame" xml:space="preserve">
+    <value>采集已启动，正在等待第一帧。</value>
+  </data>
+  <data name="LivePreviewStatus" xml:space="preserve">
+    <value>实时预览 · {0}</value>
+  </data>
+  <data name="PreviewNoInputFrame" xml:space="preserve">
+    <value>无输入帧</value>
+  </data>
+  <data name="PreviewLiveFrame" xml:space="preserve">
+    <value>实时帧</value>
+  </data>
+  <data name="PreviewFrameDetail" xml:space="preserve">
+    <value>{0} · {1} × {2} {3} · 已显示 {4:N0} 帧</value>
+  </data>
+  <data name="EventTimestampRegression" xml:space="preserve">
+    <value>视频时间戳重复或回退。</value>
+  </data>
+  <data name="EventFrameGap" xml:space="preserve">
+    <value>视频时间戳有间隔 · 丢失 {0:N0} 帧。</value>
+  </data>
+  <data name="EventNoInputAtStart" xml:space="preserve">
+    <value>采集开始时没有输入信号。</value>
+  </data>
+  <data name="EventSignalLost" xml:space="preserve">
+    <value>视频输入信号丢失。</value>
+  </data>
+  <data name="EventSignalRestored" xml:space="preserve">
+    <value>视频输入信号恢复。</value>
+  </data>
+  <data name="ConnectorComponent" xml:space="preserve">
+    <value>分量视频</value>
+  </data>
+  <data name="ConnectorComposite" xml:space="preserve">
+    <value>复合视频</value>
+  </data>
+  <data name="ConnectorEmbedded" xml:space="preserve">
+    <value>嵌入式音频</value>
+  </data>
+  <data name="ConnectorAnalog" xml:space="preserve">
+    <value>模拟音频</value>
+  </data>
+  <data name="ConnectorXlr" xml:space="preserve">
+    <value>模拟 XLR</value>
+  </data>
+  <data name="ConnectorRca" xml:space="preserve">
+    <value>模拟 RCA</value>
+  </data>
+  <data name="ConnectorMicrophone" xml:space="preserve">
+    <value>麦克风</value>
+  </data>
+  <data name="ConnectorHeadphones" xml:space="preserve">
+    <value>耳机</value>
+  </data>
+  <data name="ConnectorOpticalSdi" xml:space="preserve">
+    <value>光纤 SDI</value>
+  </data>
+  <data name="ConnectorEthernet" xml:space="preserve">
+    <value>以太网</value>
+  </data>
+  <data name="ConnectorOpticalEthernet" xml:space="preserve">
+    <value>光纤以太网</value>
+  </data>
+  <data name="ConnectorInternal" xml:space="preserve">
+    <value>内部输入</value>
+  </data>
+  <data name="ShortVideoFormat" xml:space="preserve">
+    <value>{0} {1} 位</value>
+  </data>
+  <data name="ShortPcmFormat" xml:space="preserve">
+    <value>PCM {0} 位</value>
+  </data>
+  <data name="QcOneWarning" xml:space="preserve">
+    <value>质检结果 · 1 条告警</value>
+  </data>
+  <data name="CaptureCounts" xml:space="preserve">
+    <value>有效帧 {0:N0} · 无输入帧 {1:N0} · PCM 音频包 {2:N0} · 丢帧 {3:N0}</value>
+  </data>
+</root>

@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Runtime.InteropServices;
+using CaptureDeck.Core;
 using CaptureDeck.DeckLink;
 using CaptureDeck.QualityControl;
 
@@ -7,6 +8,9 @@ namespace CaptureDeck.Probe;
 
 internal static class Program
 {
+    private static readonly ICaptureBackend<CaptureDevice, DeckLinkCaptureRequest, DeckLinkProgress, CaptureStats>
+        DeckLink = new CaptureBackendRegistry(new DeckLinkBackend())
+            .Get<DeckLinkBackend>(DeckLinkBackend.BackendId);
     [MTAThread]
     private static int Main(string[] args)
     {
@@ -31,7 +35,7 @@ internal static class Program
         try
         {
             Console.WriteLine($"DeckLink API {DeckLinkCapture.GetApiVersion()}");
-            var devices = DeckLinkCapture.GetDevices();
+            var devices = DeckLink.GetDevices();
             if (args is ["list"])
             {
                 foreach (var device in devices)
@@ -126,8 +130,10 @@ internal static class Program
             var clock = Stopwatch.StartNew();
             double nextReport = 1;
             VideoMode? runningMode = null;
-            var result = DeckLinkCapture.Run(index, mode, TimeSpan.FromSeconds(seconds), (activeMode, stats) =>
+            var request = new DeckLinkCaptureRequest(index, mode, TimeSpan.FromSeconds(seconds));
+            var result = DeckLink.Run(request, update =>
             {
+                var (activeMode, stats) = update;
                 if (activeMode != runningMode)
                 {
                     runningMode = activeMode;

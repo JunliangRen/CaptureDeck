@@ -4,6 +4,7 @@ using System.Runtime.InteropServices;
 using System.Runtime.InteropServices.WindowsRuntime;
 using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml.Media.Imaging;
+using CaptureDeck.Core;
 using CaptureDeck.DeckLink;
 using CaptureDeck.QualityControl;
 using Microsoft.UI.Windowing;
@@ -15,6 +16,9 @@ namespace CaptureDeck.App;
 
 public sealed partial class MainWindow : Window
 {
+    private static readonly ICaptureBackend<CaptureDevice, DeckLinkCaptureRequest, DeckLinkProgress, CaptureStats>
+        DeckLink = new CaptureBackendRegistry(new DeckLinkBackend())
+            .Get<DeckLinkBackend>(DeckLinkBackend.BackendId);
     private CancellationTokenSource? captureStop;
     private CancellationTokenSource? qcStop;
     private Task<CaptureStats>? captureTask;
@@ -220,7 +224,7 @@ public sealed partial class MainWindow : Window
         try
         {
             var result = await Task.Run(() => (Api: DeckLinkCapture.GetApiVersion(),
-                Devices: DeckLinkCapture.GetDevices(includeSources: true).Where(device => device.HasVideoInput).ToArray()));
+                Devices: DeckLink.GetDevices(includeCapabilities: true).Where(device => device.HasVideoInput).ToArray()));
             if (closing)
                 return;
 
@@ -536,16 +540,23 @@ public sealed partial class MainWindow : Window
         ShowCounts(new CaptureStats());
         SetStatus("StartingPreview", "OpeningInput");
         var dispatcher = DispatcherQueue;
-        var task = Task.Factory.StartNew(() => DeckLinkCapture.Run(device.Index, mode.Id, null,
-            (activeMode, stats) =>
+        var request = new DeckLinkCaptureRequest(device.Index, mode.Id, Duration: null)
+        {
+            Routing = new CaptureRouting(video.Id, audio.Id),
+            Preview = feed,
+            PixelFormat = format.Id,
+            AudioFormat = audioFormat.Id,
+            PreviewRecorder = recorder
+        };
+        var task = Task.Factory.StartNew(() => DeckLink.Run(request,
+            update =>
             {
                 dispatcher.TryEnqueue(() =>
                 {
                     if (!closing && ReferenceEquals(captureStop, stop) && !stop.IsCancellationRequested)
-                        ShowCapture(activeMode, stats);
+                        ShowCapture(update.Mode, update.Stats);
                 });
-            }, stop.Token, new CaptureRouting(video.Id, audio.Id), feed, format.Id,
-            audioFormat: audioFormat.Id, previewRecorder: recorder),
+            }, stop.Token),
             CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default);
         captureTask = task;
         UpdateControls();

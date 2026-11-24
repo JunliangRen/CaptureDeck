@@ -6,4 +6,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
   </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../CaptureDeck.Core/CaptureDeck.Core.csproj" />
+  </ItemGroup>
 </Project>

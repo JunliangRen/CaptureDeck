@@ -1,9 +1,20 @@
 using System.Runtime.InteropServices;
 using System.Text.Json;
+using CaptureDeck.DeckLink;
+using CaptureDeck.DeviceControl;
 
 namespace CaptureDeck.App;
 
 internal sealed record CaptureSettings
+{
+    public string CaptureBackendId { get; init; } = DeckLinkBackend.BackendId;
+    public DeckLinkSettings DeckLink { get; init; } = new();
+    public ControlDeviceAddress? ControlDevice { get; init; }
+    public string OutputFolder { get; init; } = "";
+    public string? LanguageOverride { get; init; }
+}
+
+internal sealed record DeckLinkSettings
 {
     public long? DeviceId { get; init; }
     public string? DeviceName { get; init; }
@@ -13,8 +24,6 @@ internal sealed record CaptureSettings
     public uint? ModeId { get; init; }
     public uint? VideoFormat { get; init; }
     public uint? AudioFormat { get; init; }
-    public string OutputFolder { get; init; } = "";
-    public string? LanguageOverride { get; init; }
 }
 
 internal static class CaptureSettingsStore
@@ -29,7 +38,7 @@ internal static class CaptureSettingsStore
         try
         {
             using var stream = File.OpenRead(FilePath);
-            return JsonSerializer.Deserialize<CaptureSettings>(stream) ?? throw new JsonException("Empty settings.");
+            return Read(stream);
         }
         catch (FileNotFoundException)
         {
@@ -41,14 +50,27 @@ internal static class CaptureSettingsStore
         }
     }
 
+    internal static CaptureSettings Read(Stream stream)
+    {
+        using var document = JsonDocument.Parse(stream);
+        var root = document.RootElement;
+        var settings = root.Deserialize<CaptureSettings>() ?? throw new JsonException("Empty settings.");
+        if (!root.TryGetProperty(nameof(CaptureSettings.DeckLink), out _))
+            return settings with { DeckLink = root.Deserialize<DeckLinkSettings>()! };
+
+        return settings.DeckLink is not null ? settings : throw new JsonException("Missing DeckLink settings.");
+    }
+
+    internal static string Serialize(CaptureSettings settings) =>
+        JsonSerializer.Serialize(settings, JsonOptions).Replace("\n", "\r\n", StringComparison.Ordinal) + "\r\n";
+
     public static void Save(CaptureSettings settings)
     {
         Directory.CreateDirectory(Path.GetDirectoryName(FilePath)!);
         var temporary = $"{FilePath}.{Guid.NewGuid():N}.tmp";
         try
         {
-            var json = JsonSerializer.Serialize(settings, JsonOptions).Replace("\n", "\r\n", StringComparison.Ordinal);
-            File.WriteAllText(temporary, json + "\r\n");
+            File.WriteAllText(temporary, Serialize(settings));
             File.Move(temporary, FilePath, overwrite: true);
         }
         finally

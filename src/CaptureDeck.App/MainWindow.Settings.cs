@@ -52,7 +52,7 @@ public sealed partial class MainWindow
         if (closing)
             return;
 
-        ApplySettingsLanguage(settings.LanguageOverride, settings.VideoFormat, settings.AudioFormat);
+        ApplySettingsLanguage(settings.LanguageOverride, settings.DeckLink.VideoFormat, settings.DeckLink.AudioFormat);
         OutputPath.Text = settings.OutputFolder ?? "";
         settingsReady = true;
         loading = false;
@@ -60,9 +60,9 @@ public sealed partial class MainWindow
 
     private void RestoreDeviceSelections(CaptureDevice[] devices)
     {
-        var matches = devices.Where(device => settings.DeviceId is { } id
-            ? device.PersistentId == id : settings.DeviceName == device.Name).ToArray();
-        DevicePicker.SelectedItem = settings.DeviceId is null && settings.DeviceName is null
+        var matches = devices.Where(device => settings.DeckLink.DeviceId is { } id
+            ? device.PersistentId == id : settings.DeckLink.DeviceName == device.Name).ToArray();
+        DevicePicker.SelectedItem = settings.DeckLink.DeviceId is null && settings.DeckLink.DeviceName is null
             ? devices.FirstOrDefault()
             : matches.Length == 1 ? matches[0] : null;
 
@@ -71,11 +71,11 @@ public sealed partial class MainWindow
             return;
 
         VideoInputPicker.SelectedItem = VideoInputPicker.Items.OfType<VideoInputSource>()
-            .FirstOrDefault(source => source.Id == settings.VideoSource);
+            .FirstOrDefault(source => source.Id == settings.DeckLink.VideoSource);
         AudioInputPicker.SelectedItem = AudioInputPicker.Items.OfType<AudioInputSource>()
-            .FirstOrDefault(source => source.Id == settings.AudioSource);
-        if (settings.ModeSelected)
-            ModePicker.SelectedItem = ModePicker.Items.OfType<ModeOption>().FirstOrDefault(mode => mode.Id == settings.ModeId);
+            .FirstOrDefault(source => source.Id == settings.DeckLink.AudioSource);
+        if (settings.DeckLink.ModeSelected)
+            ModePicker.SelectedItem = ModePicker.Items.OfType<ModeOption>().FirstOrDefault(mode => mode.Id == settings.DeckLink.ModeId);
     }
 
     private void SettingsChanged()
@@ -98,29 +98,33 @@ public sealed partial class MainWindow
 
         settingsSaveTimer.Stop();
         settingsPending = false;
-        var updated = settings;
+        var deckLink = settings.DeckLink;
         if (DevicePicker.SelectedItem is CaptureDevice device)
         {
-            var sameDevice = settings.DeviceId is { } id ? device.PersistentId == id : settings.DeviceName == device.Name;
+            var sameDevice = deckLink.DeviceId is { } id ? device.PersistentId == id : deckLink.DeviceName == device.Name;
             var video = VideoInputPicker.SelectedItem as VideoInputSource;
             var audio = AudioInputPicker.SelectedItem as AudioInputSource;
             var mode = ModePicker.SelectedItem as ModeOption;
-            var keepMode = sameDevice && (video is null || video.Id == settings.VideoSource) && settings.ModeSelected;
-            updated = updated with
+            var keepMode = sameDevice && (video is null || video.Id == deckLink.VideoSource) && deckLink.ModeSelected;
+            deckLink = deckLink with
             {
                 DeviceId = device.PersistentId,
                 DeviceName = device.Name,
-                VideoSource = video?.Id ?? (sameDevice ? settings.VideoSource : null),
-                AudioSource = audio?.Id ?? (sameDevice ? settings.AudioSource : null),
+                VideoSource = video?.Id ?? (sameDevice ? deckLink.VideoSource : null),
+                AudioSource = audio?.Id ?? (sameDevice ? deckLink.AudioSource : null),
                 ModeSelected = mode is not null || keepMode,
-                ModeId = mode is not null ? mode.Id : keepMode ? settings.ModeId : null
+                ModeId = mode is not null ? mode.Id : keepMode ? deckLink.ModeId : null
             };
         }
 
-        updated = updated with
+        deckLink = deckLink with
         {
-            VideoFormat = FormatPicker.SelectedItem is FormatOption format ? (uint)format.Id : settings.VideoFormat,
-            AudioFormat = AudioFormatPicker.SelectedItem is AudioFormatOption pcm ? (uint)pcm.Id : settings.AudioFormat,
+            VideoFormat = FormatPicker.SelectedItem is FormatOption format ? (uint)format.Id : deckLink.VideoFormat,
+            AudioFormat = AudioFormatPicker.SelectedItem is AudioFormatOption pcm ? (uint)pcm.Id : deckLink.AudioFormat
+        };
+        var updated = settings with
+        {
+            DeckLink = deckLink,
             OutputFolder = OutputPath.Text.Trim(),
             LanguageOverride = LanguagePicker.SelectedItem is ComboBoxItem { Tag: string language } &&
                 Languages.Contains(language) ? language : null
@@ -281,10 +285,10 @@ public sealed partial class MainWindow
         AutomationProperties.SetName(ConfigurationButton, $"{L("Settings")} · {text}");
         ToolTipService.SetToolTip(ConfigurationButton, text);
 
-        var missingSelection = device is not null && ((video is null && settings.VideoSource is not null) ||
-            (audio is null && settings.AudioSource is not null) || (mode is null && settings.ModeSelected));
+        var missingSelection = device is not null && ((video is null && settings.DeckLink.VideoSource is not null) ||
+            (audio is null && settings.DeckLink.AudioSource is not null) || (mode is null && settings.DeckLink.ModeSelected));
         var message = settingsError is { } error ? error.Message :
-            device is null && settings.DeviceName is { } name ? LocalFormat("MissingDevice", name) :
+            device is null && settings.DeckLink.DeviceName is { } name ? LocalFormat("MissingDevice", name) :
             missingSelection ? L("MissingSelection") : captureTask is not null ? L("ChangeCapture") : "";
         SettingsNotice.Title = settingsError is { } failure ? L(failure.Key) : "";
         SettingsNotice.Message = message;

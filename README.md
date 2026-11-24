@@ -2,6 +2,31 @@
 
 Windows video capture and preservation. CaptureDeck uses .NET 11 x64 and native WinUI 3 (Windows App SDK 2.7.0). The app and the command-line probe share the same capture module, which calls Blackmagic Desktop Video directly through the Windows COM interfaces from DeckLink SDK 16.0.
 
+## Capture backends
+
+`CaptureDeck.Core` defines the capture backend contract for device discovery, running a session and reporting progress. The desktop app and probe register DeckLink, which owns its COM calls, native configuration, preview feed and current MOV writer. Backends register by stable ID (currently blackmagic.decklink), independently of their category. Each backend owns its request and result types.
+
+| Project | Role |
+| --- | --- |
+| `CaptureDeck.DeckLink` | Blackmagic DeckLink video and audio capture |
+| `CaptureDeck.DirectShow` | Reserved for Windows capture filters |
+| `CaptureDeck.RF` | Reserved for raw RF acquisition from devices such as Domesday Duplicator and MISRC |
+| `CaptureDeck.Audio` | Reserved for standalone audio capture with transports such as ASIO or WASAPI |
+| `CaptureDeck.FireWire` | Reserved for IEEE 1394 / i.LINK stream capture |
+| `CaptureDeck.DeviceControl` | Tape-transport contracts for independent control |
+
+The FireWire project reserves IEEE 1394 / i.LINK acquisition of MPEG-TS (D-VHS and compatible HDV) and native DV. Its recording path is planned to preserve the negotiated stream, with decoding in a separate preview path.
+
+CaptureDeck.DeviceControl defines a separate tape-transport contract for future AV/C, JLIP and serial implementations. Device commands report acceptance separately from confirmed state. Host file recording, deck recording and streaming data back to tape are separate operations. Capture and control selections can be stored independently. Existing flat settings load as a DeckLink profile and move to the nested format on the next save.
+
+The reserved projects build as part of the solution. DeckLink is the only backend registered by the app and probe. The existing DeckLink settings and output formats are preserved.
+
+Hardware-independent unit tests live under `UT`.
+
+```powershell
+dotnet test UT/CaptureDeck.UT/CaptureDeck.UT.csproj -c Release
+```
+
 ## Desktop app
 
 Build and launch from the repository root with the .NET 11 SDK and Blackmagic Desktop Video installed.

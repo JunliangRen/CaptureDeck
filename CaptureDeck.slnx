@@ -3,4 +3,11 @@
   <Project Path="src/CaptureDeck.DeckLink/CaptureDeck.DeckLink.csproj" />
   <Project Path="src/CaptureDeck.Probe/CaptureDeck.Probe.csproj" />
   <Project Path="src/CaptureDeck.QualityControl/CaptureDeck.QualityControl.csproj" />
+  <Project Path="src/CaptureDeck.Core/CaptureDeck.Core.csproj" />
+  <Project Path="src/CaptureDeck.DirectShow/CaptureDeck.DirectShow.csproj" />
+  <Project Path="src/CaptureDeck.RF/CaptureDeck.RF.csproj" />
+  <Project Path="src/CaptureDeck.Audio/CaptureDeck.Audio.csproj" />
+  <Project Path="src/CaptureDeck.FireWire/CaptureDeck.FireWire.csproj" />
+  <Project Path="src/CaptureDeck.DeviceControl/CaptureDeck.DeviceControl.csproj" />
+  <Project Path="UT/CaptureDeck.UT/CaptureDeck.UT.csproj" />
 </Solution>

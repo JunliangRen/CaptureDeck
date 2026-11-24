@@ -1,0 +1,564 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <resheader name="resmimetype">
+    <value>text/microsoft-resx</value>
+  </resheader>
+  <resheader name="version">
+    <value>2.0</value>
+  </resheader>
+  <resheader name="reader">
+    <value>System.Resources.ResXResourceReader, System.Windows.Forms</value>
+  </resheader>
+  <resheader name="writer">
+    <value>System.Resources.ResXResourceWriter, System.Windows.Forms</value>
+  </resheader>
+  <data name="Settings" xml:space="preserve">
+    <value>設定</value>
+  </data>
+  <data name="Back" xml:space="preserve">
+    <value>キャプチャに戻る</value>
+  </data>
+  <data name="Capture" xml:space="preserve">
+    <value>キャプチャ</value>
+  </data>
+  <data name="Output" xml:space="preserve">
+    <value>出力</value>
+  </data>
+  <data name="About" xml:space="preserve">
+    <value>このアプリについて</value>
+  </data>
+  <data name="Appearance" xml:space="preserve">
+    <value>表示</value>
+  </data>
+  <data name="FollowSystem" xml:space="preserve">
+    <value>システムに従う</value>
+  </data>
+  <data name="Language" xml:space="preserve">
+    <value>言語</value>
+  </data>
+  <data name="Device" xml:space="preserve">
+    <value>デバイス</value>
+  </data>
+  <data name="Refresh" xml:space="preserve">
+    <value>デバイスを更新</value>
+  </data>
+  <data name="VideoSource" xml:space="preserve">
+    <value>映像入力</value>
+  </data>
+  <data name="AudioSource" xml:space="preserve">
+    <value>音声入力</value>
+  </data>
+  <data name="Mode" xml:space="preserve">
+    <value>入力モード</value>
+  </data>
+  <data name="VideoFormat" xml:space="preserve">
+    <value>映像形式</value>
+  </data>
+  <data name="AudioFormat" xml:space="preserve">
+    <value>音声形式</value>
+  </data>
+  <data name="Video10" xml:space="preserve">
+    <value>10 ビット非圧縮 (v210)</value>
+  </data>
+  <data name="Video8" xml:space="preserve">
+    <value>8 ビット非圧縮 (2vuy)</value>
+  </data>
+  <data name="Audio16" xml:space="preserve">
+    <value>16 ビット符号付き PCM</value>
+  </data>
+  <data name="Audio32" xml:space="preserve">
+    <value>32 ビット符号付き PCM</value>
+  </data>
+  <data name="Folder" xml:space="preserve">
+    <value>出力フォルダー</value>
+  </data>
+  <data name="ChooseFolder" xml:space="preserve">
+    <value>フォルダーを選択</value>
+  </data>
+  <data name="Browse" xml:space="preserve">
+    <value>参照…</value>
+  </data>
+  <data name="Auto" xml:space="preserve">
+    <value>自動検出</value>
+  </data>
+  <data name="FixedMode" xml:space="preserve">
+    <value>録画するには、プレビュー開始前に固定の入力モードを選択してください。</value>
+  </data>
+  <data name="OutputHelp" xml:space="preserve">
+    <value>MOV ファイル名には録画開始時刻（現地時間）と録画形式が入ります。</value>
+  </data>
+  <data name="Configure" xml:space="preserve">
+    <value>デバイスと入力を選択</value>
+  </data>
+  <data name="ChangeCapture" xml:space="preserve">
+    <value>デバイス、入力、または形式を変更するにはプレビューを停止してください。</value>
+  </data>
+  <data name="MissingDevice" xml:space="preserve">
+    <value>保存済みのデバイスを利用できません: {0}</value>
+  </data>
+  <data name="MissingSelection" xml:space="preserve">
+    <value>保存済みの入力またはモードを利用できません。キャプチャ設定を確認してください。</value>
+  </data>
+  <data name="SaveError" xml:space="preserve">
+    <value>設定を保存できません</value>
+  </data>
+  <data name="ReadError" xml:space="preserve">
+    <value>保存済みの設定を読み込めません</value>
+  </data>
+  <data name="FolderError" xml:space="preserve">
+    <value>出力フォルダーを選択できません</value>
+  </data>
+  <data name="ChooseStorage" xml:space="preserve">
+    <value>出力フォルダーを選択すると空き容量が表示されます。</value>
+  </data>
+  <data name="StorageChecking" xml:space="preserve">
+    <value>空き容量を確認中…</value>
+  </data>
+  <data name="StorageUnavailable" xml:space="preserve">
+    <value>出力フォルダーを利用できません</value>
+  </data>
+  <data name="StorageCapacity" xml:space="preserve">
+    <value>空き容量 {0} GiB</value>
+  </data>
+  <data name="StorageDuration" xml:space="preserve">
+    <value>録画可能時間 約 {0}</value>
+  </data>
+  <data name="StorageNeedsMode" xml:space="preserve">
+    <value>固定モードを選択すると録画可能時間を見積もれます。</value>
+  </data>
+  <data name="HoursMinutes" xml:space="preserve">
+    <value>{0} 時間 {1} 分</value>
+  </data>
+  <data name="Minutes" xml:space="preserve">
+    <value>{0} 分</value>
+  </data>
+  <data name="UnderMinute" xml:space="preserve">
+    <value>1 分未満</value>
+  </data>
+  <data name="PreviewTab" xml:space="preserve">
+    <value>プレビュー</value>
+  </data>
+  <data name="ScopesTab" xml:space="preserve">
+    <value>スコープ</value>
+  </data>
+  <data name="SpectrumTab" xml:space="preserve">
+    <value>スペクトラム</value>
+  </data>
+  <data name="EventsTab" xml:space="preserve">
+    <value>イベント</value>
+  </data>
+  <data name="Monitoring" xml:space="preserve">
+    <value>キャプチャモニター</value>
+  </data>
+  <data name="VideoScopes" xml:space="preserve">
+    <value>映像スコープ</value>
+  </data>
+  <data name="AudioSpectrum" xml:space="preserve">
+    <value>音声スペクトラム</value>
+  </data>
+  <data name="PreviewImage" xml:space="preserve">
+    <value>DeckLink 映像プレビュー</value>
+  </data>
+  <data name="WaitingPreview" xml:space="preserve">
+    <value>プレビュー待機中</value>
+  </data>
+  <data name="LumaHeading" xml:space="preserve">
+    <value>輝度波形</value>
+  </data>
+  <data name="VectorHeading" xml:space="preserve">
+    <value>ベクトルスコープ</value>
+  </data>
+  <data name="VectorAxes" xml:space="preserve">
+    <value>横軸 Cb · 縦軸 Cr</value>
+  </data>
+  <data name="VectorPlot" xml:space="preserve">
+    <value>色差ベクトル図</value>
+  </data>
+  <data name="SpectrumTitle" xml:space="preserve">
+    <value>ステレオスペクトラム</value>
+  </data>
+  <data name="SpectrumRange" xml:space="preserve">
+    <value>ステレオスペクトラム · {0} ビット PCM 入力 · {1:0.#} ～ 0 dBFS</value>
+  </data>
+  <data name="EventTimeline" xml:space="preserve">
+    <value>キャプチャイベントのタイムライン</value>
+  </data>
+  <data name="EventsEmpty" xml:space="preserve">
+    <value>信号やタイムスタンプのイベントはありません。</value>
+  </data>
+  <data name="EventsRecent" xml:space="preserve">
+    <value>最近のイベント · 最初のフレームからの経過時間</value>
+  </data>
+  <data name="ScopeWaiting" xml:space="preserve">
+    <value>映像フレームを待っています。</value>
+  </data>
+  <data name="LumaWaiting" xml:space="preserve">
+    <value>Y′ · 入力形式を待機中</value>
+  </data>
+  <data name="LumaNative" xml:space="preserve">
+    <value>Y′ 0–{0}（{1} ビット）</value>
+  </data>
+  <data name="LumaScaled" xml:space="preserve">
+    <value>Y′ 0–{0}（{1} ビット目盛り · {2} ビット入力）</value>
+  </data>
+  <data name="LumaPlotRange" xml:space="preserve">
+    <value>輝度波形、0 ～ {0}</value>
+  </data>
+  <data name="ScopeNoInput" xml:space="preserve">
+    <value>DeckLink の入力信号なしフレーム</value>
+  </data>
+  <data name="ScopeLive" xml:space="preserve">
+    <value>ライブ入力</value>
+  </data>
+  <data name="StereoHeading" xml:space="preserve">
+    <value>ステレオピーク</value>
+  </data>
+  <data name="StereoMeter" xml:space="preserve">
+    <value>ステレオピークメーター</value>
+  </data>
+  <data name="LeftChannel" xml:space="preserve">
+    <value>左チャンネル</value>
+  </data>
+  <data name="RightChannel" xml:space="preserve">
+    <value>右チャンネル</value>
+  </data>
+  <data name="LeftPeak" xml:space="preserve">
+    <value>左チャンネルピーク（dBFS）</value>
+  </data>
+  <data name="RightPeak" xml:space="preserve">
+    <value>右チャンネルピーク（dBFS）</value>
+  </data>
+  <data name="PeakUnavailable" xml:space="preserve">
+    <value>{0}のピークは取得できません</value>
+  </data>
+  <data name="PeakValue" xml:space="preserve">
+    <value>{0}のピーク：{1} dBFS</value>
+  </data>
+  <data name="Phase" xml:space="preserve">
+    <value>位相 {0}</value>
+  </data>
+  <data name="PhaseHelp" xml:space="preserve">
+    <value>ステレオの位相相関</value>
+  </data>
+  <data name="ClipCount" xml:space="preserve">
+    <value>{0}クリップ：{1:N0}</value>
+  </data>
+  <data name="StartPreview" xml:space="preserve">
+    <value>プレビュー開始</value>
+  </data>
+  <data name="StopPreview" xml:space="preserve">
+    <value>プレビュー停止</value>
+  </data>
+  <data name="StartRecording" xml:space="preserve">
+    <value>録画開始</value>
+  </data>
+  <data name="StopRecording" xml:space="preserve">
+    <value>録画停止</value>
+  </data>
+  <data name="CancelQc" xml:space="preserve">
+    <value>品質チェックを中止</value>
+  </data>
+  <data name="Elapsed" xml:space="preserve">
+    <value>経過時間</value>
+  </data>
+  <data name="ElapsedHelp" xml:space="preserve">
+    <value>録画の経過時間</value>
+  </data>
+  <data name="RecordingClock" xml:space="preserve">
+    <value>録画中</value>
+  </data>
+  <data name="QcHeading" xml:space="preserve">
+    <value>録画の品質チェック</value>
+  </data>
+  <data name="QcWarningsHeading" xml:space="preserve">
+    <value>警告</value>
+  </data>
+  <data name="QcFolder" xml:space="preserve">
+    <value>出力フォルダーを開く</value>
+  </data>
+  <data name="QcLog" xml:space="preserve">
+    <value>録画ログを開く</value>
+  </data>
+  <data name="QcHash" xml:space="preserve">
+    <value>FrameMD5 を開く</value>
+  </data>
+  <data name="QcReport" xml:space="preserve">
+    <value>QCTools レポートを開く</value>
+  </data>
+  <data name="QcResults" xml:space="preserve">
+    <value>品質チェック結果</value>
+  </data>
+  <data name="QcWarningCount" xml:space="preserve">
+    <value>品質チェック結果 · 警告 {0:N0} 件</value>
+  </data>
+  <data name="QcOpenError" xml:space="preserve">
+    <value>Windows でこの項目を開けませんでした。</value>
+  </data>
+  <data name="CheckingDevices" xml:space="preserve">
+    <value>デバイスを確認中</value>
+  </data>
+  <data name="CheckingDeckLink" xml:space="preserve">
+    <value>DeckLink SDK で入力を列挙しています。</value>
+  </data>
+  <data name="NoDevice" xml:space="preserve">
+    <value>DeckLink デバイスがありません</value>
+  </data>
+  <data name="ConnectDevice" xml:space="preserve">
+    <value>Blackmagic キャプチャデバイスを接続して更新してください。</value>
+  </data>
+  <data name="ScanFailed" xml:space="preserve">
+    <value>デバイスの検出に失敗</value>
+  </data>
+  <data name="ApiWaiting" xml:space="preserve">
+    <value>DeckLink SDK を確認中…</value>
+  </data>
+  <data name="ApiUnavailable" xml:space="preserve">
+    <value>Blackmagic DeckLink API を利用できません</value>
+  </data>
+  <data name="InputsUnavailable" xml:space="preserve">
+    <value>入力を選択できません</value>
+  </data>
+  <data name="NoInputRoutes" xml:space="preserve">
+    <value>DeckLink ドライバーから選択可能な映像・音声入力を取得できませんでした。</value>
+  </data>
+  <data name="NoModes" xml:space="preserve">
+    <value>対応モードがありません</value>
+  </data>
+  <data name="ChooseModeSource" xml:space="preserve">
+    <value>別の映像入力か映像形式を選択してください。</value>
+  </data>
+  <data name="Idle" xml:space="preserve">
+    <value>待機中</value>
+  </data>
+  <data name="SelectInputs" xml:space="preserve">
+    <value>映像入力と音声入力を選択してください。</value>
+  </data>
+  <data name="PreviewBeforeRecording" xml:space="preserve">
+    <value>録画前にプレビューを開始して入力を確認してください。</value>
+  </data>
+  <data name="StoppingPreview" xml:space="preserve">
+    <value>プレビューを停止中</value>
+  </data>
+  <data name="ReleasingInput" xml:space="preserve">
+    <value>DeckLink 入力を解放しています。</value>
+  </data>
+  <data name="CancellingQc" xml:space="preserve">
+    <value>品質チェックを中止中</value>
+  </data>
+  <data name="MovSaved" xml:space="preserve">
+    <value>録画した MOV は保存済みです。</value>
+  </data>
+  <data name="ChooseOutput" xml:space="preserve">
+    <value>出力フォルダーを選択</value>
+  </data>
+  <data name="ExistingOutput" xml:space="preserve">
+    <value>MOV の保存先として既存のフォルダーを選択してください。</value>
+  </data>
+  <data name="StartingRecording" xml:space="preserve">
+    <value>録画を開始中</value>
+  </data>
+  <data name="OpeningMov" xml:space="preserve">
+    <value>選択したフォルダーで MOV を作成しています。</value>
+  </data>
+  <data name="RecordingStartFailed" xml:space="preserve">
+    <value>録画を開始できませんでした</value>
+  </data>
+  <data name="PreviewStoppedOpening" xml:space="preserve">
+    <value>録画ファイルの作成中にプレビューが停止しました。</value>
+  </data>
+  <data name="FinalizingMov" xml:space="preserve">
+    <value>MOV を確定中</value>
+  </data>
+  <data name="WritingIndex" xml:space="preserve">
+    <value>プレビューを続けながらファイル索引を書き込んでいます。</value>
+  </data>
+  <data name="RecordingFailed" xml:space="preserve">
+    <value>録画に失敗</value>
+  </data>
+  <data name="PreviewFailed" xml:space="preserve">
+    <value>プレビューに失敗</value>
+  </data>
+  <data name="StartingPreview" xml:space="preserve">
+    <value>プレビューを開始中</value>
+  </data>
+  <data name="OpeningInput" xml:space="preserve">
+    <value>選択した DeckLink 入力を開いています。</value>
+  </data>
+  <data name="PreviewStopped" xml:space="preserve">
+    <value>プレビュー停止済み</value>
+  </data>
+  <data name="LastCounters" xml:space="preserve">
+    <value>カウンターは直前のキャプチャ結果を表示しています。</value>
+  </data>
+  <data name="QcChecking" xml:space="preserve">
+    <value>MOV 保存済み · 検査中</value>
+  </data>
+  <data name="QcStarting" xml:space="preserve">
+    <value>MOV の品質検査を開始しています。</value>
+  </data>
+  <data name="QcInspecting" xml:space="preserve">
+    <value>MOV の映像・音声トラックを確認しています。</value>
+  </data>
+  <data name="QcDecoding" xml:space="preserve">
+    <value>映像と PCM をデコードして FrameMD5 を書き込んでいます。</value>
+  </data>
+  <data name="QcAnalyzing" xml:space="preserve">
+    <value>QCTools レポート用に映像と音声を解析しています。</value>
+  </data>
+  <data name="QcPassed" xml:space="preserve">
+    <value>ファイルの品質チェックに合格</value>
+  </data>
+  <data name="QcCancelled" xml:space="preserve">
+    <value>品質チェック中止 · MOV 保存済み</value>
+  </data>
+  <data name="QcUnavailable" xml:space="preserve">
+    <value>品質チェックツールなし · MOV 保存済み</value>
+  </data>
+  <data name="QcFailed" xml:space="preserve">
+    <value>ファイルの品質チェックに失敗 · MOV 保存済み</value>
+  </data>
+  <data name="QcWriteFailed" xml:space="preserve">
+    <value>品質チェックレポートを書き込めません · MOV 保存済み</value>
+  </data>
+  <data name="QcDecoded" xml:space="preserve">
+    <value>映像 {0:N0} フレームと PCM {1:N0} サンプルフレームをデコードしました。</value>
+  </data>
+  <data name="QcCancelledDetail" xml:space="preserve">
+    <value>ファイル検査を中止しました。</value>
+  </data>
+  <data name="QcToolsDetail" xml:space="preserve">
+    <value>ffmpeg.exe と ffprobe.exe を PATH に追加するか、CaptureRack と同じフォルダーに置いてください。</value>
+  </data>
+  <data name="QcLogDetail" xml:space="preserve">
+    <value>技術的な詳細は録画ログを参照してください。</value>
+  </data>
+  <data name="QcWarnNoInput" xml:space="preserve">
+    <value>録画した {0:N0} フレームを DeckLink が入力信号なしと判定しました。</value>
+  </data>
+  <data name="QcWarnMissing" xml:space="preserve">
+    <value>欠落した映像 {0:N0} フレームに相当する間隔を検出しました。</value>
+  </data>
+  <data name="QcWarnTimestamp" xml:space="preserve">
+    <value>音声または映像のタイムスタンプの逆行を {0:N0} 回検出しました。</value>
+  </data>
+  <data name="QcWarnClipping" xml:space="preserve">
+    <value>音声がモニターのクリップしきい値に達しました。</value>
+  </data>
+  <data name="QcWarnFieldFlags" xml:space="preserve">
+    <value>デコードした {0:N0} フレームにフィールドフラグがありませんでした。</value>
+  </data>
+  <data name="NoInputSignal" xml:space="preserve">
+    <value>入力信号なし</value>
+  </data>
+  <data name="RecordingNoInput" xml:space="preserve">
+    <value>カードの入力信号なしフレームを MOV に記録しています。</value>
+  </data>
+  <data name="PreviewingNoInput" xml:space="preserve">
+    <value>カードの入力信号なしフレームをプレビューしています。</value>
+  </data>
+  <data name="SignalPresent" xml:space="preserve">
+    <value>入力信号あり</value>
+  </data>
+  <data name="ReceivingVideo" xml:space="preserve">
+    <value>有効な映像を受信しています。</value>
+  </data>
+  <data name="WaitingFrames" xml:space="preserve">
+    <value>フレーム待機中</value>
+  </data>
+  <data name="WaitingFirstFrame" xml:space="preserve">
+    <value>キャプチャ中です。最初のフレームを待っています。</value>
+  </data>
+  <data name="LivePreviewStatus" xml:space="preserve">
+    <value>ライブプレビュー · {0}</value>
+  </data>
+  <data name="PreviewNoInputFrame" xml:space="preserve">
+    <value>入力信号なしフレーム</value>
+  </data>
+  <data name="PreviewLiveFrame" xml:space="preserve">
+    <value>ライブフレーム</value>
+  </data>
+  <data name="PreviewFrameDetail" xml:space="preserve">
+    <value>{0} · {1} × {2} {3} · {4:N0} フレーム表示済み</value>
+  </data>
+  <data name="EventTimestampRegression" xml:space="preserve">
+    <value>映像タイムスタンプが重複または逆行しました。</value>
+  </data>
+  <data name="EventFrameGap" xml:space="preserve">
+    <value>映像タイムスタンプに間隔 · {0:N0} フレーム欠落。</value>
+  </data>
+  <data name="EventNoInputAtStart" xml:space="preserve">
+    <value>開始時に入力信号がありませんでした。</value>
+  </data>
+  <data name="EventSignalLost" xml:space="preserve">
+    <value>映像入力信号が途切れました。</value>
+  </data>
+  <data name="EventSignalRestored" xml:space="preserve">
+    <value>映像入力信号が復帰しました。</value>
+  </data>
+  <data name="ConnectorComponent" xml:space="preserve">
+    <value>コンポーネント</value>
+  </data>
+  <data name="ConnectorComposite" xml:space="preserve">
+    <value>コンポジット</value>
+  </data>
+  <data name="ConnectorEmbedded" xml:space="preserve">
+    <value>エンベデッド音声</value>
+  </data>
+  <data name="ConnectorAnalog" xml:space="preserve">
+    <value>アナログ音声</value>
+  </data>
+  <data name="ConnectorXlr" xml:space="preserve">
+    <value>アナログ XLR</value>
+  </data>
+  <data name="ConnectorRca" xml:space="preserve">
+    <value>アナログ RCA</value>
+  </data>
+  <data name="ConnectorMicrophone" xml:space="preserve">
+    <value>マイク</value>
+  </data>
+  <data name="ConnectorHeadphones" xml:space="preserve">
+    <value>ヘッドホン</value>
+  </data>
+  <data name="ConnectorOpticalSdi" xml:space="preserve">
+    <value>光 SDI</value>
+  </data>
+  <data name="ConnectorEthernet" xml:space="preserve">
+    <value>イーサネット</value>
+  </data>
+  <data name="ConnectorOpticalEthernet" xml:space="preserve">
+    <value>光イーサネット</value>
+  </data>
+  <data name="ConnectorInternal" xml:space="preserve">
+    <value>内部入力</value>
+  </data>
+  <data name="ShortVideoFormat" xml:space="preserve">
+    <value>{0} {1} ビット</value>
+  </data>
+  <data name="ShortPcmFormat" xml:space="preserve">
+    <value>PCM {0} ビット</value>
+  </data>
+  <data name="QcOneWarning" xml:space="preserve">
+    <value>品質チェック結果 · 警告 1 件</value>
+  </data>
+  <data name="CaptureCounts" xml:space="preserve">
+    <value>有効フレーム {0:N0} · 入力なし {1:N0} · PCM パケット {2:N0} · 欠落フレーム {3:N0}</value>
+  </data>
+  <data name="CheckMov" xml:space="preserve">
+    <value>MOV を検査…</value>
+  </data>
+  <data name="CheckMovOpenFailed" xml:space="preserve">
+    <value>MOV を開けませんでした</value>
+  </data>
+  <data name="DeckLinkUnavailable" xml:space="preserve">
+    <value>DeckLink は利用できません</value>
+  </data>
+  <data name="DeckLinkUnsupportedPlatform" xml:space="preserve">
+    <value>DeckLink キャプチャには Windows x64 が必要です。既存の MOV は検査できます。</value>
+  </data>
+  <data name="DeckLinkDriverUnavailable" xml:space="preserve">
+    <value>DeckLink キャプチャを有効にするには、Blackmagic Desktop Video をインストールまたは修復してください。</value>
+  </data>
+  <data name="QcFinishing" xml:space="preserve">
+    <value>検査を停止し、結果を保存しています。</value>
+  </data>
+</root>

@@ -1,0 +1,33 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net11.0-windows10.0.26100.0</TargetFramework>
+    <SupportedOSPlatformVersion>10.0.19041.0</SupportedOSPlatformVersion>
+    <UseWinUI>true</UseWinUI>
+    <WindowsPackageType>None</WindowsPackageType>
+    <WindowsAppSDKSelfContained>true</WindowsAppSDKSelfContained>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+  <Import Project="../../../WindowsExecutables.props" />
+  <ItemGroup>
+    <PackageReference Include="Microsoft.WindowsAppSDK" Version="2.7.0" />
+    <ProjectReference Include="../../Capture/CaptureCards/CaptureRack.DeckLink/CaptureRack.DeckLink.csproj" />
+    <ProjectReference Include="../../Processing/CaptureRack.QualityControl/CaptureRack.QualityControl.csproj" />
+    <ProjectReference Include="../../CaptureRack.DeviceControl/CaptureRack.DeviceControl.csproj" />
+  </ItemGroup>
+
+  <!-- The unpackaged MRT Core targets generate the app PRI but omit it from publish (WindowsAppSDK #6720). -->
+  <Target Name="PublishCaptureRackResourceIndex"
+          BeforeTargets="ComputeResolvedFilesToPublishList"
+          DependsOnTargets="$(GenerateProjectPriFile)"
+          Condition="'$(WindowsPackageType)' == 'None'">
+    <Error Condition="!Exists('$(ProjectPriFullPath)')" Text="The CaptureRack WinUI resource index was not generated." />
+    <ItemGroup>
+      <ResolvedFileToPublish Include="$(ProjectPriFullPath)">
+        <RelativePath>$(ProjectPriFileName)</RelativePath>
+        <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      </ResolvedFileToPublish>
+    </ItemGroup>
+  </Target>
+</Project>

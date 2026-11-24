@@ -35,18 +35,18 @@ jobs:
           global-json-file: global.json
           architecture: ${{ matrix.arch }}
       - name: Run .NET unit tests
-        run: dotnet test test/CaptureDeck.UT/CaptureDeck.UT.csproj -c Release
+        run: dotnet test test/CaptureRack.UT/CaptureRack.UT.csproj -c Release
       - name: Run offline TS QC tests
-        run: dotnet test test/CaptureDeck.QualityControl.UT/CaptureDeck.QualityControl.UT.csproj -c Release
+        run: dotnet test test/CaptureRack.QualityControl.UT/CaptureRack.QualityControl.UT.csproj -c Release
       - name: Publish App and Probe
         run: |
           $PSNativeCommandUseErrorActionPreference = $true
-          dotnet publish src/UI/CaptureDeck.App/CaptureDeck.App.csproj -c Release -r $env:RID --self-contained -o bin/publish/App
-          dotnet publish src/CaptureDeck.Probe/CaptureDeck.Probe.csproj -c Release -r $env:RID --self-contained -o bin/publish/Probe
+          dotnet publish src/UI/CaptureRack.App/CaptureRack.App.csproj -c Release -r $env:RID --self-contained -o bin/publish/App
+          dotnet publish src/CaptureRack.Probe/CaptureRack.Probe.csproj -c Release -r $env:RID --self-contained -o bin/publish/Probe
       - name: Verify published executable architecture
         run: |
           $machine = if ($env:RID -eq 'win-arm64') { 0xAA64 } else { 0x8664 }
-          foreach ($file in 'App/CaptureDeck.App.exe', 'Probe/CaptureDeck.Probe.exe') {
+          foreach ($file in 'App/CaptureRack.App.exe', 'Probe/CaptureRack.Probe.exe') {
             $bytes = [IO.File]::ReadAllBytes((Resolve-Path "bin/publish/$file"))
             $header = [BitConverter]::ToInt32($bytes, 0x3c)
             if ([BitConverter]::ToUInt16($bytes, $header + 4) -ne $machine) {
@@ -55,7 +55,7 @@ jobs:
           }
       - name: Verify DeckLink is optional
         run: |
-          $output = & ./bin/publish/Probe/CaptureDeck.Probe.exe list 2>&1
+          $output = & ./bin/publish/Probe/CaptureRack.Probe.exe list 2>&1
           $message = if ($env:RID -eq 'win-arm64') { 'requires Windows x64' } else { 'Blackmagic Desktop Video' }
           if ($LASTEXITCODE -ne 1 -or ($output -join " ") -notlike "*$message*") {
             throw "Unexpected DeckLink probe result: $output"
@@ -64,7 +64,7 @@ jobs:
           $global:LASTEXITCODE = 0
       - name: Start WinUI without DeckLink
         run: |
-          $process = Start-Process -FilePath ./bin/publish/App/CaptureDeck.App.exe -PassThru
+          $process = Start-Process -FilePath ./bin/publish/App/CaptureRack.App.exe -PassThru
           try {
             $deadline = (Get-Date).AddSeconds(20)
             do {
@@ -85,19 +85,19 @@ jobs:
           $asset = "ffmpeg-n8.1-latest-$env:FFMPEG_TARGET-gpl-8.1.zip"
           $archive = Join-Path $env:RUNNER_TEMP $asset
           Invoke-WebRequest "https://github.com/FFmpeg-Builds/FFmpeg-Builds/releases/download/latest/$asset" -OutFile $archive
-          $unpacked = Join-Path $env:RUNNER_TEMP 'capturedeck-ffmpeg'
+          $unpacked = Join-Path $env:RUNNER_TEMP 'capturerack-ffmpeg'
           Expand-Archive -LiteralPath $archive -DestinationPath $unpacked
           $ffmpeg = Get-ChildItem -LiteralPath $unpacked -Filter ffmpeg.exe -Recurse | Select-Object -First 1
           if (!$ffmpeg) { throw 'ffmpeg.exe is missing from the archive' }
           $env:PATH = "$($ffmpeg.DirectoryName);$env:PATH"
-          $mov = Join-Path $env:RUNNER_TEMP 'capturedeck-ci.mov'
+          $mov = Join-Path $env:RUNNER_TEMP 'capturerack-ci.mov'
           ffmpeg -hide_banner -loglevel error -f lavfi -i 'color=c=black:s=320x240:r=25:d=1' -f lavfi -i 'anullsrc=r=48000:cl=stereo:d=1' -c:v v210 -c:a pcm_s16le $mov
-          & ./bin/publish/Probe/CaptureDeck.Probe.exe qc $mov
-          foreach ($file in 'capturedeck-ci.capture.json', 'capturedeck-ci.framemd5', 'capturedeck-ci.mov.qctools.xml.gz') {
+          & ./bin/publish/Probe/CaptureRack.Probe.exe qc $mov
+          foreach ($file in 'capturerack-ci.capture.json', 'capturerack-ci.framemd5', 'capturerack-ci.mov.qctools.xml.gz') {
             if (!(Test-Path -LiteralPath (Join-Path $env:RUNNER_TEMP $file))) { throw "Missing QC artifact: $file" }
           }
       - uses: actions/upload-artifact@v4
         with:
-          name: CaptureDeck-${{ env.RID }}
+          name: CaptureRack-${{ env.RID }}
           path: bin/publish/
           if-no-files-found: error

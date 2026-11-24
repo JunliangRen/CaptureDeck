@@ -4,9 +4,9 @@ on:
   push:
     branches: [main]
     paths:
-      - 'src/UI/CaptureDeck.Uno/**'
-      - 'src/Processing/CaptureDeck.QualityControl/**'
-      - 'test/CaptureDeck.QualityControl.UT/**'
+      - 'src/UI/CaptureRack.Uno/**'
+      - 'src/Processing/CaptureRack.QualityControl/**'
+      - 'test/CaptureRack.QualityControl.UT/**'
       - 'global.json'
       - '.github/workflows/uno-macos.yml'
   workflow_dispatch:
@@ -27,13 +27,13 @@ jobs:
           global-json-file: global.json
           architecture: arm64
       - name: Run offline TS QC tests
-        run: dotnet test test/CaptureDeck.QualityControl.UT/CaptureDeck.QualityControl.UT.csproj -c Release
+        run: dotnet test test/CaptureRack.QualityControl.UT/CaptureRack.QualityControl.UT.csproj -c Release
       - name: Publish Apple Silicon app bundle
-        run: dotnet publish src/UI/CaptureDeck.Uno/CaptureDeck.Uno.csproj -c Release -f net11.0-desktop -r osx-arm64 --self-contained -p:PackageFormat=app
+        run: dotnet publish src/UI/CaptureRack.Uno/CaptureRack.Uno.csproj -c Release -f net11.0-desktop -r osx-arm64 --self-contained -p:PackageFormat=app
       - name: Verify and archive app bundle
         run: |
           shopt -s nullglob
-          apps=(src/UI/CaptureDeck.Uno/bin/Release/net11.0-desktop/osx-arm64/publish/*.app)
+          apps=(src/UI/CaptureRack.Uno/bin/Release/net11.0-desktop/osx-arm64/publish/*.app)
           if [[ ${#apps[@]} -ne 1 ]]; then
             echo "Expected one macOS app bundle"
             exit 1
@@ -44,9 +44,9 @@ jobs:
           executable=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$plist")
           lipo "$app/Contents/MacOS/$executable" -verify_arch arm64
           mkdir -p bin/uno-macos
-          ditto -c -k --keepParent "$app" bin/uno-macos/CaptureDeck-QC-macos-arm64.zip
+          ditto -c -k --keepParent "$app" bin/uno-macos/CaptureRack-QC-macos-arm64.zip
       - uses: actions/upload-artifact@v6
         with:
-          name: CaptureDeck-QC-macos-arm64
-          path: bin/uno-macos/CaptureDeck-QC-macos-arm64.zip
+          name: CaptureRack-QC-macos-arm64
+          path: bin/uno-macos/CaptureRack-QC-macos-arm64.zip
           if-no-files-found: error

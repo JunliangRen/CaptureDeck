@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net11.0-windows</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+  <Import Project="../../WindowsExecutables.props" />
+  <ItemGroup>
+    <ProjectReference Include="../Capture/CaptureRack.DirectShow/CaptureRack.DirectShow.csproj" />
+    <ProjectReference Include="../Capture/CaptureRack.SignalCapture/CaptureRack.SignalCapture.csproj" />
+    <ProjectReference Include="../Capture/CaptureCards/CaptureRack.DeckLink/CaptureRack.DeckLink.csproj" />
+    <ProjectReference Include="../Processing/CaptureRack.QualityControl/CaptureRack.QualityControl.csproj" />
+  </ItemGroup>
+</Project>

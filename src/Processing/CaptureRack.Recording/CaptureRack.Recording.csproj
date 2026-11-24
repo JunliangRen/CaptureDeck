@@ -1,0 +1,14 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net11.0-windows</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../Capture/CaptureRack.Core/CaptureRack.Core.csproj" />
+    <ProjectReference Include="../CaptureRack.QualityControl/CaptureRack.QualityControl.csproj" />
+    <InternalsVisibleTo Include="CaptureRack.DirectShow" />
+    <InternalsVisibleTo Include="CaptureRack.UT" />
+  </ItemGroup>
+</Project>

@@ -1,0 +1,22 @@
+<Solution>
+  <Project Path="src/CaptureRack.Probe/CaptureRack.Probe.csproj" />
+  <Project Path="src/CaptureRack.DeviceControl/CaptureRack.DeviceControl.csproj" />
+  <Project Path="test/CaptureRack.UT/CaptureRack.UT.csproj" />
+  <Project Path="test/CaptureRack.QualityControl.UT/CaptureRack.QualityControl.UT.csproj" />
+  <Folder Name="/Capture/">
+    <Project Path="src/Capture/CaptureRack.Core/CaptureRack.Core.csproj" />
+    <Project Path="src/Capture/CaptureRack.DirectShow/CaptureRack.DirectShow.csproj" />
+    <Project Path="src/Capture/CaptureRack.SignalCapture/CaptureRack.SignalCapture.csproj" />
+    <Project Path="src/Capture/CaptureRack.Audio/CaptureRack.Audio.csproj" />
+  </Folder>
+  <Folder Name="/UI/">
+    <Project Path="src/UI/CaptureRack.App/CaptureRack.App.csproj" />
+  </Folder>
+  <Folder Name="/Capture/CaptureCards/">
+    <Project Path="src/Capture/CaptureCards/CaptureRack.DeckLink/CaptureRack.DeckLink.csproj" />
+  </Folder>
+  <Folder Name="/Processing/">
+    <Project Path="src/Processing/CaptureRack.QualityControl/CaptureRack.QualityControl.csproj" />
+    <Project Path="src/Processing/CaptureRack.Recording/CaptureRack.Recording.csproj" />
+  </Folder>
+</Solution>

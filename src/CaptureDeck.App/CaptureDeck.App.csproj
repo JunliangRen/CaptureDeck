@@ -16,4 +16,18 @@
     <ProjectReference Include="..\CaptureDeck.QualityControl\CaptureDeck.QualityControl.csproj" />
     <ProjectReference Include="../CaptureDeck.DeviceControl/CaptureDeck.DeviceControl.csproj" />
   </ItemGroup>
+
+  <!-- The unpackaged MRT Core targets generate the app PRI but omit it from publish (WindowsAppSDK #6720). -->
+  <Target Name="PublishCaptureDeckResourceIndex"
+          BeforeTargets="ComputeResolvedFilesToPublishList"
+          DependsOnTargets="$(GenerateProjectPriFile)"
+          Condition="'$(WindowsPackageType)' == 'None'">
+    <Error Condition="!Exists('$(ProjectPriFullPath)')" Text="The CaptureDeck WinUI resource index was not generated." />
+    <ItemGroup>
+      <ResolvedFileToPublish Include="$(ProjectPriFullPath)">
+        <RelativePath>$(ProjectPriFileName)</RelativePath>
+        <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      </ResolvedFileToPublish>
+    </ItemGroup>
+  </Target>
 </Project>

@@ -22,7 +22,7 @@ CaptureDeck/
 |   |   |-- CaptureDeck.DeckLink     # Blackmagic DeckLink capture, preview, and MOV recording
 |   |   |-- CaptureDeck.DirectShow   # Reserved for Windows capture filters
 |   |   |-- CaptureDeck.FireWire     # MSTape / DirectShow MPEG-TS capture and analysis
-|   |   |-- CaptureDeck.RF           # RF USB device discovery and WinUSB diagnostics
+|   |   |-- CaptureDeck.SignalCapture # Sampled-signal capture devices and diagnostics
 |   |   `-- CaptureDeck.Audio        # Reserved for standalone audio capture
 |   |-- CaptureDeck.App              # Native WinUI desktop app
 |   |-- CaptureDeck.Uno              # Uno Desktop offline QC prototype
@@ -34,7 +34,7 @@ CaptureDeck/
     `-- CaptureDeck.QualityControl.UT # Cross-platform TS analysis tests
 ```
 
-Within the capture projects, RF keeps device-specific rules in `Devices/Domesday/` and Windows USB transport in `Windows/`. FireWire uses `Windows/MsTape/` for DirectShow capture and `Recording/` for packet writing. DeckLink groups SDK bindings, capture, monitoring, and recording into `Interop/`, `Capture/`, `Monitoring/`, and `Recording/`.
+Within the capture projects, SignalCapture keeps device-specific rules in `Devices/Domesday/` and `Devices/Sdr/RtlSdr/` and Windows USB transport in `Windows/`. FireWire uses `Windows/MsTape/` for DirectShow capture and `Recording/` for packet writing. DeckLink groups SDK bindings, capture, monitoring, and recording into `Interop/`, `Capture/`, `Monitoring/`, and `Recording/`.
 
 **Available today.** DeckLink is the registered desktop capture backend. The desktop app uses DeckLink for live monitoring and MOV recording. The command-line probe also captures FireWire MPEG-TS on Windows x64. The probe enumerates devices and checks input, and both entry points can run post-recording QC. Existing flat settings load as a DeckLink profile and move to the nested format on the next save.
 
@@ -43,7 +43,7 @@ Within the capture projects, RF keeps device-specific rules in `Devices/Domesday
 - **Other capture-card SDKs** can register alongside DeckLink using their own stable backend IDs. Each backend handles its own device discovery, format negotiation, and capture options.
 - **DirectShow** can support Windows capture devices that expose compatible filters.
 - **FireWire** can probe MSTape MPEG-TS sources from the command line. Native DV and a decoded preview remain future integrations.
-- **RF** can enumerate and probe Domesday Duplicator devices on Windows via WinUSB. MISRC support, raw sample recording, and live monitoring are future integrations.
+- **Signal capture** can enumerate and probe Domesday Duplicator devices via WinUSB and inspect or configure RTL-SDR receivers via librtlsdr on Windows. MISRC support, raw sample recording, and live monitoring are future integrations.
 - **Audio** is reserved for standalone audio inputs such as ASIO and WASAPI.
 - **Device control** is independent of the capture source. The transport contract is ready for future AV/C, JVC JLIP, and other RS-232 protocols. It distinguishes command acceptance from observed device state. Recording to the computer and recording to tape are separate operations.
 
@@ -78,6 +78,18 @@ $probe = '.\src\CaptureDeck.Probe\bin\Release\net11.0-windows\win-x64\CaptureDec
 The probe targets Domesday Duplicator firmware through 3.2 using the legacy USB ID `1D50:603B` or the protocol-v1 runtime ID `1209:2347`. It identifies the protocol using the device descriptor and verifies the register map and application image for protocol-v1. A USB protocol version does not identify the physical board revision. Use the Windows WinUSB driver for the selected device. The probe reports the active driver and opens only the selected runtime instance.
 
 Probing reads USB descriptors, the stream endpoint, and protocol-v1 firmware identity. It does not start collection, write device registers, rebind drivers, or enter bootloader mode. Device capture and preview are outside this probe. See the [Domesday Duplicator Windows setup guide](https://domesday86.github.io/DomesdayDuplicator/capture-gui/install-msi/) for driver binding.
+
+## Windows RTL-SDR probe
+
+RTL-SDR uses a matching-architecture `rtlsdr.dll` or `librtlsdr.dll` beside the probe, or an absolute path set in `CAPTUREDECK_RTLSDR_LIBRARY`. Place its native dependencies next to the library and bind the receiver to WinUSB. This optional library is supplied separately.
+
+```powershell
+& $probe rf sdr rtl-sdr list
+& $probe rf sdr rtl-sdr probe 0
+& $probe rf sdr rtl-sdr configure 0 --frequency 1500000 --sample-rate 1024000 --gain 0 --agc off --vga 8 --json
+```
+
+`probe` shows the tuner and its supported manual gain values. `configure` applies the settings for a diagnostic session and closes the receiver without collecting I/Q. Defaults are 100 MHz, 2.4 MSPS, auto tuner gain, and digital AGC off. Set manual gain in tenths of a dB (for example, 197 means 19.7 dB). Frequency correction is optional (`--ppm`). Manual VGA indices 0–8 are enabled only for the R828D-based RTL-SDR Blog V4 with the patched librtlsdr exports used by [MISRC-GUI](https://github.com/harrypm/MISRC-GUI/blob/main/docs/RTL-SDR.md). The manual VGA default is 8 when supported.
 
 ## Windows x64 FireWire / i.LINK probe
 

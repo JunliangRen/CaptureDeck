@@ -8,7 +8,7 @@
   <Import Project="../../WindowsExecutables.props" />
   <ItemGroup>
     <ProjectReference Include="../Capture/CaptureDeck.FireWire/CaptureDeck.FireWire.csproj" />
-    <ProjectReference Include="../Capture/CaptureDeck.RF/CaptureDeck.RF.csproj" />
+    <ProjectReference Include="../Capture/CaptureDeck.SignalCapture/CaptureDeck.SignalCapture.csproj" />
     <ProjectReference Include="../Capture/CaptureDeck.DeckLink/CaptureDeck.DeckLink.csproj" />
     <ProjectReference Include="..\CaptureDeck.QualityControl\CaptureDeck.QualityControl.csproj" />
   </ItemGroup>

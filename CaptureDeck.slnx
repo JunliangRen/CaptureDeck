@@ -9,7 +9,7 @@
     <Project Path="src/Capture/CaptureDeck.DeckLink/CaptureDeck.DeckLink.csproj" />
     <Project Path="src/Capture/CaptureDeck.Core/CaptureDeck.Core.csproj" />
     <Project Path="src/Capture/CaptureDeck.DirectShow/CaptureDeck.DirectShow.csproj" />
-    <Project Path="src/Capture/CaptureDeck.RF/CaptureDeck.RF.csproj" />
+    <Project Path="src/Capture/CaptureDeck.SignalCapture/CaptureDeck.SignalCapture.csproj" />
     <Project Path="src/Capture/CaptureDeck.Audio/CaptureDeck.Audio.csproj" />
     <Project Path="src/Capture/CaptureDeck.FireWire/CaptureDeck.FireWire.csproj" />
   </Folder>

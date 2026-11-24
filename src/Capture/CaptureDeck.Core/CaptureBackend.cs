@@ -1,6 +1,6 @@
 namespace CaptureDeck.Core;
 
-public enum CaptureBackendCategory { Video, FireWire, RF, Audio }
+public enum CaptureBackendCategory { Video, FireWire, SignalCapture, Audio }
 
 public interface ICaptureBackend
 {

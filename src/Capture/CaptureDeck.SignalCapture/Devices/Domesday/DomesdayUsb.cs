@@ -1,6 +1,6 @@
 using System.Globalization;
 
-namespace CaptureDeck.RF;
+namespace CaptureDeck.SignalCapture;
 
 public enum RfUsbFirmware { Legacy, ProtocolV1, UnsupportedProtocol }
 

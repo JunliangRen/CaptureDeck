@@ -1,4 +1,4 @@
-namespace CaptureDeck.RF;
+namespace CaptureDeck.SignalCapture;
 
 public sealed record RfUsbDevice(string InstanceId, string Model, ushort VendorId, ushort ProductId, string? DriverService)
 {

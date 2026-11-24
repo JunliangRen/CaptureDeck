@@ -1,4 +1,4 @@
-namespace CaptureDeck.RF;
+namespace CaptureDeck.SignalCapture;
 
 public static class WinUsbRfProbe
 {

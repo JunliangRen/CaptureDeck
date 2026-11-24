@@ -1,4 +1,4 @@
-using CaptureDeck.RF;
+using CaptureDeck.SignalCapture;
 using Xunit;
 
 namespace CaptureDeck.UT;

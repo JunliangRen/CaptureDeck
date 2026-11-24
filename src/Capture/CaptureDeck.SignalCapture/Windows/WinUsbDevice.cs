@@ -3,7 +3,7 @@ using System.ComponentModel;
 using System.Runtime.InteropServices;
 using Microsoft.Win32.SafeHandles;
 
-namespace CaptureDeck.RF;
+namespace CaptureDeck.SignalCapture;
 
 internal sealed unsafe partial class WinUsbDevice : IDisposable
 {

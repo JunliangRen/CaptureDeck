@@ -22,7 +22,7 @@ public sealed class CaptureBackendTests
     [Theory]
     [InlineData("windows.directshow")]
     [InlineData("windows.firewire")]
-    [InlineData("rf.test")]
+    [InlineData("signal-capture.test")]
     [InlineData("audio.test")]
     public void ReservedBackendCannotBeStarted(string id)
     {

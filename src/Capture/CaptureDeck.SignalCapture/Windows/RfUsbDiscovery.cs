@@ -1,6 +1,6 @@
 using System.Runtime.InteropServices;
 
-namespace CaptureDeck.RF;
+namespace CaptureDeck.SignalCapture;
 
 internal static unsafe partial class RfUsbDiscovery
 {

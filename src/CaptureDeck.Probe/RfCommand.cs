@@ -1,6 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using CaptureDeck.RF;
+using CaptureDeck.SignalCapture;
 
 namespace CaptureDeck.Probe;
 
@@ -25,7 +25,10 @@ internal static class RfCommand
                 case [] or ["--help"] or ["-h"]:
                     Console.WriteLine("CaptureDeck.Probe rf list [--json]");
                     Console.WriteLine("CaptureDeck.Probe rf probe <instance-id> [--json]");
+                    Console.WriteLine("CaptureDeck.Probe rf sdr rtl-sdr --help");
                     return 0;
+                case ["sdr", "rtl-sdr", .. var sdr]:
+                    return RtlSdrCommand.Run(sdr, json);
                 case ["list"]:
                     List(json);
                     return 0;
@@ -36,6 +39,7 @@ internal static class RfCommand
                     return Error("Invalid RF command. See CaptureDeck.Probe rf --help.", 2, json);
             }
         }
+        catch (ArgumentException ex) { return Error(ex.Message, 2, json); }
         catch (Exception ex) when (ex is IOException or InvalidDataException or PlatformNotSupportedException)
         {
             return Error(ex.Message, 1, json);
@@ -81,5 +85,5 @@ internal static class RfCommand
         return code;
     }
 
-    private static void WriteJson(object value) => Console.WriteLine(JsonSerializer.Serialize(value, Json));
+    internal static void WriteJson(object value) => Console.WriteLine(JsonSerializer.Serialize(value, Json));
 }

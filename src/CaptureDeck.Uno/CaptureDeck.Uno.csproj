@@ -11,6 +11,7 @@
     <ApplicationVersion>1</ApplicationVersion>
   </PropertyGroup>
   <ItemGroup>
+    <UnoIcon Include="Assets/qc_icon.png" />
     <ProjectReference Include="../CaptureDeck.QualityControl/CaptureDeck.QualityControl.csproj" />
   </ItemGroup>
 </Project>

@@ -41,10 +41,20 @@ jobs:
           $PSNativeCommandUseErrorActionPreference = $true
           dotnet publish src/CaptureDeck.App/CaptureDeck.App.csproj -c Release -r $env:RID --self-contained -o bin/publish/App
           dotnet publish src/CaptureDeck.Probe/CaptureDeck.Probe.csproj -c Release -r $env:RID --self-contained -o bin/publish/Probe
+      - name: Build, test, and publish FireWire probe
+        if: matrix.arch == 'x64'
+        run: |
+          $PSNativeCommandUseErrorActionPreference = $true
+          cmake -S src/Capture/CaptureDeck.FireWire/Native -B bin/firewire-x64 -A x64
+          cmake --build bin/firewire-x64 --config Release --parallel 2
+          ctest --test-dir bin/firewire-x64 -C Release --output-on-failure
+          cmake --install bin/firewire-x64 --config Release --prefix bin/publish/FireWire
       - name: Verify published executable architecture
         run: |
           $machine = if ($env:RID -eq 'win-arm64') { 0xAA64 } else { 0x8664 }
-          foreach ($file in 'App/CaptureDeck.App.exe', 'Probe/CaptureDeck.Probe.exe') {
+          $files = 'App/CaptureDeck.App.exe', 'Probe/CaptureDeck.Probe.exe'
+          if ($env:RID -eq 'win-x64') { $files += 'FireWire/CaptureDeck.FireWire.Probe.exe' }
+          foreach ($file in $files) {
             $bytes = [IO.File]::ReadAllBytes((Resolve-Path "bin/publish/$file"))
             $header = [BitConverter]::ToInt32($bytes, 0x3c)
             if ([BitConverter]::ToUInt16($bytes, $header + 4) -ne $machine) {

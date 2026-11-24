@@ -1,6 +1,16 @@
 # CaptureDeck
 
-Windows video capture and preservation. CaptureDeck uses .NET 11 and native WinUI 3 (Windows App SDK 2.7.0). The app and the command-line probe share the same capture module, which calls Blackmagic Desktop Video directly through the Windows COM interfaces from DeckLink SDK 16.0.
+CaptureDeck is a .NET 11 video capture and preservation tool. The Windows desktop app uses native WinUI 3 and captures directly from the Blackmagic DeckLink API. The separate Uno Desktop prototype runs offline MOV quality control on Windows and Apple Silicon Macs using the same QC engine.
+
+## Builds
+
+| Platform | Build | Features |
+| --- | --- | --- |
+| Windows x64 | [Native WinUI 3](../../actions/workflows/windows.yml?query=branch%3Amain+is%3Asuccess) | DeckLink preview, recording, and offline QC |
+| Windows ARM64 | [Native WinUI 3](../../actions/workflows/windows.yml?query=branch%3Amain+is%3Asuccess) | Offline QC. DeckLink capture is unavailable. |
+| macOS ARM64 | [Uno Desktop prototype](../../actions/workflows/uno-macos.yml?query=branch%3Amain+is%3Asuccess) | Offline MOV QC and report viewing |
+
+Open a successful run and download the matching package from **Artifacts**. The Windows artifacts contain the app and command-line probe. The macOS artifact contains the Apple Silicon test app.
 
 ## Project structure
 
@@ -15,6 +25,7 @@ CaptureDeck/
 |   |   |-- CaptureDeck.RF           # Reserved for raw RF acquisition
 |   |   `-- CaptureDeck.Audio        # Reserved for standalone audio capture
 |   |-- CaptureDeck.App              # Native WinUI desktop app
+|   |-- CaptureDeck.Uno              # Uno Desktop offline QC prototype
 |   |-- CaptureDeck.Probe            # Command-line device probe and QC
 |   |-- CaptureDeck.DeviceControl    # Independent tape-transport contracts
 |   `-- CaptureDeck.QualityControl   # Post-recording validation and reports
@@ -51,7 +62,7 @@ dotnet publish src/CaptureDeck.Probe -c Release -r $rid --self-contained
 
 On Windows ARM64, CaptureDeck can open settings and check existing MOV files. DeckLink capture is currently available on Windows x64 with a compatible Blackmagic Desktop Video installation. Device support for future backends is validated separately.
 
-## Desktop app
+## Native Windows desktop app
 
 Build and launch from the repository root with the .NET 11 SDK. Install Blackmagic Desktop Video on x64 to capture from DeckLink.
 
@@ -80,7 +91,13 @@ dotnet run --project src/CaptureDeck.Uno/CaptureDeck.Uno.csproj -c Release
 
 Select **Open MOV…** and choose an uncompressed CaptureDeck recording. The prototype saves the QC log, FrameMD5 and QCTools report beside the MOV. Use **View QC log** to read the result in the app or **Open report folder** to see the generated files. Install FFmpeg with `cropdetect`. The app checks its own directory and PATH, plus the standard Homebrew binary directories on macOS.
 
-The **Uno macOS prototype** GitHub Actions workflow builds the Apple Silicon `.app` and uploads it as **CaptureDeck-QC-macos-arm64**. The prototype uses the system file picker and supports local offline QC. The CI bundle is for testing and has no Developer ID signature or notarization.
+For a local Apple Silicon build, run this command on macOS with the .NET 11 SDK and Xcode installed.
+
+```bash
+dotnet publish src/CaptureDeck.Uno/CaptureDeck.Uno.csproj -c Release -f net11.0-desktop -r osx-arm64 --self-contained -p:PackageFormat=app
+```
+
+The [macOS workflow](../../actions/workflows/uno-macos.yml?query=branch%3Amain+is%3Asuccess) publishes **CaptureDeck-QC-macos-arm64** with `CaptureDeck QC.app` inside. The CI bundle is for testing and has no Developer ID signature or notarization.
 
 ## Post-recording QC
 

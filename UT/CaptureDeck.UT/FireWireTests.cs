@@ -1,6 +1,7 @@
 using System.Runtime.InteropServices;
 using System.Runtime.InteropServices.Marshalling;
 using CaptureDeck.FireWire;
+using CaptureDeck.QualityControl;
 using Xunit;
 using static CaptureDeck.FireWire.DirectShow;
 

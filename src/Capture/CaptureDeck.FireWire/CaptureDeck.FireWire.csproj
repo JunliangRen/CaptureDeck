@@ -7,6 +7,7 @@
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="../CaptureDeck.Core/CaptureDeck.Core.csproj" />
+    <ProjectReference Include="../../CaptureDeck.QualityControl/CaptureDeck.QualityControl.csproj" />
     <InternalsVisibleTo Include="CaptureDeck.UT" />
   </ItemGroup>
 </Project>

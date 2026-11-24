@@ -2,27 +2,9 @@ using System.Buffers;
 using System.Diagnostics;
 using System.Threading.Channels;
 
-namespace CaptureDeck.FireWire;
+using CaptureDeck.QualityControl;
 
-public static class TsFile
-{
-    public static (TsLayout Layout, TsStatistics Analysis) Analyze(string path, TsLayout? layout = null)
-    {
-        using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read,
-            1024 * 1024, FileOptions.SequentialScan);
-        var buffer = new byte[1024 * 1024];
-        var count = stream.ReadAtLeast(buffer, buffer.Length, false);
-        var detected = layout ?? TsAnalyzer.Detect(buffer.AsSpan(0, count));
-        var analyzer = new TsAnalyzer(detected);
-        while (count > 0)
-        {
-            analyzer.Feed(buffer.AsSpan(0, count));
-            count = stream.Read(buffer);
-        }
-        analyzer.Finish();
-        return (detected, analyzer.Statistics);
-    }
-}
+namespace CaptureDeck.FireWire;
 
 internal sealed class TsRecording : IDisposable
 {

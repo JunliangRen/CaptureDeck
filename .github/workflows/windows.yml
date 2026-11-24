@@ -41,7 +41,7 @@ jobs:
       - name: Publish App and Probe
         run: |
           $PSNativeCommandUseErrorActionPreference = $true
-          dotnet publish src/CaptureDeck.App/CaptureDeck.App.csproj -c Release -r $env:RID --self-contained -o bin/publish/App
+          dotnet publish src/UI/CaptureDeck.App/CaptureDeck.App.csproj -c Release -r $env:RID --self-contained -o bin/publish/App
           dotnet publish src/CaptureDeck.Probe/CaptureDeck.Probe.csproj -c Release -r $env:RID --self-contained -o bin/publish/Probe
       - name: Verify published executable architecture
         run: |

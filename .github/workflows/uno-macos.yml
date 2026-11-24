@@ -4,8 +4,8 @@ on:
   push:
     branches: [main]
     paths:
-      - 'src/CaptureDeck.Uno/**'
-      - 'src/CaptureDeck.QualityControl/**'
+      - 'src/UI/CaptureDeck.Uno/**'
+      - 'src/Processing/CaptureDeck.QualityControl/**'
       - 'test/CaptureDeck.QualityControl.UT/**'
       - 'global.json'
       - '.github/workflows/uno-macos.yml'
@@ -29,11 +29,11 @@ jobs:
       - name: Run offline TS QC tests
         run: dotnet test test/CaptureDeck.QualityControl.UT/CaptureDeck.QualityControl.UT.csproj -c Release
       - name: Publish Apple Silicon app bundle
-        run: dotnet publish src/CaptureDeck.Uno/CaptureDeck.Uno.csproj -c Release -f net11.0-desktop -r osx-arm64 --self-contained -p:PackageFormat=app
+        run: dotnet publish src/UI/CaptureDeck.Uno/CaptureDeck.Uno.csproj -c Release -f net11.0-desktop -r osx-arm64 --self-contained -p:PackageFormat=app
       - name: Verify and archive app bundle
         run: |
           shopt -s nullglob
-          apps=(src/CaptureDeck.Uno/bin/Release/net11.0-desktop/osx-arm64/publish/*.app)
+          apps=(src/UI/CaptureDeck.Uno/bin/Release/net11.0-desktop/osx-arm64/publish/*.app)
           if [[ ${#apps[@]} -ne 1 ]]; then
             echo "Expected one macOS app bundle"
             exit 1

@@ -12,6 +12,6 @@
     <PackageReference Include="xunit.runner.visualstudio" Version="3.1.5" PrivateAssets="all" />
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="../../src/CaptureDeck.QualityControl/CaptureDeck.QualityControl.csproj" />
+    <ProjectReference Include="../../src/Processing/CaptureDeck.QualityControl/CaptureDeck.QualityControl.csproj" />
   </ItemGroup>
 </Project>

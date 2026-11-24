@@ -17,25 +17,27 @@ Open a successful run and download the matching package from **Artifacts**. The 
 ```text
 CaptureDeck/
 |-- src/
+|   |-- UI/
+|   |   |-- CaptureDeck.App              # Native WinUI desktop app
+|   |   `-- CaptureDeck.Uno              # Uno Desktop offline QC prototype
 |   |-- Capture/
-|   |   |-- CaptureDeck.Core         # Shared capture contracts and backend registry
-|   |   |-- CaptureDeck.DeckLink     # Blackmagic DeckLink capture, preview, and MOV recording
-|   |   |-- CaptureDeck.DirectShow   # Windows DirectShow capture and shared interop
-|   |   |-- CaptureDeck.SignalCapture # Sampled-signal capture devices and diagnostics
-|   |   `-- CaptureDeck.Audio        # Reserved for standalone audio capture
+|   |   |-- CaptureDeck.Core             # Shared capture contracts and backend registry
+|   |   |-- CaptureCards/
+|   |   |   `-- CaptureDeck.DeckLink     # Blackmagic DeckLink SDK capture, preview, and MOV recording
+|   |   |-- CaptureDeck.DirectShow       # Windows DirectShow capture and shared interop
+|   |   |-- CaptureDeck.SignalCapture    # Sampled-signal capture devices and diagnostics
+|   |   `-- CaptureDeck.Audio            # Reserved for standalone audio capture
 |   |-- Processing/
-|   |   `-- CaptureDeck.Recording    # Shared transport-stream recording
-|   |-- CaptureDeck.App              # Native WinUI desktop app
-|   |-- CaptureDeck.Uno              # Uno Desktop offline QC prototype
-|   |-- CaptureDeck.Probe            # Command-line device probe and QC
-|   |-- CaptureDeck.DeviceControl    # Independent tape-transport contracts
-|   `-- CaptureDeck.QualityControl   # Post-recording validation and reports
+|   |   |-- CaptureDeck.Recording       # Shared transport-stream recording
+|   |   `-- CaptureDeck.QualityControl  # Capture validation and reports
+|   |-- CaptureDeck.Probe               # Command-line device probe and QC
+|   `-- CaptureDeck.DeviceControl       # Independent tape-transport contracts
 `-- test/
     |-- CaptureDeck.UT               # Windows capture and settings tests
     `-- CaptureDeck.QualityControl.UT # Cross-platform TS analysis tests
 ```
 
-Within the capture projects, SignalCapture keeps device-specific rules in `Devices/Domesday/` and `Devices/Sdr/RtlSdr/` and Windows USB transport in `Windows/`. DeckLink groups SDK bindings, capture, monitoring, and recording into `Interop/`, `Capture/`, `Monitoring/`, and `Recording/`.
+Capture backends that call a capture-card vendor SDK live under `src/Capture/CaptureCards/`. SignalCapture keeps device-specific rules in `Devices/Domesday/` and `Devices/Sdr/RtlSdr/` and Windows USB transport in `Windows/`. DeckLink groups SDK bindings, capture, monitoring, and recording into `Interop/`, `Capture/`, `Monitoring/`, and `Recording/`.
 
 FireWire / i.LINK and general DirectShow devices are separate capture sources. The Windows MSTape implementation lives under `CaptureDeck.DirectShow/Windows/FireWire/MsTape/`. Reusable COM bindings and DirectShow media-type structures live in `CaptureDeck.DirectShow/Windows/Interop/`. General DirectShow device capture can use those bindings when it is added.
 
@@ -67,7 +69,7 @@ The default build targets Windows x64 (Intel/AMD). Publish the app and probe for
 
 ```powershell
 $rid = 'win-arm64' # Or 'win-x64'
-dotnet publish src/CaptureDeck.App -c Release -r $rid --self-contained
+dotnet publish src/UI/CaptureDeck.App -c Release -r $rid --self-contained
 dotnet publish src/CaptureDeck.Probe -c Release -r $rid --self-contained
 ```
 
@@ -126,7 +128,7 @@ Build and launch from the repository root with the .NET 11 SDK. Install Blackmag
 
 ```powershell
 dotnet build CaptureDeck.slnx -c Release
-.\src\CaptureDeck.App\bin\Release\net11.0-windows10.0.26100.0\win-x64\CaptureDeck.App.exe
+.\src\UI\CaptureDeck.App\bin\Release\net11.0-windows10.0.26100.0\win-x64\CaptureDeck.App.exe
 ```
 
 Select a device, video source, audio source, and video format. The source lists come from the DeckLink SDK and the mode list follows the selected video source and format. **Start preview** monitors the input. To record, select a fixed input mode, start preview, and choose an existing output folder. **Start recording** names the MOV with the local start time and selected formats, for example `CaptureDeck_20261124_060236_633_10bit-Uncompressed_16bit-PCM.mov`. **Stop recording** finalizes the MOV and runs QC while preview continues. The app applies the selected routing for the session and restores the previous routing on stop.
@@ -141,10 +143,10 @@ The monitoring tabs show a luma waveform, chroma vectorscope, stereo frequency s
 
 ## Uno Desktop QC prototype
 
-The standalone project in `src/CaptureDeck.Uno/` uses Uno Skia Desktop and the shared QC engine. Build or run it on Windows without changing the native WinUI 3 app or solution.
+The standalone project in `src/UI/CaptureDeck.Uno/` uses Uno Skia Desktop and the shared QC engine. Build or run it on Windows without changing the native WinUI 3 app or solution.
 
 ```powershell
-dotnet run --project src/CaptureDeck.Uno/CaptureDeck.Uno.csproj -c Release
+dotnet run --project src/UI/CaptureDeck.Uno/CaptureDeck.Uno.csproj -c Release
 ```
 
 Select **Open file…** and choose a recording.
@@ -155,7 +157,7 @@ Select **Open file…** and choose a recording.
 For a local Apple Silicon build, run this command on macOS with the .NET 11 SDK and Xcode installed.
 
 ```bash
-dotnet publish src/CaptureDeck.Uno/CaptureDeck.Uno.csproj -c Release -f net11.0-desktop -r osx-arm64 --self-contained -p:PackageFormat=app
+dotnet publish src/UI/CaptureDeck.Uno/CaptureDeck.Uno.csproj -c Release -f net11.0-desktop -r osx-arm64 --self-contained -p:PackageFormat=app
 ```
 
 The [macOS workflow](../../actions/workflows/uno-macos.yml?query=branch%3Amain+is%3Asuccess) publishes **CaptureDeck-QC-macos-arm64** with `CaptureDeck QC.app` inside. The CI bundle is for testing and has no Developer ID signature or notarization.

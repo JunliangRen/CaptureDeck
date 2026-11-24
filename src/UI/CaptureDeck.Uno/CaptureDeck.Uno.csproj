@@ -12,7 +12,7 @@
   </PropertyGroup>
   <ItemGroup>
     <UnoIcon Include="Assets/qc_icon.png" />
-    <ProjectReference Include="../CaptureDeck.QualityControl/CaptureDeck.QualityControl.csproj" />
+    <ProjectReference Include="../../Processing/CaptureDeck.QualityControl/CaptureDeck.QualityControl.csproj" />
   </ItemGroup>
 
   <!-- Uno's Skia Desktop resizer emits Windows icons. Its macOS bundle task expects PNG iconset sizes. -->

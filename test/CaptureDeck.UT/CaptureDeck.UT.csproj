@@ -14,11 +14,11 @@
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="../../src/Capture/CaptureDeck.Core/CaptureDeck.Core.csproj" />
-    <ProjectReference Include="../../src/Capture/CaptureDeck.DeckLink/CaptureDeck.DeckLink.csproj" />
+    <ProjectReference Include="../../src/Capture/CaptureCards/CaptureDeck.DeckLink/CaptureDeck.DeckLink.csproj" />
     <ProjectReference Include="../../src/Capture/CaptureDeck.DirectShow/CaptureDeck.DirectShow.csproj" />
     <ProjectReference Include="../../src/Processing/CaptureDeck.Recording/CaptureDeck.Recording.csproj" />
     <ProjectReference Include="../../src/Capture/CaptureDeck.SignalCapture/CaptureDeck.SignalCapture.csproj" />
     <ProjectReference Include="../../src/CaptureDeck.DeviceControl/CaptureDeck.DeviceControl.csproj" />
-    <Compile Include="../../src/CaptureDeck.App/CaptureSettings.cs" Link="CaptureSettings.cs" />
+    <Compile Include="../../src/UI/CaptureDeck.App/CaptureSettings.cs" Link="CaptureSettings.cs" />
   </ItemGroup>
 </Project>

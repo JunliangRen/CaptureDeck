@@ -9,7 +9,7 @@
   <ItemGroup>
     <ProjectReference Include="../Capture/CaptureDeck.DirectShow/CaptureDeck.DirectShow.csproj" />
     <ProjectReference Include="../Capture/CaptureDeck.SignalCapture/CaptureDeck.SignalCapture.csproj" />
-    <ProjectReference Include="../Capture/CaptureDeck.DeckLink/CaptureDeck.DeckLink.csproj" />
-    <ProjectReference Include="..\CaptureDeck.QualityControl\CaptureDeck.QualityControl.csproj" />
+    <ProjectReference Include="../Capture/CaptureCards/CaptureDeck.DeckLink/CaptureDeck.DeckLink.csproj" />
+    <ProjectReference Include="../Processing/CaptureDeck.QualityControl/CaptureDeck.QualityControl.csproj" />
   </ItemGroup>
 </Project>

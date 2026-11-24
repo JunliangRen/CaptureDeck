@@ -9,12 +9,12 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
   </PropertyGroup>
-  <Import Project="../../WindowsExecutables.props" />
+  <Import Project="../../../WindowsExecutables.props" />
   <ItemGroup>
     <PackageReference Include="Microsoft.WindowsAppSDK" Version="2.7.0" />
-    <ProjectReference Include="../Capture/CaptureDeck.DeckLink/CaptureDeck.DeckLink.csproj" />
-    <ProjectReference Include="..\CaptureDeck.QualityControl\CaptureDeck.QualityControl.csproj" />
-    <ProjectReference Include="../CaptureDeck.DeviceControl/CaptureDeck.DeviceControl.csproj" />
+    <ProjectReference Include="../../Capture/CaptureCards/CaptureDeck.DeckLink/CaptureDeck.DeckLink.csproj" />
+    <ProjectReference Include="../../Processing/CaptureDeck.QualityControl/CaptureDeck.QualityControl.csproj" />
+    <ProjectReference Include="../../CaptureDeck.DeviceControl/CaptureDeck.DeviceControl.csproj" />
   </ItemGroup>
 
   <!-- The unpackaged MRT Core targets generate the app PRI but omit it from publish (WindowsAppSDK #6720). -->

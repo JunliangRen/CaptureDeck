@@ -39,7 +39,7 @@ jobs:
           plist="$app/Contents/Info.plist"
           plutil -lint "$plist"
           executable=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$plist")
-          lipo -verify_arch arm64 "$app/Contents/MacOS/$executable"
+          lipo "$app/Contents/MacOS/$executable" -verify_arch arm64
           mkdir -p bin/uno-macos
           ditto -c -k --keepParent "$app" bin/uno-macos/CaptureDeck-QC-macos-arm64.zip
       - uses: actions/upload-artifact@v6

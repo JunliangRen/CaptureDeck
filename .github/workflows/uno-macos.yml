@@ -2,7 +2,7 @@ name: Uno macOS prototype
 
 on:
   push:
-    branches: [main, prototype/uno-desktop]
+    branches: [main]
     paths:
       - 'src/CaptureDeck.Uno/**'
       - 'src/CaptureDeck.QualityControl/**'

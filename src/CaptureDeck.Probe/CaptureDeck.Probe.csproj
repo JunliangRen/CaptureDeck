@@ -8,7 +8,7 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
   <ItemGroup>
-    <ProjectReference Include="..\CaptureDeck.DeckLink\CaptureDeck.DeckLink.csproj" />
+    <ProjectReference Include="../Capture/CaptureDeck.DeckLink/CaptureDeck.DeckLink.csproj" />
     <ProjectReference Include="..\CaptureDeck.QualityControl\CaptureDeck.QualityControl.csproj" />
   </ItemGroup>
 </Project>

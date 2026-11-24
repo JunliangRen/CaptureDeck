@@ -2,26 +2,38 @@
 
 Windows video capture and preservation. CaptureDeck uses .NET 11 x64 and native WinUI 3 (Windows App SDK 2.7.0). The app and the command-line probe share the same capture module, which calls Blackmagic Desktop Video directly through the Windows COM interfaces from DeckLink SDK 16.0.
 
-## Capture backends
+## Project structure
 
-`CaptureDeck.Core` defines the capture backend contract for device discovery, running a session and reporting progress. The desktop app and probe register DeckLink, which owns its COM calls, native configuration, preview feed and current MOV writer. Backends register by stable ID (currently blackmagic.decklink), independently of their category. Each backend owns its request and result types.
+```text
+CaptureDeck/
+|-- src/
+|   |-- Capture/
+|   |   |-- CaptureDeck.Core         # Shared capture contracts and backend registry
+|   |   |-- CaptureDeck.DeckLink     # Blackmagic DeckLink capture, preview, and MOV recording
+|   |   |-- CaptureDeck.DirectShow   # Reserved for Windows capture filters
+|   |   |-- CaptureDeck.FireWire     # Reserved for IEEE 1394 / i.LINK capture
+|   |   |-- CaptureDeck.RF           # Reserved for raw RF acquisition
+|   |   `-- CaptureDeck.Audio        # Reserved for standalone audio capture
+|   |-- CaptureDeck.App              # Native WinUI desktop app
+|   |-- CaptureDeck.Probe            # Command-line device probe and QC
+|   |-- CaptureDeck.DeviceControl    # Independent tape-transport contracts
+|   `-- CaptureDeck.QualityControl   # Post-recording validation and reports
+`-- UT/
+    `-- CaptureDeck.UT               # Hardware-independent unit tests
+```
 
-| Project | Role |
-| --- | --- |
-| `CaptureDeck.DeckLink` | Blackmagic DeckLink video and audio capture |
-| `CaptureDeck.DirectShow` | Reserved for Windows capture filters |
-| `CaptureDeck.RF` | Reserved for raw RF acquisition from devices such as Domesday Duplicator and MISRC |
-| `CaptureDeck.Audio` | Reserved for standalone audio capture with transports such as ASIO or WASAPI |
-| `CaptureDeck.FireWire` | Reserved for IEEE 1394 / i.LINK stream capture |
-| `CaptureDeck.DeviceControl` | Tape-transport contracts for independent control |
+**Available today.** DeckLink is the only registered capture backend. The desktop app uses it for live monitoring and MOV recording. The probe enumerates devices and checks input, and both entry points can run post-recording QC. Existing flat settings load as a DeckLink profile and move to the nested format on the next save.
 
-The FireWire project reserves IEEE 1394 / i.LINK acquisition of MPEG-TS (D-VHS and compatible HDV) and native DV. Its recording path is planned to preserve the negotiated stream, with decoding in a separate preview path.
+**Possible future integrations.**
 
-CaptureDeck.DeviceControl defines a separate tape-transport contract for future AV/C, JLIP and serial implementations. Device commands report acceptance separately from confirmed state. Host file recording, deck recording and streaming data back to tape are separate operations. Capture and control selections can be stored independently. Existing flat settings load as a DeckLink profile and move to the nested format on the next save.
+- **Other capture-card SDKs** can register alongside DeckLink using their own stable backend IDs. Each backend handles its own device discovery, format negotiation, and capture options.
+- **DirectShow** can support Windows capture devices that expose compatible filters.
+- **FireWire** is reserved for i.LINK MPEG-TS from D-VHS and compatible HDV devices, plus native DV. The intended recording path preserves the source stream while a separate path decodes it for preview.
+- **RF** is reserved for devices such as Domesday Duplicator and MISRC, with raw sample recording and live signal monitoring.
+- **Audio** is reserved for standalone audio inputs such as ASIO and WASAPI.
+- **Device control** is independent of the capture source. The transport contract is ready for future AV/C, JVC JLIP, and other RS-232 protocols. It distinguishes command acceptance from observed device state. Recording to the computer and recording to tape are separate operations.
 
-The reserved projects build as part of the solution. DeckLink is the only backend registered by the app and probe. The existing DeckLink settings and output formats are preserved.
-
-Hardware-independent unit tests live under `UT`.
+Run the unit tests from the repository root.
 
 ```powershell
 dotnet test UT/CaptureDeck.UT/CaptureDeck.UT.csproj -c Release

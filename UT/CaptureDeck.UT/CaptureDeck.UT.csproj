@@ -13,8 +13,8 @@
     <PackageReference Include="xunit.runner.visualstudio" Version="3.1.5" PrivateAssets="all" />
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="../../src/CaptureDeck.Core/CaptureDeck.Core.csproj" />
-    <ProjectReference Include="../../src/CaptureDeck.DeckLink/CaptureDeck.DeckLink.csproj" />
+    <ProjectReference Include="../../src/Capture/CaptureDeck.Core/CaptureDeck.Core.csproj" />
+    <ProjectReference Include="../../src/Capture/CaptureDeck.DeckLink/CaptureDeck.DeckLink.csproj" />
     <ProjectReference Include="../../src/CaptureDeck.DeviceControl/CaptureDeck.DeviceControl.csproj" />
     <Compile Include="../../src/CaptureDeck.App/CaptureSettings.cs" Link="CaptureSettings.cs" />
   </ItemGroup>

@@ -14,7 +14,7 @@
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="Microsoft.WindowsAppSDK" Version="2.7.0" />
-    <ProjectReference Include="..\CaptureDeck.DeckLink\CaptureDeck.DeckLink.csproj" />
+    <ProjectReference Include="../Capture/CaptureDeck.DeckLink/CaptureDeck.DeckLink.csproj" />
     <ProjectReference Include="..\CaptureDeck.QualityControl\CaptureDeck.QualityControl.csproj" />
     <ProjectReference Include="../CaptureDeck.DeviceControl/CaptureDeck.DeviceControl.csproj" />
   </ItemGroup>

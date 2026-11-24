@@ -1,0 +1,101 @@
+name: Windows build and test
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  windows:
+    name: Windows ${{ matrix.arch }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x64
+            runner: windows-2025
+            ffmpeg_target: win64
+          - arch: arm64
+            runner: windows-11-arm
+            ffmpeg_target: winarm64
+    env:
+      RID: win-${{ matrix.arch }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-dotnet@v6
+        with:
+          global-json-file: global.json
+          architecture: ${{ matrix.arch }}
+      - name: Run native unit tests
+        run: dotnet test UT/CaptureDeck.UT/CaptureDeck.UT.csproj -c Release
+      - name: Publish App and Probe
+        run: |
+          $PSNativeCommandUseErrorActionPreference = $true
+          dotnet publish src/CaptureDeck.App/CaptureDeck.App.csproj -c Release -r $env:RID --self-contained -o bin/publish/App
+          dotnet publish src/CaptureDeck.Probe/CaptureDeck.Probe.csproj -c Release -r $env:RID --self-contained -o bin/publish/Probe
+      - name: Verify published executable architecture
+        run: |
+          $machine = if ($env:RID -eq 'win-arm64') { 0xAA64 } else { 0x8664 }
+          foreach ($file in 'App/CaptureDeck.App.exe', 'Probe/CaptureDeck.Probe.exe') {
+            $bytes = [IO.File]::ReadAllBytes((Resolve-Path "bin/publish/$file"))
+            $header = [BitConverter]::ToInt32($bytes, 0x3c)
+            if ([BitConverter]::ToUInt16($bytes, $header + 4) -ne $machine) {
+              throw "Wrong executable architecture: $file"
+            }
+          }
+      - name: Verify DeckLink is optional
+        run: |
+          $output = & ./bin/publish/Probe/CaptureDeck.Probe.exe list 2>&1
+          $message = if ($env:RID -eq 'win-arm64') { 'requires Windows x64' } else { 'Blackmagic Desktop Video' }
+          if ($LASTEXITCODE -ne 1 -or ($output -join " ") -notlike "*$message*") {
+            throw "Unexpected DeckLink probe result: $output"
+          }
+          # A machine without DeckLink is an expected result.
+          $global:LASTEXITCODE = 0
+      - name: Start WinUI without DeckLink
+        run: |
+          $process = Start-Process -FilePath ./bin/publish/App/CaptureDeck.App.exe -PassThru
+          try {
+            $deadline = (Get-Date).AddSeconds(20)
+            do {
+              Start-Sleep -Milliseconds 250
+              $process.Refresh()
+              if ($process.HasExited) { throw "WinUI exited with code $($process.ExitCode)" }
+            } until ($process.MainWindowHandle -ne 0 -or (Get-Date) -ge $deadline)
+            if ($process.MainWindowHandle -eq 0) { throw 'WinUI main window did not open' }
+          }
+          finally {
+            if (!$process.HasExited) { Stop-Process -Id $process.Id }
+          }
+      - name: Verify offline MOV QC
+        env:
+          FFMPEG_TARGET: ${{ matrix.ffmpeg_target }}
+        run: |
+          $PSNativeCommandUseErrorActionPreference = $true
+          $asset = "ffmpeg-n8.1-latest-$env:FFMPEG_TARGET-lgpl-8.1.zip"
+          $archive = Join-Path $env:RUNNER_TEMP $asset
+          Invoke-WebRequest "https://github.com/FFmpeg-Builds/FFmpeg-Builds/releases/download/latest/$asset" -OutFile $archive
+          $unpacked = Join-Path $env:RUNNER_TEMP 'capturedeck-ffmpeg'
+          Expand-Archive -LiteralPath $archive -DestinationPath $unpacked
+          $ffmpeg = Get-ChildItem -LiteralPath $unpacked -Filter ffmpeg.exe -Recurse | Select-Object -First 1
+          if (!$ffmpeg) { throw 'ffmpeg.exe is missing from the archive' }
+          $env:PATH = "$($ffmpeg.DirectoryName);$env:PATH"
+          $mov = Join-Path $env:RUNNER_TEMP 'capturedeck-ci.mov'
+          ffmpeg -hide_banner -loglevel error -f lavfi -i 'color=c=black:s=320x240:r=25:d=1' -f lavfi -i 'anullsrc=r=48000:cl=stereo:d=1' -c:v v210 -c:a pcm_s16le $mov
+          & ./bin/publish/Probe/CaptureDeck.Probe.exe qc $mov
+          foreach ($file in 'capturedeck-ci.capture.json', 'capturedeck-ci.framemd5', 'capturedeck-ci.mov.qctools.xml.gz') {
+            if (!(Test-Path -LiteralPath (Join-Path $env:RUNNER_TEMP $file))) { throw "Missing QC artifact: $file" }
+          }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: CaptureDeck-${{ env.RID }}
+          path: bin/publish/
+          if-no-files-found: error

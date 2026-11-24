@@ -8,8 +8,7 @@ namespace CaptureDeck.Probe;
 
 internal static class Program
 {
-    private static readonly ICaptureBackend<CaptureDevice, DeckLinkCaptureRequest, DeckLinkProgress, CaptureStats>
-        DeckLink = new CaptureBackendRegistry(new DeckLinkBackend())
+    private static readonly DeckLinkBackend DeckLink = new CaptureBackendRegistry(new DeckLinkBackend())
             .Get<DeckLinkBackend>(DeckLinkBackend.BackendId);
     [MTAThread]
     private static int Main(string[] args)
@@ -34,8 +33,20 @@ internal static class Program
 
         try
         {
-            Console.WriteLine($"DeckLink API {DeckLinkCapture.GetApiVersion()}");
-            var devices = DeckLink.GetDevices();
+            var scan = DeckLink.ScanDevices();
+            if (scan.Availability == DeckLinkAvailability.UnsupportedPlatform)
+            {
+                Console.Error.WriteLine("DeckLink capture requires Windows x64. Offline QC is available.");
+                return 1;
+            }
+            if (scan.Availability == DeckLinkAvailability.DriverUnavailable)
+            {
+                Console.Error.WriteLine("Blackmagic Desktop Video or its DeckLink COM component is unavailable.");
+                return 1;
+            }
+
+            Console.WriteLine($"DeckLink API {scan.ApiVersion}");
+            var devices = scan.Devices;
             if (args is ["list"])
             {
                 foreach (var device in devices)

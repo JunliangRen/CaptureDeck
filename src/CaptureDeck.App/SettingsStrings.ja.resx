@@ -394,7 +394,7 @@
     <value>MOV 保存済み · 検査中</value>
   </data>
   <data name="QcStarting" xml:space="preserve">
-    <value>録画後の品質チェックを開始しています。</value>
+    <value>MOV の品質検査を開始しています。</value>
   </data>
   <data name="QcInspecting" xml:space="preserve">
     <value>MOV の映像・音声トラックを確認しています。</value>
@@ -542,5 +542,23 @@
   </data>
   <data name="CaptureCounts" xml:space="preserve">
     <value>有効フレーム {0:N0} · 入力なし {1:N0} · PCM パケット {2:N0} · 欠落フレーム {3:N0}</value>
+  </data>
+  <data name="CheckMov" xml:space="preserve">
+    <value>MOV を検査…</value>
+  </data>
+  <data name="CheckMovOpenFailed" xml:space="preserve">
+    <value>MOV を開けませんでした</value>
+  </data>
+  <data name="DeckLinkUnavailable" xml:space="preserve">
+    <value>DeckLink は利用できません</value>
+  </data>
+  <data name="DeckLinkUnsupportedPlatform" xml:space="preserve">
+    <value>DeckLink キャプチャには Windows x64 が必要です。既存の MOV は検査できます。</value>
+  </data>
+  <data name="DeckLinkDriverUnavailable" xml:space="preserve">
+    <value>DeckLink キャプチャを有効にするには、Blackmagic Desktop Video をインストールまたは修復してください。</value>
+  </data>
+  <data name="QcFinishing" xml:space="preserve">
+    <value>検査を停止し、結果を保存しています。</value>
   </data>
 </root>

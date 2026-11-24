@@ -44,6 +44,7 @@ public sealed partial class MainWindow
         StartButton.Content = L(captureTask is not null ? "StopPreview" : "StartPreview");
         RecordButton.Content = L(qcStop is not null ? "CancelQc" : recordingSession ? "StopRecording" : "StartRecording");
         RecordingClockLabel.Text = L(recordingClock.IsRunning ? "RecordingClock" : "Elapsed");
+        CheckMovButton.Content = L("CheckMov");
         QcHeading.Text = L("QcHeading");
         QcWarningsHeading.Text = L("QcWarningsHeading");
         QcFolderButton.Content = L("QcFolder");
@@ -111,13 +112,13 @@ public sealed partial class MainWindow
         List<string> warnings = [];
         if (lastQcResult is { } result)
         {
-            if (capture.NoInputFrames > 0)
+            if (capture is { NoInputFrames: > 0 })
                 warnings.Add(LocalFormat("QcWarnNoInput", capture.NoInputFrames));
-            if (capture.MissingVideoFrames > 0)
+            if (capture is { MissingVideoFrames: > 0 })
                 warnings.Add(LocalFormat("QcWarnMissing", capture.MissingVideoFrames));
-            if (capture.TimestampRegressions > 0)
+            if (capture is { TimestampRegressions: > 0 })
                 warnings.Add(LocalFormat("QcWarnTimestamp", capture.TimestampRegressions));
-            if (capture.LeftClips > 0 || capture.RightClips > 0)
+            if (capture is { LeftClips: > 0 } or { RightClips: > 0 })
                 warnings.Add(L("QcWarnClipping"));
             if (result.VideoFramesWithoutFieldFlags > 0)
                 warnings.Add(LocalFormat("QcWarnFieldFlags", result.VideoFramesWithoutFieldFlags));
@@ -129,6 +130,6 @@ public sealed partial class MainWindow
             QcResultsButton.Content = warnings.Count == 1 ? L("QcOneWarning") : LocalFormat("QcWarningCount", warnings.Count);
     }
 
-    private sealed record QcPresentation(QcCaptureLog Capture, string Title, Func<string> Summary);
+    private sealed record QcPresentation(QcCaptureLog? Capture, string Title, Func<string> Summary);
     private readonly record struct PreviewCaption(bool NoInput, int Width, int Height, string Format, long Frames);
 }

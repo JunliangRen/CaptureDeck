@@ -16,8 +16,7 @@ namespace CaptureDeck.App;
 
 public sealed partial class MainWindow : Window
 {
-    private static readonly ICaptureBackend<CaptureDevice, DeckLinkCaptureRequest, DeckLinkProgress, CaptureStats>
-        DeckLink = new CaptureBackendRegistry(new DeckLinkBackend())
+    private static readonly DeckLinkBackend DeckLink = new CaptureBackendRegistry(new DeckLinkBackend())
             .Get<DeckLinkBackend>(DeckLinkBackend.BackendId);
     private CancellationTokenSource? captureStop;
     private CancellationTokenSource? qcStop;
@@ -214,7 +213,7 @@ public sealed partial class MainWindow : Window
 
     private async Task RefreshDevicesAsync()
     {
-        if (loading || captureTask is not null)
+        if (loading || pickingOutput || captureTask is not null || qcStop is not null)
             return;
 
         SavePendingSettings();
@@ -223,21 +222,32 @@ public sealed partial class MainWindow : Window
         SetStatus("CheckingDevices", "CheckingDeckLink");
         try
         {
-            var result = await Task.Run(() => (Api: DeckLinkCapture.GetApiVersion(),
-                Devices: DeckLink.GetDevices(includeCapabilities: true).Where(device => device.HasVideoInput).ToArray()));
+            var result = await Task.Run(() => DeckLink.ScanDevices(includeCapabilities: true));
             if (closing)
                 return;
 
-            sdkVersion = result.Api;
+            sdkVersion = result.ApiVersion ?? "";
             RenderApiVersion();
-            DevicePicker.ItemsSource = result.Devices;
-            RestoreDeviceSelections(result.Devices);
+            var devices = result.Devices.Where(device => device.HasVideoInput).ToArray();
+            DevicePicker.ItemsSource = devices;
+            RestoreDeviceSelections(devices);
             loading = false;
             UpdateControls();
-            if (result.Devices.Length == 0)
-                SetStatus("NoDevice", "ConnectDevice", InfoBarSeverity.Warning);
-            else
-                ShowInputSelectionStatus();
+            switch (result.Availability)
+            {
+                case DeckLinkAvailability.UnsupportedPlatform:
+                    SetStatus("DeckLinkUnavailable", "DeckLinkUnsupportedPlatform");
+                    break;
+                case DeckLinkAvailability.DriverUnavailable:
+                    SetStatus("DeckLinkUnavailable", "DeckLinkDriverUnavailable", InfoBarSeverity.Warning);
+                    break;
+                default:
+                    if (devices.Length == 0)
+                        SetStatus("NoDevice", "ConnectDevice", InfoBarSeverity.Warning);
+                    else
+                        ShowInputSelectionStatus();
+                    break;
+            }
         }
         catch (Exception ex) when (ex is COMException or InvalidOperationException or InvalidCastException)
         {
@@ -393,7 +403,7 @@ public sealed partial class MainWindow : Window
         if (qcStop is { } stop)
         {
             stop.Cancel();
-            SetStatus("CancellingQc", "MovSaved");
+            SetStatus("CancellingQc", "QcFinishing");
             UpdateControls();
             return;
         }
@@ -490,7 +500,7 @@ public sealed partial class MainWindow : Window
                 stats.MissingVideoFrames, stats.TimestampRegressions, stats.AudioPackets,
                 stats.AudioLevels?.LeftClips, stats.AudioLevels?.RightClips,
                 stats.Events.Select(item => new QcEvent(item.Elapsed, item.Description)).ToArray());
-            if (!await RunRecordingQcAsync(saved.Path, log))
+            if (!await RunQcAsync(saved.Path, log))
                 closeAfterQc = false;
         }
         catch (Exception ex) when (IsSessionError(ex))
@@ -607,7 +617,7 @@ public sealed partial class MainWindow : Window
             e.Cancel = true;
             closeAfterQc = true;
             qc.Cancel();
-            SetStatus("CancellingQc", "MovSaved");
+            SetStatus("CancellingQc", "QcFinishing");
             UpdateControls();
             return;
         }
@@ -655,7 +665,41 @@ public sealed partial class MainWindow : Window
         DispatcherQueue.TryEnqueue(() => Close());
     }
 
-    private async Task<bool> RunRecordingQcAsync(string path, QcCaptureLog log)
+    private async void CheckMovButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (!CheckMovButton.IsEnabled)
+            return;
+
+        pickingOutput = true;
+        UpdateControls();
+        PickFileResult? file;
+        try
+        {
+            var picker = new FileOpenPicker(AppWindow.Id) { Title = L("CheckMov") };
+            picker.FileTypeFilter.Add(".mov");
+            file = await picker.PickSingleFileAsync();
+        }
+        catch (Exception ex) when (IsSessionError(ex))
+        {
+            if (!closing)
+                SetStatus("CheckMovOpenFailed", () => ex.Message, InfoBarSeverity.Error);
+            return;
+        }
+        finally
+        {
+            pickingOutput = false;
+            if (!closing)
+                UpdateControls();
+        }
+
+        if (file is not null && !closing)
+        {
+            await RunQcAsync(file.Path, null);
+            CloseAfterRecordingIfRequested();
+        }
+    }
+
+    private async Task<bool> RunQcAsync(string path, QcCaptureLog? log)
     {
         using var cancellation = new CancellationTokenSource();
         qcStop = cancellation;
@@ -693,10 +737,12 @@ public sealed partial class MainWindow : Window
         finally
         {
             qcStop = null;
+            if (!closing)
+                UpdateControls();
         }
     }
 
-    private void ShowQcResult(string path, QcResult? result, QcCaptureLog capture, string title, Func<string> summary)
+    private void ShowQcResult(string path, QcResult? result, QcCaptureLog? capture, string title, Func<string> summary)
     {
         qcOutputPath = path;
         lastQcResult = result;
@@ -880,7 +926,8 @@ public sealed partial class MainWindow : Window
     private void UpdateControls()
     {
         var active = captureTask is not null;
-        var idle = settingsReady && !closing && !loading && !pickingOutput && !active;
+        var idle = settingsReady && !closing && !loading && !pickingOutput && !active && qcStop is null;
+        CheckMovButton.IsEnabled = idle && !recordingTransition;
         RefreshButton.IsEnabled = idle;
         DevicePicker.IsEnabled = idle && DevicePicker.Items.Count != 0;
         VideoInputPicker.IsEnabled = idle && VideoInputPicker.Items.Count != 0;

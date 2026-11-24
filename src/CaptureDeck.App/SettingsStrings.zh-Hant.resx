@@ -394,7 +394,7 @@
     <value>MOV 已儲存 · 正在檢查</value>
   </data>
   <data name="QcStarting" xml:space="preserve">
-    <value>正在啟動錄後品管檢查。</value>
+    <value>正在啟動 MOV 品質檢查。</value>
   </data>
   <data name="QcInspecting" xml:space="preserve">
     <value>正在檢查 MOV 音視訊軌。</value>
@@ -542,5 +542,23 @@
   </data>
   <data name="CaptureCounts" xml:space="preserve">
     <value>有效影格 {0:N0} · 無輸入影格 {1:N0} · PCM 音訊封包 {2:N0} · 遺失影格 {3:N0}</value>
+  </data>
+  <data name="CheckMov" xml:space="preserve">
+    <value>檢查 MOV…</value>
+  </data>
+  <data name="CheckMovOpenFailed" xml:space="preserve">
+    <value>無法開啟 MOV</value>
+  </data>
+  <data name="DeckLinkUnavailable" xml:space="preserve">
+    <value>DeckLink 無法使用</value>
+  </data>
+  <data name="DeckLinkUnsupportedPlatform" xml:space="preserve">
+    <value>DeckLink 擷取需要 Windows x64。仍可檢查現有 MOV。</value>
+  </data>
+  <data name="DeckLinkDriverUnavailable" xml:space="preserve">
+    <value>請安裝或修復 Blackmagic Desktop Video，以啟用 DeckLink 擷取。</value>
+  </data>
+  <data name="QcFinishing" xml:space="preserve">
+    <value>正在停止檢查並儲存結果。</value>
   </data>
 </root>

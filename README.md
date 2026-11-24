@@ -1,6 +1,6 @@
 # CaptureDeck
 
-Windows video capture and preservation. CaptureDeck uses .NET 11 x64 and native WinUI 3 (Windows App SDK 2.7.0). The app and the command-line probe share the same capture module, which calls Blackmagic Desktop Video directly through the Windows COM interfaces from DeckLink SDK 16.0.
+Windows video capture and preservation. CaptureDeck uses .NET 11 and native WinUI 3 (Windows App SDK 2.7.0). The app and the command-line probe share the same capture module, which calls Blackmagic Desktop Video directly through the Windows COM interfaces from DeckLink SDK 16.0.
 
 ## Project structure
 
@@ -39,9 +39,21 @@ Run the unit tests from the repository root.
 dotnet test UT/CaptureDeck.UT/CaptureDeck.UT.csproj -c Release
 ```
 
+## Windows builds
+
+The default build targets Windows x64 (Intel/AMD). Publish the app and probe for the architecture that will run them.
+
+```powershell
+$rid = 'win-arm64' # Or 'win-x64'
+dotnet publish src/CaptureDeck.App -c Release -r $rid --self-contained
+dotnet publish src/CaptureDeck.Probe -c Release -r $rid --self-contained
+```
+
+On Windows ARM64, CaptureDeck can open settings and check existing MOV files. DeckLink capture is currently available on Windows x64 with a compatible Blackmagic Desktop Video installation. Device support for future backends is validated separately.
+
 ## Desktop app
 
-Build and launch from the repository root with the .NET 11 SDK and Blackmagic Desktop Video installed.
+Build and launch from the repository root with the .NET 11 SDK. Install Blackmagic Desktop Video on x64 to capture from DeckLink.
 
 ```powershell
 dotnet build CaptureDeck.slnx -c Release
@@ -70,7 +82,7 @@ For a recording named `tape.mov`, QC writes three files beside it.
 
 QC checks that both tracks decode to the end and compares the decoded video frame and PCM sample counts with the recording counts. It also checks field order and PCM depth against the recording selections. The MOV remains available if QC fails or is canceled. Repeated checks use numbered filenames to preserve existing reports.
 
-Run the same checks on an existing CaptureDeck MOV with the probe. The command does not require a DeckLink card. If the recording counts are unavailable, the command compares decoded counts against the MOV indexes.
+Use **Check MOV…** in the desktop app to run the same checks on an existing CaptureDeck MOV, or use the probe command below. Offline QC works without a DeckLink card or its driver. On ARM64, use ARM64 builds of both FFmpeg tools. If the recording counts are unavailable, the command compares decoded counts against the MOV indexes.
 
 ```powershell
 .\src\CaptureDeck.Probe\bin\Release\net11.0-windows\win-x64\CaptureDeck.Probe.exe qc 'D:\Captures\tape.mov'

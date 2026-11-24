@@ -30,11 +30,13 @@
                         <SelectorBarItem x:Name="EventsTab" Text="Events" />
                     </SelectorBar>
                 </ScrollViewer>
-                <Button x:Name="OpenSettingsButton" Grid.Column="1" Click="OpenSettings_Click"
-                        AutomationProperties.Name="Settings" ToolTipService.ToolTip="Settings"
-                        VerticalAlignment="Center">
-                    <SymbolIcon Symbol="Setting" />
-                </Button>
+                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                    <Button x:Name="CheckMovButton" Content="Check MOV…" Click="CheckMovButton_Click" IsEnabled="False" />
+                    <Button x:Name="OpenSettingsButton" Click="OpenSettings_Click"
+                            AutomationProperties.Name="Settings" ToolTipService.ToolTip="Settings">
+                        <SymbolIcon Symbol="Setting" />
+                    </Button>
+                </StackPanel>
             </Grid>
             <ScrollViewer x:Name="MonitorViewport" Grid.Row="1" SizeChanged="MonitorViewport_SizeChanged"
                           VerticalScrollBarVisibility="Auto" HorizontalScrollMode="Disabled"

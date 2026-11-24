@@ -394,7 +394,7 @@
     <value>MOV saved · checking file</value>
   </data>
   <data name="QcStarting" xml:space="preserve">
-    <value>Starting post-recording QC.</value>
+    <value>Starting MOV QC.</value>
   </data>
   <data name="QcInspecting" xml:space="preserve">
     <value>Inspecting MOV streams.</value>
@@ -542,5 +542,23 @@
   </data>
   <data name="CaptureCounts" xml:space="preserve">
     <value>Valid frames {0:N0} · No-input frames {1:N0} · PCM packets {2:N0} · Missing frames {3:N0}</value>
+  </data>
+  <data name="CheckMov" xml:space="preserve">
+    <value>Check MOV…</value>
+  </data>
+  <data name="CheckMovOpenFailed" xml:space="preserve">
+    <value>Could not open MOV</value>
+  </data>
+  <data name="DeckLinkUnavailable" xml:space="preserve">
+    <value>DeckLink unavailable</value>
+  </data>
+  <data name="DeckLinkUnsupportedPlatform" xml:space="preserve">
+    <value>DeckLink capture requires Windows x64. Offline QC is available.</value>
+  </data>
+  <data name="DeckLinkDriverUnavailable" xml:space="preserve">
+    <value>Install or repair Blackmagic Desktop Video to enable DeckLink capture.</value>
+  </data>
+  <data name="QcFinishing" xml:space="preserve">
+    <value>Stopping the check and saving its results.</value>
   </data>
 </root>

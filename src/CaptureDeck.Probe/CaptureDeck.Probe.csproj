@@ -2,11 +2,10 @@
   <PropertyGroup>
     <OutputType>Exe</OutputType>
     <TargetFramework>net11.0-windows</TargetFramework>
-    <PlatformTarget>x64</PlatformTarget>
-    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
   </PropertyGroup>
+  <Import Project="../../WindowsExecutables.props" />
   <ItemGroup>
     <ProjectReference Include="../Capture/CaptureDeck.DeckLink/CaptureDeck.DeckLink.csproj" />
     <ProjectReference Include="..\CaptureDeck.QualityControl\CaptureDeck.QualityControl.csproj" />

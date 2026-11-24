@@ -65,7 +65,18 @@ On Windows ARM64, CaptureDeck can open settings and check existing MOV files. De
 
 ## Windows x64 FireWire / i.LINK probe
 
-The standalone C++ probe reuses the CapDVHS CLI 0.1.1 MSTape/DirectShow capture pipeline and TS analyzer. It uses the Windows IEEE 1394 and tape-device drivers. Build it from the repository root with CMake 3.25 or newer, the MSVC C++ tools, and the Windows SDK.
+The .NET 11 probe includes a FireWire command group. It calls MSTape/DirectShow on Windows x64 and can analyze TS files without a deck.
+
+```powershell
+dotnet build src/CaptureDeck.Probe -c Release
+$probe = '.\src\CaptureDeck.Probe\bin\Release\net11.0-windows\win-x64\CaptureDeck.Probe.exe'
+& $probe firewire list
+& $probe firewire probe --device '<device-id>'
+& $probe firewire capture --device '<device-id>' --output 'D:\Captures\tape.ts192' --format ts192
+& $probe firewire analyze --input 'D:\Captures\tape.ts192' --json
+```
+
+The managed version has passed offline comparisons and synthetic DirectShow graph tests. Live capture on the HM-DHX2 is pending. The existing standalone C++ probe remains available during this validation. It reuses the CapDVHS CLI 0.1.1 MSTape/DirectShow capture pipeline and TS analyzer. It uses the Windows IEEE 1394 and tape-device drivers. Build it from the repository root with CMake 3.25 or newer, the MSVC C++ tools, and the Windows SDK.
 
 ```powershell
 cmake -S src/Capture/CaptureDeck.FireWire/Native -B bin/firewire-x64 -A x64

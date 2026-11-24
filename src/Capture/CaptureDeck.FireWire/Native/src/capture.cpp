@@ -156,8 +156,6 @@ int run_capture(const CaptureOptions& options, std::atomic<bool>& cancel, Captur
         check_hr(connection, "Connect MSTape directly to sink");
         check_hr(graph.As(&control), "Query IMediaControl");
         check_hr(graph.As(&events), "Query IMediaEvent");
-        ComPtr<IMediaFilter> clock_control;
-        check_hr(graph.As(&clock_control), "Query IMediaFilter");
         check_hr(graph->SetDefaultSyncSource(), "Select capture graph clock");
         writer = std::thread([&] {
             try {

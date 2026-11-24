@@ -3,6 +3,7 @@
     <TargetFramework>net11.0-windows</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <IsTestProject>true</IsTestProject>
     <IsPackable>false</IsPackable>
   </PropertyGroup>
@@ -14,6 +15,7 @@
   <ItemGroup>
     <ProjectReference Include="../../src/Capture/CaptureDeck.Core/CaptureDeck.Core.csproj" />
     <ProjectReference Include="../../src/Capture/CaptureDeck.DeckLink/CaptureDeck.DeckLink.csproj" />
+    <ProjectReference Include="../../src/Capture/CaptureDeck.FireWire/CaptureDeck.FireWire.csproj" />
     <ProjectReference Include="../../src/CaptureDeck.DeviceControl/CaptureDeck.DeviceControl.csproj" />
     <Compile Include="../../src/CaptureDeck.App/CaptureSettings.cs" Link="CaptureSettings.cs" />
   </ItemGroup>

@@ -159,7 +159,7 @@ internal sealed unsafe partial class MsTapeDevices : IDisposable
         throw new FireWireException(3, "DirectShow enumerator returned an incomplete item.");
     }
 
-    public static MsTapeOutput SelectOutput(nint source, TsLayout? requested)
+    public static MsTapeOutput SelectOutput(nint source)
     {
         nint enumerator = 0;
         Check(PointerOut(source, 10, &enumerator), "Enumerate MSTape pins"); // IBaseFilter::EnumPins
@@ -182,23 +182,17 @@ internal sealed unsafe partial class MsTapeDevices : IDisposable
                 while (ReadNext(types.Value, isMediaType: true) is var pointer && pointer != 0)
                 {
                     var type = (DirectShowMediaType*)pointer;
-                    if (type->GetLayout() is TsLayout layout &&
-                        (layout == TsLayout.Ts188 || layout == TsLayout.Ts192) &&
-                        (!requested.HasValue || layout == requested.Value))
+                    if (type->GetLayout() == TsLayout.Ts192 && (capture ? 0 : 1) < bestScore)
                     {
-                        var score = (layout == TsLayout.Ts192 ? 0 : 2) + (capture ? 0 : 1);
-                        if (score < bestScore)
-                        {
-                            best.Set(pin, type, layout);
-                            bestScore = score;
-                            continue;
-                        }
+                        best.Set(pin, type);
+                        bestScore = capture ? 0 : 1;
+                        continue;
                     }
                     DirectShowMediaType.Free(type);
                 }
             }
             if (best.Pin == 0)
-                throw new FireWireException(4, $"No native {requested?.Format ?? "188/192-byte"} MSTape output pin is available.");
+                throw new FireWireException(4, "No native 192-byte MSTape output pin is available.");
             return best;
         }
         catch
@@ -234,15 +228,14 @@ internal sealed unsafe class MsTapeOutput : IDisposable
 {
     public nint Pin { get; private set; }
     public DirectShowMediaType* MediaType { get; private set; }
-    public TsLayout Layout { get; private set; }
+    public TsLayout Layout => TsLayout.Ts192;
 
-    public void Set(nint pin, DirectShowMediaType* mediaType, TsLayout layout)
+    public void Set(nint pin, DirectShowMediaType* mediaType)
     {
         Dispose();
         Marshal.AddRef(pin);
         Pin = pin;
         MediaType = mediaType;
-        Layout = layout;
     }
 
     public void Dispose()

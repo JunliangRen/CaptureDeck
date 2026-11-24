@@ -6,11 +6,11 @@ CaptureDeck is a .NET 11 video capture and preservation tool. The Windows deskto
 
 | Platform | Build | Features |
 | --- | --- | --- |
-| Windows x64 | [Native WinUI 3](../../actions/workflows/windows.yml?query=branch%3Amain+is%3Asuccess) | DeckLink preview, recording, and offline QC. Separate FireWire TS probe. |
+| Windows x64 | [Native WinUI 3](../../actions/workflows/windows.yml?query=branch%3Amain+is%3Asuccess) | DeckLink preview, recording, and offline QC. FireWire TS capture from the command line. |
 | Windows ARM64 | [Native WinUI 3](../../actions/workflows/windows.yml?query=branch%3Amain+is%3Asuccess) | Offline QC. DeckLink capture is unavailable. |
 | macOS ARM64 | [Uno Desktop prototype](../../actions/workflows/uno-macos.yml?query=branch%3Amain+is%3Asuccess) | Offline MOV QC and report viewing |
 
-Open a successful run and download the matching package from **Artifacts**. The Windows artifacts contain the app and managed command-line probe. The Windows x64 artifact also includes `FireWire/CaptureDeck.FireWire.Probe.exe`. The macOS artifact contains the Apple Silicon test app.
+Open a successful run and download the matching package from **Artifacts**. The Windows artifacts contain the app and managed command-line probe. Run `Probe/CaptureDeck.Probe.exe firewire` to access the FireWire commands. The macOS artifact contains the Apple Silicon test app.
 
 ## Project structure
 
@@ -21,7 +21,7 @@ CaptureDeck/
 |   |   |-- CaptureDeck.Core         # Shared capture contracts and backend registry
 |   |   |-- CaptureDeck.DeckLink     # Blackmagic DeckLink capture, preview, and MOV recording
 |   |   |-- CaptureDeck.DirectShow   # Reserved for Windows capture filters
-|   |   |-- CaptureDeck.FireWire     # Native IEEE 1394 / i.LINK MPEG-TS probe
+|   |   |-- CaptureDeck.FireWire     # MSTape / DirectShow MPEG-TS capture and analysis
 |   |   |-- CaptureDeck.RF           # Reserved for raw RF acquisition
 |   |   `-- CaptureDeck.Audio        # Reserved for standalone audio capture
 |   |-- CaptureDeck.App              # Native WinUI desktop app
@@ -30,11 +30,10 @@ CaptureDeck/
 |   |-- CaptureDeck.DeviceControl    # Independent tape-transport contracts
 |   `-- CaptureDeck.QualityControl   # Post-recording validation and reports
 `-- UT/
-    |-- CaptureDeck.UT               # Hardware-independent .NET tests
-    `-- CaptureDeck.FireWire.UT      # Native TS, DirectShow, and CLI tests
+    `-- CaptureDeck.UT               # Hardware-independent .NET tests
 ```
 
-**Available today.** DeckLink is the registered desktop capture backend. The Windows x64 FireWire probe runs independently. The desktop app uses it for live monitoring and MOV recording. The probe enumerates devices and checks input, and both entry points can run post-recording QC. Existing flat settings load as a DeckLink profile and move to the nested format on the next save.
+**Available today.** DeckLink is the registered desktop capture backend. The desktop app uses DeckLink for live monitoring and MOV recording. The command-line probe also captures FireWire MPEG-TS on Windows x64. The probe enumerates devices and checks input, and both entry points can run post-recording QC. Existing flat settings load as a DeckLink profile and move to the nested format on the next save.
 
 **Possible future integrations.**
 
@@ -76,30 +75,14 @@ $probe = '.\src\CaptureDeck.Probe\bin\Release\net11.0-windows\win-x64\CaptureDec
 & $probe firewire analyze --input 'D:\Captures\tape.ts192' --json
 ```
 
-The managed version has passed offline comparisons and synthetic DirectShow graph tests. Live capture on the HM-DHX2 is pending. The existing standalone C++ probe remains available during this validation. It reuses the CapDVHS CLI 0.1.1 MSTape/DirectShow capture pipeline and TS analyzer. It uses the Windows IEEE 1394 and tape-device drivers. Build it from the repository root with CMake 3.25 or newer, the MSVC C++ tools, and the Windows SDK.
-
-```powershell
-cmake -S src/Capture/CaptureDeck.FireWire/Native -B bin/firewire-x64 -A x64
-cmake --build bin/firewire-x64 --config Release
-ctest --test-dir bin/firewire-x64 -C Release --output-on-failure
-```
-
-```powershell
-$firewire = '.\bin\firewire-x64\Release\CaptureDeck.FireWire.Probe.exe'
-& $firewire list
-& $firewire probe --device '<device-id>'
-& $firewire capture --device '<device-id>' --output 'D:\Captures\tape.ts192' --format ts192
-& $firewire analyze --input 'D:\Captures\tape.ts192' --json
-```
-
 Copy the device ID from `list`. Use an existing output directory. Once the graph starts, play the tape manually. Ctrl+C stops PC capture, drains queued samples, and finalizes the file. `--duration` limits capture from the first sample. `--no-data-timeout` sets the idle timeout in seconds (default 30).
 
-- Explicit `--format ts188` and `--format ts192` require that native layout from the driver. Capture without `--format` selects the advertised layout, preferring 192. The report records the selected layout. Choose the output extension accordingly.
+- Live capture requires MSTape to deliver native 192-byte packets. Omitting `--format` and specifying `--format ts192` select the same layout. Offline `analyze` accepts both 188- and 192-byte files.
 - Files contain the bytes delivered by MSTape, including the four-byte prefix in the 192-byte layout. Capture writes to `<output>.partial` before finalization and retains the partial file on failure. Existing files are protected from overwrites.
 - The sidecar `<output>.report.json` records file and queue accounting, transport sync, malformed packets, TEI, continuity, PCR and PTS statistics. It includes zero-based packet indexes for the first error of each reported kind. PCR checks account for wraparound and signaled discontinuities. The report covers transport integrity, and separate playback is needed to verify decoding.
 - `analyze` inspects an existing recording and prints a summary or JSON with `--json`. It auto-detects aligned input with at least five valid packets at the beginning. Specify `--format` for short files or files with a damaged beginning. Structural errors and a truncated tail return exit code 4. TEI, continuity, and backward PCR counts are quality diagnostics.
 
-Python 3 is optional and enables the offline CLI test in CTest. The other tests use generated packets and an in-process DirectShow source, so no tape deck is required.
+The .NET tests use generated packets and an in-process DirectShow source. Live capture on the HM-DHX2 is pending.
 
 ## Native Windows desktop app
 

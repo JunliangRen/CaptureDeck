@@ -33,7 +33,7 @@ public sealed unsafe class FireWireTests
     [Theory]
     [InlineData(188)]
     [InlineData(192)]
-    public void NativeGraphReceivesAndDrainsEveryByte(int stride)
+    public void LiveGraphRequires192AndDrainsEveryByte(int stride)
     {
         if (!FireWireCapture.IsSupported)
             return;
@@ -56,10 +56,13 @@ public sealed unsafe class FireWireTests
             using var sink = new DirectShowSink(&type, writer);
             using var source = new TestTsSource(sink);
             using var filter = new ComReference(Export(source, BaseFilter));
-            using var selected = MsTapeDevices.SelectOutput(filter.Value, requested: layout);
-            Assert.Equal(layout, selected.Layout);
-            var other = stride == 188 ? TsLayout.Ts192 : TsLayout.Ts188;
-            Assert.Equal(4, Assert.Throws<FireWireException>(() => MsTapeDevices.SelectOutput(filter.Value, other)).ExitCode);
+            if (stride == 188)
+            {
+                Assert.Equal(4, Assert.Throws<FireWireException>(() => MsTapeDevices.SelectOutput(filter.Value)).ExitCode);
+                return;
+            }
+            using var selected = MsTapeDevices.SelectOutput(filter.Value);
+            Assert.Equal(TsLayout.Ts192, selected.Layout);
             using (var graph = new FireWireGraph())
             {
                 graph.Connect(filter.Value, selected, sink);

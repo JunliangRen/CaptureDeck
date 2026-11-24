@@ -4,7 +4,7 @@ using static CaptureDeck.FireWire.DirectShow;
 
 namespace CaptureDeck.FireWire;
 
-public sealed record FireWireRequest(string DeviceId, string OutputPath, TsLayout? Format, TimeSpan Duration, TimeSpan NoDataTimeout);
+public sealed record FireWireRequest(string DeviceId, string OutputPath, TimeSpan Duration, TimeSpan NoDataTimeout);
 
 public sealed record FireWireProgress(double ElapsedSeconds, long ReceivedBytes, long WrittenBytes);
 
@@ -67,17 +67,15 @@ public static unsafe class FireWireCapture
         using var apartment = new ComApartment();
         using var devices = MsTapeDevices.Scan();
         using var source = devices.Bind(deviceId);
-        var formats = new List<TsLayout>(2);
-        foreach (var layout in new[] { TsLayout.Ts188, TsLayout.Ts192 })
+        try
         {
-            try
-            {
-                using var output = MsTapeDevices.SelectOutput(source.Value, layout);
-                formats.Add(output.Layout);
-            }
-            catch (FireWireException ex) when (ex.ExitCode == 4) { }
+            using var output = MsTapeDevices.SelectOutput(source.Value);
+            return [output.Layout];
         }
-        return formats;
+        catch (FireWireException ex) when (ex.ExitCode == 4)
+        {
+            return [];
+        }
     }
 
     internal static void CheckPlatform()
@@ -112,7 +110,7 @@ public static unsafe class FireWireCapture
             using var apartment = new ComApartment();
             using var devices = MsTapeDevices.Scan();
             using var source = devices.Bind(request.DeviceId);
-            using var selected = MsTapeDevices.SelectOutput(source.Value, request.Format);
+            using var selected = MsTapeDevices.SelectOutput(source.Value);
             outputFormat = selected.Layout.Format;
             recording = new TsRecording(path, selected.Layout);
             using var sink = new DirectShowSink(selected.MediaType, recording);
@@ -158,7 +156,7 @@ public static unsafe class FireWireCapture
             ExitCode = error?.Code ?? 0,
             Error = error?.Message,
             StopReason = error is null ? endReason : "error",
-            RequestedFormat = request.Format?.Format ?? "auto",
+            RequestedFormat = TsLayout.Ts192.Format,
             OutputFormat = outputFormat,
             OutputPath = path,
             DataPath = recording?.Finalized == true ? path : path + ".partial",

@@ -17,7 +17,7 @@ internal static class FireWireCommand
             {
                 Console.WriteLine("CaptureDeck.Probe firewire list [--json]");
                 Console.WriteLine("CaptureDeck.Probe firewire probe --device <id> [--json]");
-                Console.WriteLine("CaptureDeck.Probe firewire capture --device <id> --output <path> [--format ts188|ts192] [--duration <seconds>] [--no-data-timeout <seconds>] [--json]");
+                Console.WriteLine("CaptureDeck.Probe firewire capture --device <id> --output <path> [--format ts192] [--duration <seconds>] [--no-data-timeout <seconds>] [--json]");
                 Console.WriteLine("CaptureDeck.Probe firewire analyze --input <path> [--format ts188|ts192] [--json]");
                 return 0;
             }
@@ -72,7 +72,9 @@ internal static class FireWireCommand
 
     private static int Capture(Dictionary<string, string> options, bool json)
     {
-        var request = new FireWireRequest(Required(options, "--device"), Required(options, "--output"), Format(options),
+        if (options.TryGetValue("--format", out var format) && format != "ts192")
+            throw new ArgumentException("Live FireWire capture requires native ts192. Use analyze for existing ts188 files.");
+        var request = new FireWireRequest(Required(options, "--device"), Required(options, "--output"),
             Seconds(options, "--duration", 0, allowZero: true),
             Seconds(options, "--no-data-timeout", 30, allowZero: false));
         using var cancellation = new CancellationTokenSource();

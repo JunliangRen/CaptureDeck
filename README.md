@@ -72,7 +72,7 @@ The monitoring tabs show a luma waveform, chroma vectorscope, stereo frequency s
 
 ## Post-recording QC
 
-After saving the MOV, CaptureDeck runs QC in the background. Put `ffmpeg.exe` and `ffprobe.exe` from a recent FFmpeg build on PATH or beside the executable. These tools read the saved file. Recording continues to use the DeckLink SDK directly.
+After saving the MOV, CaptureDeck runs QC in the background. Put `ffmpeg.exe` and `ffprobe.exe` from a recent FFmpeg build with the `cropdetect` filter on PATH or beside the executable. These tools read the saved file. Recording continues to use the DeckLink SDK directly.
 
 For a recording named `tape.mov`, QC writes three files beside it.
 

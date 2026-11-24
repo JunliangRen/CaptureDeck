@@ -80,7 +80,7 @@ jobs:
           FFMPEG_TARGET: ${{ matrix.ffmpeg_target }}
         run: |
           $PSNativeCommandUseErrorActionPreference = $true
-          $asset = "ffmpeg-n8.1-latest-$env:FFMPEG_TARGET-lgpl-8.1.zip"
+          $asset = "ffmpeg-n8.1-latest-$env:FFMPEG_TARGET-gpl-8.1.zip"
           $archive = Join-Path $env:RUNNER_TEMP $asset
           Invoke-WebRequest "https://github.com/FFmpeg-Builds/FFmpeg-Builds/releases/download/latest/$asset" -OutFile $archive
           $unpacked = Join-Path $env:RUNNER_TEMP 'capturedeck-ffmpeg'

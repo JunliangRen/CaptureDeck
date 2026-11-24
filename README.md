@@ -22,7 +22,7 @@ CaptureDeck/
 |   |   |-- CaptureDeck.DeckLink     # Blackmagic DeckLink capture, preview, and MOV recording
 |   |   |-- CaptureDeck.DirectShow   # Reserved for Windows capture filters
 |   |   |-- CaptureDeck.FireWire     # MSTape / DirectShow MPEG-TS capture and analysis
-|   |   |-- CaptureDeck.RF           # Reserved for raw RF acquisition
+|   |   |-- CaptureDeck.RF           # RF USB device discovery and WinUSB diagnostics
 |   |   `-- CaptureDeck.Audio        # Reserved for standalone audio capture
 |   |-- CaptureDeck.App              # Native WinUI desktop app
 |   |-- CaptureDeck.Uno              # Uno Desktop offline QC prototype
@@ -33,6 +33,8 @@ CaptureDeck/
     `-- CaptureDeck.UT               # Hardware-independent .NET tests
 ```
 
+Within the capture projects, RF keeps device-specific rules in `Devices/Domesday/` and Windows USB transport in `Windows/`. FireWire uses `Windows/MsTape/` for DirectShow capture and `Recording/` for packet writing. DeckLink groups SDK bindings, capture, monitoring, and recording into `Interop/`, `Capture/`, `Monitoring/`, and `Recording/`.
+
 **Available today.** DeckLink is the registered desktop capture backend. The desktop app uses DeckLink for live monitoring and MOV recording. The command-line probe also captures FireWire MPEG-TS on Windows x64. The probe enumerates devices and checks input, and both entry points can run post-recording QC. Existing flat settings load as a DeckLink profile and move to the nested format on the next save.
 
 **Possible future integrations.**
@@ -40,7 +42,7 @@ CaptureDeck/
 - **Other capture-card SDKs** can register alongside DeckLink using their own stable backend IDs. Each backend handles its own device discovery, format negotiation, and capture options.
 - **DirectShow** can support Windows capture devices that expose compatible filters.
 - **FireWire** can probe MSTape MPEG-TS sources from the command line. Native DV and a decoded preview remain future integrations.
-- **RF** is reserved for devices such as Domesday Duplicator and MISRC, with raw sample recording and live signal monitoring.
+- **RF** can enumerate and probe Domesday Duplicator devices on Windows via WinUSB. MISRC support, raw sample recording, and live monitoring are future integrations.
 - **Audio** is reserved for standalone audio inputs such as ASIO and WASAPI.
 - **Device control** is independent of the capture source. The transport contract is ready for future AV/C, JVC JLIP, and other RS-232 protocols. It distinguishes command acceptance from observed device state. Recording to the computer and recording to tape are separate operations.
 
@@ -61,6 +63,19 @@ dotnet publish src/CaptureDeck.Probe -c Release -r $rid --self-contained
 ```
 
 On Windows ARM64, CaptureDeck can open settings and check existing MOV files. DeckLink capture is currently available on Windows x64 with a compatible Blackmagic Desktop Video installation. Device support for future backends is validated separately.
+
+## Windows RF USB probe
+
+```powershell
+dotnet build src/CaptureDeck.Probe -c Release
+$probe = '.\src\CaptureDeck.Probe\bin\Release\net11.0-windows\win-x64\CaptureDeck.Probe.exe'
+& $probe rf list
+& $probe rf probe '<instance-id from rf list>' --json
+```
+
+The probe targets Domesday Duplicator firmware through 3.2 using the legacy USB ID `1D50:603B` or the protocol-v1 runtime ID `1209:2347`. It identifies the protocol using the device descriptor and verifies the register map and application image for protocol-v1. A USB protocol version does not identify the physical board revision. Use the Windows WinUSB driver for the selected device. The probe reports the active driver and opens only the selected runtime instance.
+
+Probing reads USB descriptors, the stream endpoint, and protocol-v1 firmware identity. It does not start collection, write device registers, rebind drivers, or enter bootloader mode. Device capture and preview are outside this probe. See the [Domesday Duplicator Windows setup guide](https://domesday86.github.io/DomesdayDuplicator/capture-gui/install-msi/) for driver binding.
 
 ## Windows x64 FireWire / i.LINK probe
 

@@ -3,8 +3,10 @@
     <TargetFramework>net11.0-windows</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="../CaptureDeck.Core/CaptureDeck.Core.csproj" />
+    <InternalsVisibleTo Include="CaptureDeck.UT" />
   </ItemGroup>
 </Project>

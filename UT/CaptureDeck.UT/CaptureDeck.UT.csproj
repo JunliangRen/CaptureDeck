@@ -16,6 +16,7 @@
     <ProjectReference Include="../../src/Capture/CaptureDeck.Core/CaptureDeck.Core.csproj" />
     <ProjectReference Include="../../src/Capture/CaptureDeck.DeckLink/CaptureDeck.DeckLink.csproj" />
     <ProjectReference Include="../../src/Capture/CaptureDeck.FireWire/CaptureDeck.FireWire.csproj" />
+    <ProjectReference Include="../../src/Capture/CaptureDeck.RF/CaptureDeck.RF.csproj" />
     <ProjectReference Include="../../src/CaptureDeck.DeviceControl/CaptureDeck.DeviceControl.csproj" />
     <Compile Include="../../src/CaptureDeck.App/CaptureSettings.cs" Link="CaptureSettings.cs" />
   </ItemGroup>

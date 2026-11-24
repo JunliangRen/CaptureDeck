@@ -13,6 +13,9 @@ internal static class Program
     [MTAThread]
     private static int Main(string[] args)
     {
+        if (args.Length > 0 && args[0] == "rf")
+            return RfCommand.Run(args[1..]);
+
         if (args.Length > 0 && args[0] == "firewire")
             return FireWireCommand.Run(args[1..]);
 
@@ -84,6 +87,7 @@ internal static class Program
         Console.WriteLine("CaptureDeck.Probe capture <device-index> <seconds:1-3600> [mode-fourcc]");
         Console.WriteLine("CaptureDeck.Probe qc <mov-path>");
         Console.WriteLine("CaptureDeck.Probe firewire --help");
+        Console.WriteLine("CaptureDeck.Probe rf --help");
         Console.WriteLine("Capture uses the current Desktop Video input routing. Omit the mode for auto detection.");
         Console.WriteLine("Quote mode codes with spaces, for example \"pal \".");
     }

@@ -1,9 +1,12 @@
 using System.Runtime.InteropServices;
 using System.Runtime.InteropServices.Marshalling;
-using CaptureDeck.FireWire;
+using CaptureDeck.DirectShow.Windows.FireWire.MsTape;
+using CaptureDeck.DirectShow.Windows.Interop;
 using CaptureDeck.QualityControl;
+using CaptureDeck.Recording.TransportStream;
 using Xunit;
-using static CaptureDeck.FireWire.DirectShow;
+using static CaptureDeck.DirectShow.Windows.FireWire.MsTape.MsTapeMediaTypes;
+using static CaptureDeck.DirectShow.Windows.Interop.DirectShowInterop;
 
 namespace CaptureDeck.UT;
 
@@ -147,7 +150,7 @@ public sealed unsafe class FireWireTests
 }
 
 [GeneratedComClass]
-internal sealed unsafe partial class TestTsSource(DirectShowSink typeSource) : IFireWireFilter, IFireWirePin, IDisposable
+internal sealed unsafe partial class TestTsSource(DirectShowSink typeSource) : IDirectShowFilter, IDirectShowPin, IDisposable
 {
     private int state;
     private nint graph;
@@ -163,7 +166,7 @@ internal sealed unsafe partial class TestTsSource(DirectShowSink typeSource) : I
     public int GetState(uint timeout, int* result) { *result = state; return Ok; }
     public int SetSyncSource(nint clock) => Ok;
     public int GetSyncSource(nint* clock) { *clock = 0; return Ok; }
-    public int EnumPins(nint* pins) { *pins = Export(new TestPinEnumerator(this), DirectShow.EnumPins); return Ok; }
+    public int EnumPins(nint* pins) { *pins = Export(new TestPinEnumerator(this), DirectShowInterop.EnumPins); return Ok; }
     public int FindPin(char* id, nint* pin)
     {
         *pin = id != null && new string(id) == "Output" ? Export(this, Pin) : 0;
@@ -277,13 +280,13 @@ internal sealed unsafe partial class TestTsSource(DirectShowSink typeSource) : I
 }
 
 [GeneratedComClass]
-internal sealed unsafe partial class TestPinEnumerator(TestTsSource source) : SingleComItem, IFireWireEnumPins
+internal sealed unsafe partial class TestPinEnumerator(TestTsSource source) : SingleComItem, IDirectShowEnumPins
 {
     protected override nint CreateItem() => Export(source, Pin);
     public int Next(uint count, nint* pins, uint* fetched) => NextItem(count, pins, fetched);
     public int Clone(nint* result)
     {
-        *result = Export(new TestPinEnumerator(source) { consumed = consumed }, DirectShow.EnumPins);
+        *result = Export(new TestPinEnumerator(source) { consumed = consumed }, DirectShowInterop.EnumPins);
         return Ok;
     }
 }

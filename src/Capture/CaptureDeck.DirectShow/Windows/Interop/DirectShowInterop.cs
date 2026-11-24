@@ -1,23 +1,18 @@
 using System.Runtime.InteropServices;
 using System.Runtime.InteropServices.Marshalling;
-using CaptureDeck.QualityControl;
 
-namespace CaptureDeck.FireWire;
+namespace CaptureDeck.DirectShow.Windows.Interop;
 
-internal static unsafe partial class DirectShow
+internal static unsafe partial class DirectShowInterop
 {
-    internal static readonly Guid BaseFilter = typeof(IFireWireFilter).GUID;
-    internal static readonly Guid Pin = typeof(IFireWirePin).GUID;
-    internal static readonly Guid MemInputPin = typeof(IFireWireMemInputPin).GUID;
-    internal static readonly Guid EnumPins = typeof(IFireWireEnumPins).GUID;
-    internal static readonly Guid EnumMediaTypes = typeof(IFireWireEnumMediaTypes).GUID;
-    internal static readonly Guid MiscFlags = typeof(IFireWireFilterFlags).GUID;
+    internal static readonly Guid BaseFilter = typeof(IDirectShowFilter).GUID;
+    internal static readonly Guid Pin = typeof(IDirectShowPin).GUID;
+    internal static readonly Guid MemInputPin = typeof(IDirectShowMemInputPin).GUID;
+    internal static readonly Guid EnumPins = typeof(IDirectShowEnumPins).GUID;
+    internal static readonly Guid EnumMediaTypes = typeof(IDirectShowEnumMediaTypes).GUID;
+    internal static readonly Guid MiscFlags = typeof(IDirectShowFilterFlags).GUID;
     internal static readonly Guid MemoryAllocator = new("1E651CC0-B199-11D0-8212-00C04FC32C45");
     internal static readonly Guid MemAllocator = new("56A8689C-0AD4-11CE-B03A-0020AF0BA770");
-    internal static readonly Guid StreamType = new("E436EB83-524F-11CE-9F53-0020AF0BA770");
-    internal static readonly Guid Mpeg2Transport = new("E06D8023-DB46-11CF-B4D1-00805F6CBBEA");
-    internal static readonly Guid Mpeg2TransportStride = new("138AA9A4-1EE2-4C5B-988E-19ABFDBC8A11");
-
     internal const int Ok = 0;
     internal const int False = 1;
     internal const int Pointer = unchecked((int)0x80004003);
@@ -53,12 +48,12 @@ internal static unsafe partial class DirectShow
     }
 
     internal static ComReference Own(nint pointer, string operation) =>
-        pointer != 0 ? new ComReference(pointer) : throw new FireWireException(3, $"{operation} returned a null pointer.");
+        pointer != 0 ? new ComReference(pointer) : throw new DirectShowException($"{operation} returned a null pointer.");
 
     internal static void Check(int status, string operation)
     {
         if (status < 0)
-            throw new FireWireException(3, $"{operation} failed (0x{status:X8}).");
+            throw new DirectShowException($"{operation} failed (0x{status:X8}).");
     }
 
     internal static nint Method(nint instance, int index) => (*(nint**)instance)[index];
@@ -114,11 +109,6 @@ internal sealed class ComReference(nint value) : IDisposable
     }
 }
 
-public sealed class FireWireException(int exitCode, string message) : Exception(message)
-{
-    public int ExitCode { get; } = exitCode;
-}
-
 [StructLayout(LayoutKind.Sequential)]
 internal unsafe struct DirectShowMediaType
 {
@@ -131,26 +121,6 @@ internal unsafe struct DirectShowMediaType
     public nint Unknown;
     public uint FormatSize;
     public byte* Format;
-
-    public readonly TsLayout? GetLayout()
-    {
-        if (Major != DirectShow.StreamType)
-            return null;
-        if (Subtype == DirectShow.Mpeg2Transport)
-            return FormatSize == 0 ? TsLayout.Ts188 : null;
-        if (Subtype != DirectShow.Mpeg2TransportStride)
-            return null;
-        if (FormatSize == 0)
-            return TsLayout.Ts188;
-        if (Format == null || FormatSize < 12)
-            return null;
-        var fields = new ReadOnlySpan<byte>(Format, 12);
-        var offset = System.Buffers.Binary.BinaryPrimitives.ReadUInt32LittleEndian(fields);
-        var packet = System.Buffers.Binary.BinaryPrimitives.ReadUInt32LittleEndian(fields[4..]);
-        var stride = System.Buffers.Binary.BinaryPrimitives.ReadUInt32LittleEndian(fields[8..]);
-        return packet == 188 && stride is 188 or 192 && offset <= stride - 188
-            ? new TsLayout((int)offset, (int)stride) : null;
-    }
 
     public readonly bool Matches(in DirectShowMediaType other) =>
         Major == other.Major && Subtype == other.Subtype && FormatType == other.FormatType &&
@@ -207,13 +177,13 @@ internal unsafe struct DirectShowPinInfo
 }
 
 [GeneratedComInterface, Guid("0000010C-0000-0000-C000-000000000046")]
-internal unsafe partial interface IFireWirePersist
+internal unsafe partial interface IDirectShowPersist
 {
     [PreserveSig] int GetClassID(Guid* classId);
 }
 
 [GeneratedComInterface, Guid("56A86899-0AD4-11CE-B03A-0020AF0BA770")]
-internal unsafe partial interface IFireWireMediaFilter : IFireWirePersist
+internal unsafe partial interface IDirectShowMediaFilter : IDirectShowPersist
 {
     [PreserveSig] int Stop();
     [PreserveSig] int Pause();
@@ -224,7 +194,7 @@ internal unsafe partial interface IFireWireMediaFilter : IFireWirePersist
 }
 
 [GeneratedComInterface, Guid("56A86895-0AD4-11CE-B03A-0020AF0BA770")]
-internal unsafe partial interface IFireWireFilter : IFireWireMediaFilter
+internal unsafe partial interface IDirectShowFilter : IDirectShowMediaFilter
 {
     [PreserveSig] int EnumPins(nint* pins);
     [PreserveSig] int FindPin(char* id, nint* pin);
@@ -234,7 +204,7 @@ internal unsafe partial interface IFireWireFilter : IFireWireMediaFilter
 }
 
 [GeneratedComInterface, Guid("56A86891-0AD4-11CE-B03A-0020AF0BA770")]
-internal unsafe partial interface IFireWirePin
+internal unsafe partial interface IDirectShowPin
 {
     [PreserveSig] int Connect(nint pin, DirectShowMediaType* type);
     [PreserveSig] int ReceiveConnection(nint pin, DirectShowMediaType* type);
@@ -254,7 +224,7 @@ internal unsafe partial interface IFireWirePin
 }
 
 [GeneratedComInterface, Guid("56A8689D-0AD4-11CE-B03A-0020AF0BA770")]
-internal unsafe partial interface IFireWireMemInputPin
+internal unsafe partial interface IDirectShowMemInputPin
 {
     [PreserveSig] int GetAllocator(nint* allocator);
     [PreserveSig] int NotifyAllocator(nint allocator, int readOnly);
@@ -265,13 +235,13 @@ internal unsafe partial interface IFireWireMemInputPin
 }
 
 [GeneratedComInterface, Guid("2DD74950-A890-11D1-ABE8-00A0C905F375")]
-internal partial interface IFireWireFilterFlags
+internal partial interface IDirectShowFilterFlags
 {
     [PreserveSig] uint GetMiscFlags();
 }
 
 [GeneratedComInterface, Guid("56A86892-0AD4-11CE-B03A-0020AF0BA770")]
-internal unsafe partial interface IFireWireEnumPins
+internal unsafe partial interface IDirectShowEnumPins
 {
     [PreserveSig] int Next(uint count, nint* output, uint* fetched);
     [PreserveSig] int Skip(uint count);
@@ -280,10 +250,12 @@ internal unsafe partial interface IFireWireEnumPins
 }
 
 [GeneratedComInterface, Guid("89C31040-846B-11CE-97D3-00AA0055595A")]
-internal unsafe partial interface IFireWireEnumMediaTypes
+internal unsafe partial interface IDirectShowEnumMediaTypes
 {
     [PreserveSig] int Next(uint count, nint* output, uint* fetched);
     [PreserveSig] int Skip(uint count);
     [PreserveSig] int Reset();
     [PreserveSig] int Clone(nint* result);
 }
+
+internal sealed class DirectShowException(string message) : Exception(message);

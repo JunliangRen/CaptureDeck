@@ -1,9 +1,17 @@
 using System.Runtime.InteropServices;
 using System.Text.Json;
+using CaptureDeck.DirectShow.Windows.Interop;
 using CaptureDeck.QualityControl;
-using static CaptureDeck.FireWire.DirectShow;
+using CaptureDeck.Recording.TransportStream;
+using CaptureDeck.Recording.Windows;
+using static CaptureDeck.DirectShow.Windows.Interop.DirectShowInterop;
 
-namespace CaptureDeck.FireWire;
+namespace CaptureDeck.DirectShow.Windows.FireWire.MsTape;
+
+public sealed class FireWireException(int exitCode, string message) : Exception(message)
+{
+    public int ExitCode { get; } = exitCode;
+}
 
 public sealed record FireWireRequest(string DeviceId, string OutputPath, TimeSpan Duration, TimeSpan NoDataTimeout);
 
@@ -56,19 +64,23 @@ public static unsafe class FireWireCapture
     public static IReadOnlyList<FireWireDevice> List()
     {
         CheckPlatform();
-        using var apartment = new ComApartment();
-        using var devices = MsTapeDevices.Scan();
-        return devices.Descriptions;
+        try
+        {
+            using var apartment = new ComApartment();
+            using var devices = MsTapeDevices.Scan();
+            return devices.Descriptions;
+        }
+        catch (DirectShowException ex) { throw new FireWireException(3, ex.Message); }
     }
 
     public static IReadOnlyList<TsLayout> GetFormats(string deviceId)
     {
         CheckPlatform();
-        using var apartment = new ComApartment();
-        using var devices = MsTapeDevices.Scan();
-        using var source = devices.Bind(deviceId);
         try
         {
+            using var apartment = new ComApartment();
+            using var devices = MsTapeDevices.Scan();
+            using var source = devices.Bind(deviceId);
             using var output = MsTapeDevices.SelectOutput(source.Value);
             return [output.Layout];
         }
@@ -76,6 +88,7 @@ public static unsafe class FireWireCapture
         {
             return [];
         }
+        catch (DirectShowException ex) { throw new FireWireException(3, ex.Message); }
     }
 
     internal static void CheckPlatform()
@@ -137,6 +150,7 @@ public static unsafe class FireWireCapture
             }
         }
         catch (FireWireException ex) { error = (ex.ExitCode, ex.Message); }
+        catch (DirectShowException ex) { error = (3, ex.Message); }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { error = (5, ex.Message); }
         catch (Exception ex) { error = (6, ex.Message); }
 
@@ -237,18 +251,6 @@ public static unsafe class FireWireCapture
         }
         return "error";
     }
-}
-
-internal sealed partial class ComApartment : IDisposable
-{
-    [LibraryImport("ole32.dll")]
-    private static partial int CoInitializeEx(nint reserved, uint mode);
-
-    [LibraryImport("ole32.dll")]
-    private static partial void CoUninitialize();
-
-    public ComApartment() => Check(CoInitializeEx(0, 0), "Initialize multithreaded COM apartment");
-    public void Dispose() => CoUninitialize();
 }
 
 internal sealed unsafe class FireWireGraph : IDisposable

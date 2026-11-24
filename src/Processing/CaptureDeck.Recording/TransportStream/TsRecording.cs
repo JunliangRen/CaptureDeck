@@ -1,10 +1,10 @@
 using System.Buffers;
 using System.Diagnostics;
 using System.Threading.Channels;
-
 using CaptureDeck.QualityControl;
+using CaptureDeck.Recording.Windows;
 
-namespace CaptureDeck.FireWire;
+namespace CaptureDeck.Recording.TransportStream;
 
 internal sealed class TsRecording : IDisposable
 {
@@ -197,19 +197,4 @@ internal sealed class TsRecording : IDisposable
     }
 
     public void Dispose() => Close();
-}
-
-internal static partial class WindowsFile
-{
-    [System.Runtime.InteropServices.LibraryImport("kernel32.dll", EntryPoint = "MoveFileExW",
-        StringMarshalling = System.Runtime.InteropServices.StringMarshalling.Utf16, SetLastError = true)]
-    private static partial int MoveFileEx(string source, string destination, uint flags);
-
-    public static void MoveWriteThrough(string source, string destination)
-    {
-        const uint WriteThrough = 8;
-        if (MoveFileEx(source, destination, WriteThrough) == 0)
-            throw new IOException($"Could not finalize {destination}.",
-                new System.ComponentModel.Win32Exception(System.Runtime.InteropServices.Marshal.GetLastPInvokeError()));
-    }
 }

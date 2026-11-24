@@ -20,10 +20,11 @@ CaptureDeck/
 |   |-- Capture/
 |   |   |-- CaptureDeck.Core         # Shared capture contracts and backend registry
 |   |   |-- CaptureDeck.DeckLink     # Blackmagic DeckLink capture, preview, and MOV recording
-|   |   |-- CaptureDeck.DirectShow   # Reserved for Windows capture filters
-|   |   |-- CaptureDeck.FireWire     # MSTape / DirectShow MPEG-TS capture and analysis
+|   |   |-- CaptureDeck.DirectShow   # Windows DirectShow capture and shared interop
 |   |   |-- CaptureDeck.SignalCapture # Sampled-signal capture devices and diagnostics
 |   |   `-- CaptureDeck.Audio        # Reserved for standalone audio capture
+|   |-- Processing/
+|   |   `-- CaptureDeck.Recording    # Shared transport-stream recording
 |   |-- CaptureDeck.App              # Native WinUI desktop app
 |   |-- CaptureDeck.Uno              # Uno Desktop offline QC prototype
 |   |-- CaptureDeck.Probe            # Command-line device probe and QC
@@ -34,14 +35,20 @@ CaptureDeck/
     `-- CaptureDeck.QualityControl.UT # Cross-platform TS analysis tests
 ```
 
-Within the capture projects, SignalCapture keeps device-specific rules in `Devices/Domesday/` and `Devices/Sdr/RtlSdr/` and Windows USB transport in `Windows/`. FireWire uses `Windows/MsTape/` for DirectShow capture and `Recording/` for packet writing. DeckLink groups SDK bindings, capture, monitoring, and recording into `Interop/`, `Capture/`, `Monitoring/`, and `Recording/`.
+Within the capture projects, SignalCapture keeps device-specific rules in `Devices/Domesday/` and `Devices/Sdr/RtlSdr/` and Windows USB transport in `Windows/`. DeckLink groups SDK bindings, capture, monitoring, and recording into `Interop/`, `Capture/`, `Monitoring/`, and `Recording/`.
+
+FireWire / i.LINK and general DirectShow devices are separate capture sources. The Windows MSTape implementation lives under `CaptureDeck.DirectShow/Windows/FireWire/MsTape/`. Reusable COM bindings and DirectShow media-type structures live in `CaptureDeck.DirectShow/Windows/Interop/`. General DirectShow device capture can use those bindings when it is added.
+
+Capture backends discover devices, negotiate formats, and receive samples. Downstream processing is organized by media format so multiple backends can use the same writer or analyzer. MSTape negotiates its supported packet layout and passes the original bytes to `Processing/CaptureDeck.Recording/TransportStream/`. The writer handles buffering, byte-preserving output, and file finalization. It has no dependency on DirectShow or MSTape. `CaptureDeck.QualityControl` provides the TS parser for both recording-time validation and offline file checks. Tape transport controls belong to `CaptureDeck.DeviceControl`.
+
+The shared recording project currently contains the Windows TS writer. Future sources that deliver TS can use it with their own packet layout. DV handling, shared frame and PCM processing, and CVBS/RF preview decoding can be added as separate paths when their sources are connected.
 
 **Available today.** DeckLink is the registered desktop capture backend. The desktop app uses DeckLink for live monitoring and MOV recording. The command-line probe also captures FireWire MPEG-TS on Windows x64. The probe enumerates devices and checks input, and both entry points can run post-recording QC. Existing flat settings load as a DeckLink profile and move to the nested format on the next save.
 
 **Possible future integrations.**
 
 - **Other capture-card SDKs** can register alongside DeckLink using their own stable backend IDs. Each backend handles its own device discovery, format negotiation, and capture options.
-- **DirectShow** can support Windows capture devices that expose compatible filters.
+- **General DirectShow capture** can support Windows cameras, video capture cards, and audio inputs that expose compatible filters.
 - **FireWire** can probe MSTape MPEG-TS sources from the command line. Native DV and a decoded preview remain future integrations.
 - **Signal capture** can enumerate and probe Domesday Duplicator devices via WinUSB and inspect or configure RTL-SDR receivers via librtlsdr on Windows. MISRC support, raw sample recording, and live monitoring are future integrations.
 - **Audio** is reserved for standalone audio inputs such as ASIO and WASAPI.

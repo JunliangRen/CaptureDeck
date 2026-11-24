@@ -11,6 +11,8 @@
     <Project Path="src/Capture/CaptureDeck.DirectShow/CaptureDeck.DirectShow.csproj" />
     <Project Path="src/Capture/CaptureDeck.SignalCapture/CaptureDeck.SignalCapture.csproj" />
     <Project Path="src/Capture/CaptureDeck.Audio/CaptureDeck.Audio.csproj" />
-    <Project Path="src/Capture/CaptureDeck.FireWire/CaptureDeck.FireWire.csproj" />
+  </Folder>
+  <Folder Name="/Processing/">
+    <Project Path="src/Processing/CaptureDeck.Recording/CaptureDeck.Recording.csproj" />
   </Folder>
 </Solution>

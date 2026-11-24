@@ -1,6 +1,6 @@
 using System.Globalization;
 using System.Text.Json;
-using CaptureDeck.FireWire;
+using CaptureDeck.DirectShow.Windows.FireWire.MsTape;
 using CaptureDeck.QualityControl;
 
 namespace CaptureDeck.Probe;

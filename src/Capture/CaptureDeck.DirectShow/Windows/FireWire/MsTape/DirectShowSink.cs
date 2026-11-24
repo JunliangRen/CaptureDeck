@@ -1,12 +1,14 @@
 using System.Runtime.InteropServices;
 using System.Runtime.InteropServices.Marshalling;
-using static CaptureDeck.FireWire.DirectShow;
+using CaptureDeck.DirectShow.Windows.Interop;
+using CaptureDeck.Recording.TransportStream;
+using static CaptureDeck.DirectShow.Windows.Interop.DirectShowInterop;
 
-namespace CaptureDeck.FireWire;
+namespace CaptureDeck.DirectShow.Windows.FireWire.MsTape;
 
 [GeneratedComClass]
 internal sealed unsafe partial class DirectShowSink :
-    IFireWireFilter, IFireWirePin, IFireWireMemInputPin, IFireWireFilterFlags, IDisposable
+    IDirectShowFilter, IDirectShowPin, IDirectShowMemInputPin, IDirectShowFilterFlags, IDisposable
 {
     private static readonly Guid ClassId = new("4A4FC139-7958-4EB7-B49A-660E2D93228A");
     private readonly TsRecording recording;
@@ -93,7 +95,7 @@ internal sealed unsafe partial class DirectShowSink :
     public int EnumPins(nint* pins)
     {
         if (pins == null) return Pointer;
-        *pins = Export(new SinkPinEnumerator(this), DirectShow.EnumPins);
+        *pins = Export(new SinkPinEnumerator(this), DirectShowInterop.EnumPins);
         return Ok;
     }
 
@@ -224,7 +226,7 @@ internal sealed unsafe partial class DirectShowSink :
     public int EnumMediaTypes(nint* types)
     {
         if (types == null) return Pointer;
-        *types = Export(new SinkTypeEnumerator(this), DirectShow.EnumMediaTypes);
+        *types = Export(new SinkTypeEnumerator(this), DirectShowInterop.EnumMediaTypes);
         return Ok;
     }
 
@@ -462,7 +464,7 @@ internal abstract unsafe class SingleComItem
 }
 
 [GeneratedComClass]
-internal sealed unsafe partial class SinkPinEnumerator(DirectShowSink sink) : SingleComItem, IFireWireEnumPins
+internal sealed unsafe partial class SinkPinEnumerator(DirectShowSink sink) : SingleComItem, IDirectShowEnumPins
 {
     protected override nint CreateItem() => Export(sink, Pin);
     public int Next(uint count, nint* pins, uint* fetched) => NextItem(count, pins, fetched);
@@ -470,13 +472,13 @@ internal sealed unsafe partial class SinkPinEnumerator(DirectShowSink sink) : Si
     public int Clone(nint* result)
     {
         if (result == null) return Pointer;
-        *result = Export(new SinkPinEnumerator(sink) { consumed = consumed }, DirectShow.EnumPins);
+        *result = Export(new SinkPinEnumerator(sink) { consumed = consumed }, DirectShowInterop.EnumPins);
         return Ok;
     }
 }
 
 [GeneratedComClass]
-internal sealed unsafe partial class SinkTypeEnumerator(DirectShowSink sink) : SingleComItem, IFireWireEnumMediaTypes
+internal sealed unsafe partial class SinkTypeEnumerator(DirectShowSink sink) : SingleComItem, IDirectShowEnumMediaTypes
 {
     protected override nint CreateItem() => sink.CopyExpectedType();
     public int Next(uint count, nint* types, uint* fetched) => NextItem(count, types, fetched);
@@ -484,7 +486,7 @@ internal sealed unsafe partial class SinkTypeEnumerator(DirectShowSink sink) : S
     public int Clone(nint* result)
     {
         if (result == null) return Pointer;
-        *result = Export(new SinkTypeEnumerator(sink) { consumed = consumed }, DirectShow.EnumMediaTypes);
+        *result = Export(new SinkTypeEnumerator(sink) { consumed = consumed }, DirectShowInterop.EnumMediaTypes);
         return Ok;
     }
 }

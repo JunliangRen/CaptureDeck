@@ -1,8 +1,9 @@
 using System.Runtime.InteropServices;
 using CaptureDeck.QualityControl;
-using static CaptureDeck.FireWire.DirectShow;
+using CaptureDeck.DirectShow.Windows.Interop;
+using static CaptureDeck.DirectShow.Windows.Interop.DirectShowInterop;
 
-namespace CaptureDeck.FireWire;
+namespace CaptureDeck.DirectShow.Windows.FireWire.MsTape;
 
 public sealed record FireWireDevice(string Id, string Name, string Vendor, string Model, string DevicePath);
 
@@ -183,7 +184,7 @@ internal sealed unsafe partial class MsTapeDevices : IDisposable
                 while (ReadNext(types.Value, isMediaType: true) is var pointer && pointer != 0)
                 {
                     var type = (DirectShowMediaType*)pointer;
-                    if (type->GetLayout() == TsLayout.Ts192 && (capture ? 0 : 1) < bestScore)
+                    if (MsTapeMediaTypes.GetLayout(in *type) == TsLayout.Ts192 && (capture ? 0 : 1) < bestScore)
                     {
                         best.Set(pin, type);
                         bestScore = capture ? 0 : 1;

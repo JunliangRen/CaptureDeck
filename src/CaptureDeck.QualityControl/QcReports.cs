@@ -402,7 +402,12 @@ public static class QcReports
     {
         var filename = OperatingSystem.IsWindows() ? $"{name}.exe" : name;
         var path = Environment.GetEnvironmentVariable("PATH") ?? "";
-        foreach (var entry in path.Split(Path.PathSeparator).Prepend(AppContext.BaseDirectory))
+        var folders = path.Split(Path.PathSeparator).Prepend(AppContext.BaseDirectory);
+        // Finder-launched apps do not inherit the interactive shell's Homebrew PATH.
+        if (OperatingSystem.IsMacOS())
+            folders = folders.Append("/opt/homebrew/bin").Append("/usr/local/bin");
+
+        foreach (var entry in folders)
         {
             var folder = entry.Trim().Trim('"');
             if (!Path.IsPathFullyQualified(folder))

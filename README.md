@@ -70,6 +70,18 @@ The native WinUI preview converts either format to BGRA. A latest-frame buffer k
 
 The monitoring tabs show a luma waveform, chroma vectorscope, stereo frequency spectrum, and recent signal and timestamp events. The spectrum extends to half the SDK input sample rate and uses the level of one PCM count relative to full scale as its display floor. Left and right meters report interval peaks in dBFS, cumulative full-scale clip counts, and phase correlation. The 32-bit clip indicator also catches the full-scale endpoint of 24-bit signals carried in a left-aligned 32-bit word. Missing video frames are estimated from SDK timestamp gaps relative to the selected mode. No-input frames and preview skips are counted separately from those gaps.
 
+## Uno Desktop QC prototype
+
+The standalone project in `src/CaptureDeck.Uno/` uses Uno Skia Desktop and the shared QC engine. Build or run it on Windows without changing the native WinUI 3 app or solution.
+
+```powershell
+dotnet run --project src/CaptureDeck.Uno/CaptureDeck.Uno.csproj -c Release
+```
+
+Select **Open MOV…** and choose an uncompressed CaptureDeck recording. The prototype saves the QC log, FrameMD5 and QCTools report beside the MOV. Use **View QC log** to read the result in the app or **Open report folder** to see the generated files. Install FFmpeg with `cropdetect`. The app checks its own directory and PATH, plus the standard Homebrew binary directories on macOS.
+
+The **Uno macOS prototype** GitHub Actions workflow builds the Apple Silicon `.app` and uploads it as **CaptureDeck-QC-macos-arm64**. The prototype uses the system file picker and supports local offline QC. The CI bundle is for testing and has no Developer ID signature or notarization.
+
 ## Post-recording QC
 
 After saving the MOV, CaptureDeck runs QC in the background. Put `ffmpeg.exe` and `ffprobe.exe` from a recent FFmpeg build with the `cropdetect` filter on PATH or beside the executable. These tools read the saved file. Recording continues to use the DeckLink SDK directly.

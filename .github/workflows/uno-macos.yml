@@ -1,0 +1,49 @@
+name: Uno macOS prototype
+
+on:
+  push:
+    branches: [main, prototype/uno-desktop]
+    paths:
+      - 'src/CaptureDeck.Uno/**'
+      - 'src/CaptureDeck.QualityControl/**'
+      - 'global.json'
+      - '.github/workflows/uno-macos.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: macos-15
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-dotnet@v6
+        with:
+          global-json-file: global.json
+          architecture: arm64
+      - name: Publish Apple Silicon app bundle
+        run: dotnet publish src/CaptureDeck.Uno/CaptureDeck.Uno.csproj -c Release -f net11.0-desktop -r osx-arm64 -p:PackageFormat=app
+      - name: Verify and archive app bundle
+        run: |
+          shopt -s nullglob
+          apps=(src/CaptureDeck.Uno/bin/Release/net11.0-desktop/osx-arm64/publish/*.app)
+          if [[ ${#apps[@]} -ne 1 ]]; then
+            echo "Expected one macOS app bundle"
+            exit 1
+          fi
+          app="${apps[0]}"
+          plist="$app/Contents/Info.plist"
+          plutil -lint "$plist"
+          executable=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$plist")
+          lipo -verify_arch arm64 "$app/Contents/MacOS/$executable"
+          mkdir -p bin/uno-macos
+          ditto -c -k --keepParent "$app" bin/uno-macos/CaptureDeck-QC-macos-arm64.zip
+      - uses: actions/upload-artifact@v6
+        with:
+          name: CaptureDeck-QC-macos-arm64
+          path: bin/uno-macos/CaptureDeck-QC-macos-arm64.zip
+          if-no-files-found: error

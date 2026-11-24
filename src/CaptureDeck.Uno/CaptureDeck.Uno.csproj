@@ -1,0 +1,16 @@
+<Project Sdk="Uno.Sdk/7.0.22">
+  <PropertyGroup>
+    <TargetFramework>net11.0-desktop</TargetFramework>
+    <OutputType>Exe</OutputType>
+    <UnoSingleProject>true</UnoSingleProject>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <ApplicationTitle>CaptureDeck QC</ApplicationTitle>
+    <ApplicationId>org.capturedeck.qc</ApplicationId>
+    <ApplicationDisplayVersion>0.1.0</ApplicationDisplayVersion>
+    <ApplicationVersion>1</ApplicationVersion>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../CaptureDeck.QualityControl/CaptureDeck.QualityControl.csproj" />
+  </ItemGroup>
+</Project>

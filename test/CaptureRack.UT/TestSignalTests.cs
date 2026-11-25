@@ -36,8 +36,11 @@ public sealed class TestSignalTests
             Assert.True(session.Snapshot().AudioPeak > 0);
             Assert.True(session.Snapshot().CanStartRecording);
             var started = recorder.Start(path);
+            var frameInterval = TimeSpan.FromSeconds((double)TestSignal.Mode.FrameDuration / TestSignal.Mode.TimeScale);
             for (var i = 1; i <= 80; i++)
             {
+                // Match realtime delivery so this content test does not depend on burst disk throughput.
+                await Task.Delay(frameInterval);
                 session.Emit(i);
                 if (i != 45)
                     continue;

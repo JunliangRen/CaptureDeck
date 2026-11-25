@@ -430,10 +430,10 @@
     <value>技術詳細資料請查看錄製記錄。</value>
   </data>
   <data name="QcWarnNoInput" xml:space="preserve">
-    <value>DeckLink 將 {0:N0} 個錄製影格標記為無輸入。</value>
+    <value>DeckLink 將 {0:N0} 格標示為無輸入訊號。</value>
   </data>
   <data name="QcWarnMissing" xml:space="preserve">
-    <value>擷取偵測到相當於遺失 {0:N0} 個視訊影格的間隔。</value>
+    <value>視訊時間戳記顯示疑似遺失 {0:N0} 格。</value>
   </data>
   <data name="QcWarnTimestamp" xml:space="preserve">
     <value>擷取偵測到 {0:N0} 次音訊或視訊時間戳記回退。</value>
@@ -478,10 +478,10 @@
     <value>{0} · {1} × {2} {3} · 已顯示 {4:N0} 個影格</value>
   </data>
   <data name="EventTimestampRegression" xml:space="preserve">
-    <value>視訊時間戳記重複或回退。</value>
+    <value>視訊時間戳記不連續。</value>
   </data>
   <data name="EventFrameGap" xml:space="preserve">
-    <value>視訊時間戳記有間隔 · 遺失 {0:N0} 個影格。</value>
+    <value>視訊時間戳記有缺口 · 疑似遺失 {0:N0} 格。</value>
   </data>
   <data name="EventNoInputAtStart" xml:space="preserve">
     <value>擷取開始時沒有輸入訊號。</value>
@@ -643,7 +643,7 @@
     <value>無輸入</value>
   </data>
   <data name="MetricMissing" xml:space="preserve">
-    <value>遺失</value>
+    <value>疑似掉格</value>
   </data>
   <data name="MetricSkipped" xml:space="preserve">
     <value>跳格</value>
@@ -869,5 +869,23 @@
   </data>
   <data name="MatrixBt709" xml:space="preserve">
     <value>BT.709</value>
+  </data>
+  <data name="QcWarnVideoTiming" xml:space="preserve">
+    <value>已修正 {0:N0} 個視訊時間戳記間隔，裝置回報 {1:N0} 個無效畫格時長。</value>
+  </data>
+  <data name="QcWarnAudioTiming" xml:space="preserve">
+    <value>音訊封包有 {0:N0} 次時間戳記不連續，最大累計偏差為 {1:N0} 個樣本。PCM 已按接收順序儲存，請檢查影音同步。</value>
+  </data>
+  <data name="QcWarnCaptureEnded" xml:space="preserve">
+    <value>擷取提前結束，已儲存可寫入的片段。{0}</value>
+  </data>
+  <data name="QcWarnNoAudio" xml:space="preserve">
+    <value>未收到音訊樣本。</value>
+  </data>
+  <data name="QcWarnNoVideo" xml:space="preserve">
+    <value>未收到視訊畫格。</value>
+  </data>
+  <data name="QcWarnUnreadableNoInput" xml:space="preserve">
+    <value>{0:N0} 個無訊號畫格缺少可寫入的視訊資料。</value>
   </data>
 </root>

@@ -1,3 +1,5 @@
+using System.Runtime.ExceptionServices;
+
 namespace CaptureRack.DeckLink;
 
 // Each instance belongs to one preview. Each clip uses the mode of its attached callback.
@@ -6,6 +8,8 @@ public sealed class PreviewRecorder
     private readonly object gate = new();
     private CaptureCallback? callback;
     private MovRecording? recording;
+    private CaptureStats? savedOnDisconnect;
+    private ExceptionDispatchInfo? finishError;
 
     internal void Connect(CaptureCallback input)
     {
@@ -17,11 +21,18 @@ public sealed class PreviewRecorder
     {
         lock (gate)
         {
-            if (recording is { } active)
+            if (recording is not null)
             {
-                callback!.DetachRecording();
-                recording = null;
-                active.Dispose();
+                try
+                {
+                    var saved = FinishAttachedRecording();
+                    saved.Error ??= "The capture stream disconnected before recording was stopped.";
+                    savedOnDisconnect = saved;
+                }
+                catch (Exception ex) when (ex is IOException or InvalidOperationException or UnauthorizedAccessException or OverflowException)
+                {
+                    finishError = ExceptionDispatchInfo.Capture(ex);
+                }
             }
             callback = null;
         }
@@ -32,7 +43,7 @@ public sealed class PreviewRecorder
         lock (gate)
         {
             var input = callback ?? throw new InvalidOperationException("Wait for the preview input to be ready before recording.");
-            if (recording is not null)
+            if (recording is not null || savedOnDisconnect is not null || finishError is not null)
                 throw new InvalidOperationException("A recording is already running.");
 
             recording = input.AttachRecording(path);
@@ -44,13 +55,26 @@ public sealed class PreviewRecorder
     {
         lock (gate)
         {
-            using var active = recording ?? throw new InvalidOperationException("The recording is no longer active.");
-            var stats = callback!.DetachRecording();
-            recording = null;
-            if (stats.Error is { } error)
-                throw new IOException(error);
-            stats.Recording = active.Finish();
-            return stats;
+            if (savedOnDisconnect is { } saved)
+            {
+                savedOnDisconnect = null;
+                return saved;
+            }
+            if (finishError is { } failure)
+            {
+                finishError = null;
+                failure.Throw();
+            }
+            return FinishAttachedRecording();
         }
+    }
+
+    private CaptureStats FinishAttachedRecording()
+    {
+        using var active = recording ?? throw new InvalidOperationException("The recording is no longer active.");
+        recording = null;
+        var stats = callback!.DetachRecording();
+        stats.Recording = active.Finish();
+        return stats;
     }
 }

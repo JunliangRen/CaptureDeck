@@ -99,6 +99,7 @@ internal sealed class CaptureCallback(PreviewFeed? preview, CapturePixelFormat p
             {
                 VideoFrames = stats.VideoFrames - baseline.VideoFrames,
                 NoInputFrames = stats.NoInputFrames - baseline.NoInputFrames,
+                UnreadableNoInputFrames = stats.UnreadableNoInputFrames - baseline.UnreadableNoInputFrames,
                 AudioPackets = stats.AudioPackets - baseline.AudioPackets,
                 MissingVideoFrames = recordingTimeline!.MissingFrames,
                 TimestampRegressions = recordingRegressions,
@@ -247,10 +248,11 @@ internal sealed class CaptureCallback(PreviewFeed? preview, CapturePixelFormat p
                     var payload = ReadVideoPayload(video, true, describe: stats.NoInputVideoPayload is null);
                     stats.NoInputVideoPayload ??= payload;
                 }
-                catch (Exception ex) when (recording is null &&
+                catch (Exception ex) when ((recording is null || !hasRecordableFrame) &&
                     ex is COMException or InvalidCastException or InvalidOperationException)
                 {
                     // Some devices report loss of input without delivering a readable frame.
+                    stats.UnreadableNoInputFrames++;
                     stats.NoInputVideoPayload ??= $"unavailable ({ex.Message})";
                 }
             }
@@ -294,11 +296,13 @@ internal sealed class CaptureCallback(PreviewFeed? preview, CapturePixelFormat p
             var width = video.GetWidth();
             hasRecordableFrame = width == mode.Width && height == mode.Height &&
                 rowBytes >= MovRecording.StoredRowBytes(mode.Width, pixelFormat);
+            if (noInput && recording is not null && !hasRecordableFrame)
+                throw new InvalidOperationException("No-input frame has no writable buffer for this mode.");
             if (recording is not null)
             {
                 DeckLinkCapture.Check(video.GetStreamTime(out var time, out var duration, recording.VideoTimeScale),
                     "Get recording video stream time");
-                recording.SubmitVideo(bytes, width, height, rowBytes, time, duration);
+                recording.SubmitVideo(bytes, width, height, rowBytes, time, duration, stats.Signal);
                 recordingTimeline?.Observe(time, noInput);
                 ObserveRecordingTimestamp(ref recordingVideoTime, time);
             }
@@ -337,7 +341,7 @@ internal sealed class CaptureCallback(PreviewFeed? preview, CapturePixelFormat p
 
         if (recording is not null)
         {
-            recording.SubmitAudio(bytes, sampleFrames, time, inputAudioFormat);
+            recording.SubmitAudio(bytes, sampleFrames, time, inputAudioFormat, stats.Signal);
             ObserveRecordingTimestamp(ref recordingAudioTime, time);
         }
         var sampleCount = checked(sampleFrames * (int)CaptureAudio.Channels);
@@ -383,6 +387,7 @@ public sealed class CaptureStats
     public bool RecordingModeChanged { get; internal set; }
     public long VideoFrames { get; internal set; }
     public long NoInputFrames { get; internal set; }
+    public long UnreadableNoInputFrames { get; internal set; }
     public long AudioPackets { get; internal set; }
     public long AudioSampleFrames { get; internal set; }
     public long AudioPeak { get; internal set; }

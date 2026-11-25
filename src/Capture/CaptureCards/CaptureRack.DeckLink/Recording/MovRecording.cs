@@ -1,11 +1,15 @@
 using System.Buffers;
 using System.Collections.Concurrent;
 using System.Runtime.InteropServices;
+using CaptureRack.Core;
 
 namespace CaptureRack.DeckLink;
 
 public sealed record RecordingResult(string Path, int VideoFrames, long AudioSampleFrames,
-    VideoMode Mode, CapturePixelFormat VideoFormat, CaptureAudioFormat AudioFormat);
+    VideoMode Mode, CapturePixelFormat VideoFormat, CaptureAudioFormat AudioFormat)
+{
+    public RecordingTiming? Timing { get; init; }
+}
 
 internal sealed class MovRecording : IDisposable
 {
@@ -17,7 +21,7 @@ internal sealed class MovRecording : IDisposable
     private readonly CaptureAudioFormat audioFormat;
     private readonly BlockingCollection<Packet> packets = new(16);
     private readonly Task<RecordingResult> writer;
-    private bool finished;
+    private bool finalized;
 
     public long VideoTimeScale => mode.TimeScale;
 
@@ -55,7 +59,7 @@ internal sealed class MovRecording : IDisposable
         ? checked(((width + 47) / 48) * 128)
         : checked(width * 2);
 
-    public void SubmitVideo(IntPtr bytes, int width, int height, int stride, long time, long duration)
+    public void SubmitVideo(IntPtr bytes, int width, int height, int stride, long time, long duration, VideoSignal signal = VideoSignal.Unknown)
     {
         if (width != mode.Width || height != mode.Height || stride < rowBytes)
             throw new InvalidOperationException("The captured frame geometry changed during recording.");
@@ -70,7 +74,7 @@ internal sealed class MovRecording : IDisposable
                 for (var row = 0; row < height; row++)
                     Marshal.Copy(IntPtr.Add(bytes, row * stride), data, row * rowBytes, rowBytes);
 
-            Enqueue(new Packet(data, length, time, duration, 0));
+            Enqueue(new Packet(data, length, time, duration, 0, signal));
         }
         catch
         {
@@ -79,7 +83,8 @@ internal sealed class MovRecording : IDisposable
         }
     }
 
-    public unsafe void SubmitAudio(IntPtr bytes, int sampleFrames, long time, CaptureAudioFormat inputFormat)
+    public unsafe void SubmitAudio(IntPtr bytes, int sampleFrames, long time, CaptureAudioFormat inputFormat,
+        VideoSignal signal = VideoSignal.Unknown)
     {
         var length = checked(sampleFrames * audioFrameBytes);
         var data = ArrayPool<byte>.Shared.Rent(length);
@@ -101,7 +106,7 @@ internal sealed class MovRecording : IDisposable
             {
                 throw new InvalidOperationException("Unsupported PCM input and output format combination.");
             }
-            Enqueue(new Packet(data, length, time, 0, sampleFrames));
+            Enqueue(new Packet(data, length, time, 0, sampleFrames, signal));
         }
         catch
         {
@@ -127,8 +132,16 @@ internal sealed class MovRecording : IDisposable
     {
         packets.CompleteAdding();
         var result = writer.GetAwaiter().GetResult();
-        File.Move(stagingPath, path);
-        finished = true;
+        finalized = true;
+        try
+        {
+            File.Move(stagingPath, path);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            throw new IOException($"The MOV was finalized and is still available at '{stagingPath}'. " +
+                $"Publishing to '{path}' failed: {ex.Message}", ex);
+        }
         return result;
     }
 
@@ -142,9 +155,9 @@ internal sealed class MovRecording : IDisposable
                 try
                 {
                     if (packet.AudioSamples == 0)
-                        movie.WriteVideo(packet.Bytes.AsSpan(0, packet.Length), packet.Time, packet.Duration);
+                        movie.WriteVideo(packet.Bytes.AsSpan(0, packet.Length), packet.Time, packet.Duration, packet.Signal);
                     else
-                        movie.WriteAudio(packet.Bytes.AsSpan(0, packet.Length), packet.Time, packet.AudioSamples);
+                        movie.WriteAudio(packet.Bytes.AsSpan(0, packet.Length), packet.Time, packet.AudioSamples, packet.Signal);
                 }
                 finally
                 {
@@ -154,13 +167,16 @@ internal sealed class MovRecording : IDisposable
 
             movie.Finish();
             stream.Flush(flushToDisk: true);
-            return new RecordingResult(path, movie.VideoFrames, movie.AudioSamples, mode, format, audioFormat);
+            return new RecordingResult(path, movie.VideoFrames, movie.AudioSamples, mode, format, audioFormat)
+            {
+                Timing = movie.Timing
+            };
         }
     }
 
     public void Dispose()
     {
-        if (!finished)
+        if (!finalized)
         {
             packets.CompleteAdding();
             try
@@ -179,5 +195,6 @@ internal sealed class MovRecording : IDisposable
         packets.Dispose();
     }
 
-    private sealed record Packet(byte[] Bytes, int Length, long Time, long Duration, int AudioSamples);
+    private sealed record Packet(byte[] Bytes, int Length, long Time, long Duration, int AudioSamples,
+        VideoSignal Signal);
 }

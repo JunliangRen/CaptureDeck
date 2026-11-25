@@ -151,6 +151,94 @@ public sealed class CaptureBackendTests
         Assert.True(callback.Snapshot(false).CanStartRecording);
     }
 
+    [Fact]
+    public void PublishesVideoAlreadyQueuedWhenPreviewDisconnects()
+    {
+        var folder = Directory.CreateTempSubdirectory("capturerack-disconnect-");
+        var path = Path.Combine(folder.FullName, "interrupted.mov");
+        var callback = CreatePreviewCallback(automaticMode: false);
+        var recorder = new PreviewRecorder();
+        recorder.Connect(callback);
+        using var frame = new VideoFrame(Ntsc, noInput: false);
+        try
+        {
+            recorder.Start(path);
+            callback.CountVideo(frame);
+            recorder.Disconnect();
+            Assert.True(File.Exists(path));
+            var result = recorder.Finish();
+            Assert.Equal(1, result.Recording!.VideoFrames);
+            Assert.Equal(0, result.Recording.AudioSampleFrames);
+            Assert.Contains("disconnected", result.Error);
+            Assert.Throws<InvalidOperationException>(() => recorder.Finish());
+        }
+        finally
+        {
+            recorder.Disconnect();
+            File.Delete(path);
+            folder.Delete();
+        }
+    }
+
+    [Fact]
+    public void KeepsFinalizedRecordingIfAnExistingOutputPreventsPublishing()
+    {
+        var folder = Directory.CreateTempSubdirectory("capturerack-publish-collision-");
+        var path = Path.Combine(folder.FullName, "recording.mov");
+        var callback = CreatePreviewCallback(automaticMode: false);
+        var recorder = new PreviewRecorder();
+        recorder.Connect(callback);
+        using var frame = new VideoFrame(Ntsc, noInput: false);
+        try
+        {
+            recorder.Start(path);
+            callback.CountVideo(frame);
+            File.WriteAllText(path, "existing");
+            var error = Assert.Throws<IOException>(() => recorder.Finish());
+            var saved = Assert.Single(Directory.GetFiles(folder.FullName, "*.partial"));
+            Assert.Contains(saved, error.Message);
+            Assert.Equal("existing", File.ReadAllText(path));
+            Assert.True(File.ReadAllBytes(saved).AsSpan().IndexOf("moov"u8) > 0);
+        }
+        finally
+        {
+            recorder.Disconnect();
+            folder.Delete(recursive: true);
+        }
+    }
+
+    [Fact]
+    public void UnreadableNoSignalFrameDoesNotPreventWritingLaterFrames()
+    {
+        var folder = Directory.CreateTempSubdirectory("capturerack-unreadable-");
+        var path = Path.Combine(folder.FullName, "recover.mov");
+        var callback = CreatePreviewCallback(automaticMode: false);
+        var recorder = new PreviewRecorder();
+        recorder.Connect(callback);
+        using var frame = new VideoFrame(Ntsc, noInput: true);
+        using var audio = new AudioPacket();
+        try
+        {
+            recorder.Start(path);
+            frame.Readable = false;
+            callback.CountVideo(frame);
+            callback.CountAudio(audio);
+            frame.Readable = true;
+            callback.CountVideo(frame);
+            var stats = recorder.Finish();
+            Assert.Equal(2, stats.NoInputFrames);
+            Assert.Equal(1, stats.UnreadableNoInputFrames);
+            Assert.Equal(1, stats.Recording!.VideoFrames);
+            Assert.Equal(1602, stats.Recording.AudioSampleFrames);
+            Assert.Null(stats.Error);
+        }
+        finally
+        {
+            recorder.Disconnect();
+            folder.Delete(recursive: true);
+        }
+    }
+
     private static CaptureCallback CreatePreviewCallback(bool automaticMode) =>
         new(new PreviewFeed(), CapturePixelFormat.V210, CaptureAudioFormat.Pcm16, Ntsc, null, automaticMode);
 

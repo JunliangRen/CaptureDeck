@@ -27,28 +27,28 @@ internal sealed class FrameTimeline(VideoMode mode)
     private readonly Queue<CaptureEvent> events = new();
     private IReadOnlyList<CaptureEvent>? snapshot;
     private long? firstTime;
-    private long? previousTime;
+    private readonly FrameTimestampTracker timestamps = new(mode.FrameDuration);
     private bool? previousNoInput;
     public long MissingFrames { get; private set; }
 
     public void Observe(long time, bool noInput)
     {
         firstTime ??= time;
-        var elapsed = TimeSpan.FromSeconds(Math.Max(0, (double)(time - firstTime.Value) / mode.TimeScale));
+        var elapsedTicks = ((decimal)time - firstTime.Value) * TimeSpan.TicksPerSecond / mode.TimeScale;
+        var elapsed = TimeSpan.FromTicks((long)Math.Clamp(elapsedTicks, 0, TimeSpan.MaxValue.Ticks));
 
-        if (previousTime is long previous)
+        if (timestamps.Observe(time) is { } interval)
         {
-            var delta = time - previous;
-            if (delta <= 0)
-                Add(elapsed, CaptureEventKind.TimestampRegression, "Video timestamp repeated or moved backwards.");
-            else if (delta >= mode.FrameDuration * 1.5)
+            if (interval.Corrected)
+                Add(elapsed, CaptureEventKind.TimestampRegression, "Video timestamp discontinuity.");
+            if (interval.SuspectedMissingFrames > 0)
             {
-                var missing = (long)Math.Round((double)delta / mode.FrameDuration, MidpointRounding.AwayFromZero) - 1;
-                MissingFrames += missing;
-                Add(elapsed, CaptureEventKind.FrameGap, $"Video timestamp gap · {missing:N0} missing frame(s).", missing);
+                MissingFrames += interval.SuspectedMissingFrames;
+                Add(elapsed, CaptureEventKind.FrameGap,
+                    $"Video timestamp gap · {interval.SuspectedMissingFrames:N0} suspected missing frame(s).",
+                    interval.SuspectedMissingFrames);
             }
         }
-        previousTime = time;
 
         if (previousNoInput != noInput)
         {

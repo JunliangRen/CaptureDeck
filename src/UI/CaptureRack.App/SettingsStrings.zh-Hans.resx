@@ -430,10 +430,10 @@
     <value>技术详情请查看录制日志。</value>
   </data>
   <data name="QcWarnNoInput" xml:space="preserve">
-    <value>DeckLink 将 {0:N0} 个录制帧标记为无输入。</value>
+    <value>DeckLink 将 {0:N0} 帧标为无输入信号。</value>
   </data>
   <data name="QcWarnMissing" xml:space="preserve">
-    <value>采集检测到相当于丢失 {0:N0} 个视频帧的间隔。</value>
+    <value>视频时间戳显示疑似丢失 {0:N0} 帧。</value>
   </data>
   <data name="QcWarnTimestamp" xml:space="preserve">
     <value>采集检测到 {0:N0} 次音频或视频时间戳回退。</value>
@@ -478,10 +478,10 @@
     <value>{0} · {1} × {2} {3} · 已显示 {4:N0} 帧</value>
   </data>
   <data name="EventTimestampRegression" xml:space="preserve">
-    <value>视频时间戳重复或回退。</value>
+    <value>视频时间戳不连续。</value>
   </data>
   <data name="EventFrameGap" xml:space="preserve">
-    <value>视频时间戳有间隔 · 丢失 {0:N0} 帧。</value>
+    <value>视频时间戳有缺口 · 疑似丢失 {0:N0} 帧。</value>
   </data>
   <data name="EventNoInputAtStart" xml:space="preserve">
     <value>采集开始时没有输入信号。</value>
@@ -643,7 +643,7 @@
     <value>无输入</value>
   </data>
   <data name="MetricMissing" xml:space="preserve">
-    <value>丢帧</value>
+    <value>疑似丢帧</value>
   </data>
   <data name="MetricSkipped" xml:space="preserve">
     <value>跳帧</value>
@@ -869,5 +869,23 @@
   </data>
   <data name="MatrixBt709" xml:space="preserve">
     <value>BT.709</value>
+  </data>
+  <data name="QcWarnVideoTiming" xml:space="preserve">
+    <value>视频时间戳已修正 {0:N0} 个间隔，设备报告 {1:N0} 个无效帧时长。</value>
+  </data>
+  <data name="QcWarnAudioTiming" xml:space="preserve">
+    <value>音频包时间戳有 {0:N0} 次不连续，最大累计偏差 {1:N0} 个样本。PCM 已按接收顺序保存，请检查音画同步。</value>
+  </data>
+  <data name="QcWarnCaptureEnded" xml:space="preserve">
+    <value>采集提前结束，已保存可写入的片段。{0}</value>
+  </data>
+  <data name="QcWarnNoAudio" xml:space="preserve">
+    <value>未收到音频样本。</value>
+  </data>
+  <data name="QcWarnNoVideo" xml:space="preserve">
+    <value>未收到视频帧。</value>
+  </data>
+  <data name="QcWarnUnreadableNoInput" xml:space="preserve">
+    <value>{0:N0} 个无信号帧缺少可写入的视频数据。</value>
   </data>
 </root>

@@ -1,5 +1,6 @@
 using System.Buffers.Binary;
 using System.Text;
+using CaptureRack.Core;
 
 namespace CaptureRack.DeckLink;
 
@@ -20,18 +21,30 @@ internal sealed class QuickTimeMovie
     private readonly List<long> audioOffsets = [];
     private readonly List<ChunkRun> audioChunks = [];
     private long firstVideoTime;
-    private long lastVideoTime;
-    private long lastVideoDuration;
+    private readonly FrameTimestampTracker videoTiming;
+    private readonly AudioTimestampTracker audioTiming = new();
+    private long videoDuration;
+    private uint lastVideoDuration;
+    private long suspectedMissingVideoFrames;
+    private long videoCorrections;
+    private long videoInvalidDurations;
+    private RecordingTimestampIssue? firstVideoCorrection;
     private long firstAudioTime;
 
     public int VideoFrames => videoOffsets.Count;
     public long AudioSamples { get; private set; }
+    public RecordingTiming Timing => new(suspectedMissingVideoFrames, videoCorrections, videoInvalidDurations, audioTiming.Discontinuities,
+        audioTiming.Resets, audioTiming.ApparentGapSamples, audioTiming.ApparentOverlapSamples,
+        audioTiming.MaximumOffsetSamples, firstVideoCorrection, audioTiming.FirstIssue);
 
     public QuickTimeMovie(Stream stream, VideoMode mode, CapturePixelFormat format, int videoSampleSize,
         CaptureAudioFormat audioFormat)
     {
         this.stream = stream;
+        if (mode.FrameDuration is <= 0 or > uint.MaxValue)
+            throw new ArgumentOutOfRangeException(nameof(mode), "The video mode requires a valid MOV sample duration.");
         this.mode = mode;
+        videoTiming = new FrameTimestampTracker(mode.FrameDuration);
         this.format = format;
         this.videoSampleSize = videoSampleSize;
         this.audioFormat = audioFormat;
@@ -49,27 +62,37 @@ internal sealed class QuickTimeMovie
         U64(0);
     }
 
-    public void WriteVideo(ReadOnlySpan<byte> data, long time, long duration)
+    public void WriteVideo(ReadOnlySpan<byte> data, long time, long duration, VideoSignal signal = VideoSignal.Unknown)
     {
-        if (data.Length != videoSampleSize || duration <= 0)
-            throw new InvalidOperationException("Invalid video sample size or duration.");
-        if (videoOffsets.Count == 0)
-            firstVideoTime = time;
-        else
+        if (data.Length != videoSampleSize)
+            throw new InvalidOperationException("Invalid video sample size.");
+
+        var interval = videoTiming.Observe(time);
+        var durationInvalid = duration is <= 0 or > uint.MaxValue;
+        if (durationInvalid)
+            videoInvalidDurations++;
+        if (interval is { } step)
         {
-            var delta = checked(time - lastVideoTime);
-            if (delta <= 0 || delta > uint.MaxValue)
-                throw new InvalidOperationException("The DeckLink video timestamps are not increasing.");
-            AddVideoDuration((uint)delta);
+            AddVideoDuration(step.Duration);
+            videoDuration += step.Duration;
+            suspectedMissingVideoFrames += step.SuspectedMissingFrames;
+        }
+        else
+            firstVideoTime = time;
+
+        if (interval is { Corrected: true } correction)
+        {
+            videoCorrections++;
+            firstVideoCorrection ??= new(videoOffsets.Count + 1L, correction.ExpectedTimestamp, time,
+                time - correction.ExpectedTimestamp, null, null, signal.ToString());
         }
 
         videoOffsets.Add(stream.Position);
         stream.Write(data);
-        lastVideoTime = time;
-        lastVideoDuration = duration;
+        lastVideoDuration = (uint)(durationInvalid ? mode.FrameDuration : duration);
     }
 
-    public void WriteAudio(ReadOnlySpan<byte> data, long time, int samples)
+    public void WriteAudio(ReadOnlySpan<byte> data, long time, int samples, VideoSignal signal = VideoSignal.Unknown)
     {
         if (samples <= 0 || data.Length != checked(samples * audioFrameBytes))
             throw new InvalidOperationException("Invalid stereo PCM sample size.");
@@ -77,8 +100,7 @@ internal sealed class QuickTimeMovie
             throw new InvalidOperationException("The MOV stereo PCM sample table reached its maximum duration.");
         if (audioOffsets.Count == 0)
             firstAudioTime = time;
-        else if (Math.Abs(checked(time - firstAudioTime - AudioSamples)) > 1)
-            throw new InvalidOperationException("The DeckLink audio timestamp has a gap or overlap.");
+        audioTiming.Observe(time, samples, signal);
 
         if (audioChunks.Count == 0 || audioChunks[^1].SamplesPerChunk != (uint)samples)
             audioChunks.Add(new((uint)audioOffsets.Count + 1, (uint)samples));
@@ -89,27 +111,30 @@ internal sealed class QuickTimeMovie
 
     public void Finish()
     {
-        if (VideoFrames == 0 || AudioSamples == 0)
-            throw new InvalidOperationException("No MOV was saved because the capture did not deliver both video and PCM.");
+        if (VideoFrames == 0 && AudioSamples == 0)
+            throw new InvalidOperationException("No MOV was saved because the capture did not deliver video or PCM.");
 
-        AddVideoDuration(checked((uint)lastVideoDuration));
+        if (VideoFrames > 0)
+            AddVideoDuration(lastVideoDuration);
         var end = stream.Position;
         stream.Position = mediaDataOffset + 8;
         U64(checked((ulong)(end - mediaDataOffset)));
         stream.Position = end;
 
-        var videoStart = (decimal)firstVideoTime / mode.TimeScale;
-        var audioStart = (decimal)firstAudioTime / AudioRate;
+        var videoStart = VideoFrames > 0 ? (decimal)firstVideoTime / mode.TimeScale : (decimal)firstAudioTime / AudioRate;
+        var audioStart = AudioSamples > 0 ? (decimal)firstAudioTime / AudioRate : videoStart;
         var origin = Math.Min(videoStart, audioStart);
-        var video = new TrackTiming(checked((uint)mode.TimeScale), checked(lastVideoTime - firstVideoTime + lastVideoDuration),
+        var video = new TrackTiming(checked((uint)mode.TimeScale), checked(videoDuration + lastVideoDuration),
             ToMovieTicks(videoStart - origin));
         var audio = new TrackTiming(AudioRate, AudioSamples, ToMovieTicks(audioStart - origin));
 
         Atom("moov", () =>
         {
             WriteMovieHeader(Math.Max(video.End, audio.End));
-            WriteTrack(true, video);
-            WriteTrack(false, audio);
+            if (VideoFrames > 0)
+                WriteTrack(true, video);
+            if (AudioSamples > 0)
+                WriteTrack(false, audio);
         });
     }
 

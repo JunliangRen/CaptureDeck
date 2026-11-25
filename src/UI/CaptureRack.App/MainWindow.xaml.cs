@@ -1033,7 +1033,7 @@ public sealed partial class MainWindow : Window
         }
     }
 
-    private async Task FinishRecordingAsync()
+    private async Task FinishRecordingAsync(string? captureError = null)
     {
         if (!recordingSession || recordingTransition || previewRecorder is not { } recorder ||
             DevicePicker.SelectedItem is not CaptureDevice device ||
@@ -1061,11 +1061,14 @@ public sealed partial class MainWindow : Window
                 saved.Mode.Width, saved.Mode.Height);
             var log = new QcCaptureLog(device.Name, $"Blackmagic DeckLink API {sdkVersion}", video.Name, audio.Name, saved.Mode.Description,
                 recordingStarted, stopped, expected, stats.VideoFrames, stats.NoInputFrames,
-                stats.MissingVideoFrames, stats.TimestampRegressions, stats.AudioPackets,
+                saved.Timing?.SuspectedMissingVideoFrames ?? stats.MissingVideoFrames, stats.TimestampRegressions, stats.AudioPackets,
                 stats.AudioLevels?.LeftClips, stats.AudioLevels?.RightClips,
                 stats.Events.Select(item => new QcEvent(item.Elapsed, item.Description)).ToArray())
             {
-                InputModeChanged = stats.RecordingModeChanged
+                InputModeChanged = stats.RecordingModeChanged,
+                Timing = saved.Timing,
+                CaptureError = captureError ?? stats.Error,
+                UnreadableNoInputFrames = stats.UnreadableNoInputFrames
             };
             if (!await RunQcAsync(saved.Path, log))
                 closeAfterQc = false;
@@ -1155,15 +1158,24 @@ public sealed partial class MainWindow : Window
             if (closing)
                 return;
             ShowCounts(stats);
-            if (stats.Error is { } error)
-                SetStatus(recordingSession ? "RecordingFailed" : "PreviewFailed", () => error, InfoBarSeverity.Error);
-            else if (!recordingTransition)
+            if (recordingTransition)
+                return;
+            if (recordingSession)
+                await FinishRecordingAsync();
+            else if (stats.Error is { } error)
+                SetStatus("PreviewFailed", () => error, InfoBarSeverity.Error);
+            else
                 SetStatus("PreviewStopped", "LastCounters");
         }
         catch (Exception ex) when (IsSessionError(ex))
         {
-            if (!closing)
-                SetStatus(recordingSession ? "RecordingFailed" : "PreviewFailed", () => ex.Message, InfoBarSeverity.Error);
+            if (!closing && !recordingTransition)
+            {
+                if (recordingSession)
+                    await FinishRecordingAsync(ex.Message);
+                else
+                    SetStatus("PreviewFailed", () => ex.Message, InfoBarSeverity.Error);
+            }
         }
         finally
         {

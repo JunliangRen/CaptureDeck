@@ -4,4 +4,8 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
   </PropertyGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="CaptureRack.QualityControl.UT" />
+    <ProjectReference Include="../../Capture/CaptureRack.Core/CaptureRack.Core.csproj" />
+  </ItemGroup>
 </Project>

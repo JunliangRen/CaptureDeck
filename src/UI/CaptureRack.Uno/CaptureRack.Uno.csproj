@@ -7,8 +7,8 @@
     <Nullable>enable</Nullable>
     <ApplicationTitle>CaptureRack QC</ApplicationTitle>
     <ApplicationId>org.capturerack.qc</ApplicationId>
-    <ApplicationDisplayVersion>0.1.0</ApplicationDisplayVersion>
-    <ApplicationVersion>1</ApplicationVersion>
+    <ApplicationDisplayVersion>0.1.1</ApplicationDisplayVersion>
+    <ApplicationVersion>2</ApplicationVersion>
   </PropertyGroup>
   <ItemGroup>
     <UnoIcon Include="Assets/qc_icon.png" />

@@ -430,10 +430,10 @@
     <value>See the recording log for technical details.</value>
   </data>
   <data name="QcWarnNoInput" xml:space="preserve">
-    <value>DeckLink marked {0:N0} recorded frames as no input.</value>
+    <value>DeckLink marked {0:N0} frames as no input.</value>
   </data>
   <data name="QcWarnMissing" xml:space="preserve">
-    <value>Capture detected gaps corresponding to {0:N0} missing video frames.</value>
+    <value>Video timestamps suggest {0:N0} missing frames.</value>
   </data>
   <data name="QcWarnTimestamp" xml:space="preserve">
     <value>Capture detected {0:N0} audio or video timestamp regressions.</value>
@@ -478,10 +478,10 @@
     <value>{0} · {1} × {2} {3} · {4:N0} displayed</value>
   </data>
   <data name="EventTimestampRegression" xml:space="preserve">
-    <value>Video timestamp repeated or moved backwards.</value>
+    <value>Video timestamp discontinuity.</value>
   </data>
   <data name="EventFrameGap" xml:space="preserve">
-    <value>Video timestamp gap · {0:N0} missing frame(s).</value>
+    <value>Video timestamp gap · {0:N0} suspected missing frame(s).</value>
   </data>
   <data name="EventNoInputAtStart" xml:space="preserve">
     <value>No input signal at start.</value>
@@ -643,7 +643,7 @@
     <value>No-input</value>
   </data>
   <data name="MetricMissing" xml:space="preserve">
-    <value>Missing</value>
+    <value>Suspected drops</value>
   </data>
   <data name="MetricSkipped" xml:space="preserve">
     <value>Skipped</value>
@@ -869,5 +869,23 @@
   </data>
   <data name="MatrixBt709" xml:space="preserve">
     <value>BT.709</value>
+  </data>
+  <data name="QcWarnVideoTiming" xml:space="preserve">
+    <value>Video timing: {0:N0} intervals corrected and {1:N0} invalid frame durations.</value>
+  </data>
+  <data name="QcWarnAudioTiming" xml:space="preserve">
+    <value>Audio timing: {0:N0} packet discontinuities, maximum cumulative offset {1:N0} samples. PCM was saved in arrival order. Check A/V sync.</value>
+  </data>
+  <data name="QcWarnCaptureEnded" xml:space="preserve">
+    <value>Capture ended early. The writable portion was saved. {0}</value>
+  </data>
+  <data name="QcWarnNoAudio" xml:space="preserve">
+    <value>No audio samples were captured.</value>
+  </data>
+  <data name="QcWarnNoVideo" xml:space="preserve">
+    <value>No video frames were captured.</value>
+  </data>
+  <data name="QcWarnUnreadableNoInput" xml:space="preserve">
+    <value>{0:N0} no-input frames had no writable video payload.</value>
   </data>
 </root>

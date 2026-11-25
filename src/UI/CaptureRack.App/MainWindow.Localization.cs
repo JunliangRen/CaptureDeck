@@ -205,7 +205,7 @@ public sealed partial class MainWindow
         SkippedFramesValue.Text = skipped.ToString("N0", settingsCulture);
 
         ApplyTelemetryChipTone(NoInputFramesChip, NoInputFramesValue, noInput > 0 ? "Caution" : null);
-        ApplyTelemetryChipTone(MissingFramesChip, MissingFramesValue, missing > 0 ? "Danger" : null);
+        ApplyTelemetryChipTone(MissingFramesChip, MissingFramesValue, missing > 0 ? "Caution" : null);
         ApplyTelemetryChipTone(SkippedFramesChip, SkippedFramesValue, skipped > 0 ? "Caution" : null);
 
         var summary = LocalFormat("CaptureCounts", valid, noInput, audio, missing, skipped);
@@ -252,15 +252,27 @@ public sealed partial class MainWindow
         QcSummary.Text = presentation.Summary();
         var capture = presentation.Capture;
         List<string> warnings = [];
+        if (capture?.Expected.VideoFrames == 0 || (capture is null && lastQcResult is { DecodedVideoFrames: 0 }))
+            warnings.Add(L("QcWarnNoVideo"));
+        if (capture?.Expected.AudioSampleFrames == 0 || (capture is null && lastQcResult is { DecodedAudioSampleFrames: 0 }))
+            warnings.Add(L("QcWarnNoAudio"));
+        if (capture?.CaptureError is { } captureError)
+            warnings.Add(LocalFormat("QcWarnCaptureEnded", captureError));
         if (capture is { InputModeChanged: true })
             warnings.Add(L("QcWarnInputModeChange"));
         if (lastQcResult is { } result)
         {
             if (capture is { NoInputFrames: > 0 })
                 warnings.Add(LocalFormat("QcWarnNoInput", capture.NoInputFrames));
+            if (capture is { UnreadableNoInputFrames: > 0 })
+                warnings.Add(LocalFormat("QcWarnUnreadableNoInput", capture.UnreadableNoInputFrames));
             if (capture is { MissingVideoFrames: > 0 })
                 warnings.Add(LocalFormat("QcWarnMissing", capture.MissingVideoFrames));
-            if (capture is { TimestampRegressions: > 0 })
+            if (capture?.Timing is { } videoTiming && videoTiming.VideoCorrections + videoTiming.VideoInvalidDurations > 0)
+                warnings.Add(LocalFormat("QcWarnVideoTiming", videoTiming.VideoCorrections, videoTiming.VideoInvalidDurations));
+            if (capture?.Timing is { FirstAudioIssue: not null } audioTiming)
+                warnings.Add(LocalFormat("QcWarnAudioTiming", audioTiming.AudioDiscontinuities, audioTiming.MaximumAudioOffsetSamples));
+            if (capture is { Timing: null, TimestampRegressions: > 0 })
                 warnings.Add(LocalFormat("QcWarnTimestamp", capture.TimestampRegressions));
             if (capture is { LeftClips: > 0 } or { RightClips: > 0 })
                 warnings.Add(L("QcWarnClipping"));

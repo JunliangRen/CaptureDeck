@@ -430,10 +430,10 @@
     <value>技術的な詳細は録画ログを参照してください。</value>
   </data>
   <data name="QcWarnNoInput" xml:space="preserve">
-    <value>録画した {0:N0} フレームを DeckLink が入力信号なしと判定しました。</value>
+    <value>DeckLink が {0:N0} フレームを入力なしと判定しました。</value>
   </data>
   <data name="QcWarnMissing" xml:space="preserve">
-    <value>欠落した映像 {0:N0} フレームに相当する間隔を検出しました。</value>
+    <value>映像タイムスタンプから {0:N0} フレームの欠落が疑われます。</value>
   </data>
   <data name="QcWarnTimestamp" xml:space="preserve">
     <value>音声または映像のタイムスタンプの逆行を {0:N0} 回検出しました。</value>
@@ -478,10 +478,10 @@
     <value>{0} · {1} × {2} {3} · {4:N0} フレーム表示済み</value>
   </data>
   <data name="EventTimestampRegression" xml:space="preserve">
-    <value>映像タイムスタンプが重複または逆行しました。</value>
+    <value>映像タイムスタンプが不連続です。</value>
   </data>
   <data name="EventFrameGap" xml:space="preserve">
-    <value>映像タイムスタンプに間隔 · {0:N0} フレーム欠落。</value>
+    <value>映像タイムスタンプに間隔があり、{0:N0} フレームの欠落が疑われます。</value>
   </data>
   <data name="EventNoInputAtStart" xml:space="preserve">
     <value>開始時に入力信号がありませんでした。</value>
@@ -643,7 +643,7 @@
     <value>無入力</value>
   </data>
   <data name="MetricMissing" xml:space="preserve">
-    <value>欠落</value>
+    <value>推定ドロップ</value>
   </data>
   <data name="MetricSkipped" xml:space="preserve">
     <value>スキップ</value>
@@ -869,5 +869,23 @@
   </data>
   <data name="MatrixBt709" xml:space="preserve">
     <value>BT.709</value>
+  </data>
+  <data name="QcWarnVideoTiming" xml:space="preserve">
+    <value>映像タイミングの {0:N0} 区間を補正し、{1:N0} 件の無効なフレーム継続時間を検出しました。</value>
+  </data>
+  <data name="QcWarnAudioTiming" xml:space="preserve">
+    <value>音声パケットの不連続が {0:N0} 件、最大累積差は {1:N0} サンプルです。PCM は受信順に保存しました。映像と音声の同期を確認してください。</value>
+  </data>
+  <data name="QcWarnCaptureEnded" xml:space="preserve">
+    <value>収録が途中で終了しました。書き込み可能な範囲を保存しました。{0}</value>
+  </data>
+  <data name="QcWarnNoAudio" xml:space="preserve">
+    <value>音声サンプルを受信できませんでした。</value>
+  </data>
+  <data name="QcWarnNoVideo" xml:space="preserve">
+    <value>映像フレームを受信できませんでした。</value>
+  </data>
+  <data name="QcWarnUnreadableNoInput" xml:space="preserve">
+    <value>{0:N0} 件の入力なしフレームに、書き込み可能な映像データがありませんでした。</value>
   </data>
 </root>

@@ -396,7 +396,7 @@ public static class DeckLinkCapture
         }
 
         var result = callback.Snapshot(publishMonitor: true);
-        if (recording is not null && result.Error is null)
+        if (recording is not null)
             result.Recording = recording.Finish();
         return result;
     }

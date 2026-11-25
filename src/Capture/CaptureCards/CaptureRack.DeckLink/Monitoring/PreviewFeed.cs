@@ -27,6 +27,7 @@ public sealed class PreviewFeed
     private long lastScopeUpdate;
     private int deinterlaceMode = (int)PreviewDeinterlaceMode.BobWeave;
     private int colorMatrix = (int)PreviewColorMatrix.Auto;
+    private int scopeWaveformMode = (int)VideoScopeWaveformMode.Luma;
 
     public long PresentedSequence { get; private set; }
     public long SkippedFrames => incoming.SkippedFrames + outgoing.SkippedFrames;
@@ -42,6 +43,12 @@ public sealed class PreviewFeed
     {
         get => (PreviewColorMatrix)Volatile.Read(ref colorMatrix);
         set => Volatile.Write(ref colorMatrix, (int)value);
+    }
+
+    public VideoScopeWaveformMode ScopeWaveformMode
+    {
+        get => (VideoScopeWaveformMode)Volatile.Read(ref scopeWaveformMode);
+        set => Volatile.Write(ref scopeWaveformMode, (int)value);
     }
 
     internal void Offer(IntPtr bytes, int width, int height, int stride, ulong size, bool noInput,
@@ -84,7 +91,7 @@ public sealed class PreviewFeed
         outgoing.Publish(ref converted);
         if (lastScopeUpdate == 0 || Stopwatch.GetElapsedTime(lastScopeUpdate) >= TimeSpan.FromMilliseconds(125))
         {
-            Volatile.Write(ref scopes, VideoScopes.Analyze(input, lumaScaleBits));
+            Volatile.Write(ref scopes, VideoScopes.Analyze(input, lumaScaleBits, ScopeWaveformMode, ColorMatrix));
             lastScopeUpdate = Stopwatch.GetTimestamp();
         }
     }

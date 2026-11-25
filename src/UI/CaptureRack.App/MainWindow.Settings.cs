@@ -8,7 +8,6 @@ using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Controls;
-using Microsoft.UI.Xaml.Input;
 using Windows.Storage;
 
 namespace CaptureRack.App;
@@ -26,6 +25,7 @@ public sealed partial class MainWindow
     private bool checkingStorage;
     private string? checkedFolder;
     private (ulong AvailableBytes, ulong TotalBytes)? diskSpace;
+    private string activeTheme = "System";
 
     private void InitializeSettings()
     {
@@ -58,10 +58,12 @@ public sealed partial class MainWindow
         if (closing)
             return;
 
+        activeModule = moduleRegistry.Resolve(settings.CaptureBackendId);
         var language = SettingsLanguage.Resolve(settings.LanguageOverride, CultureInfo.CurrentUICulture.Name);
         ApplyThemeSelection(settings.Theme);
         workspaceLayout = string.Equals(settings.WorkspaceLayout, "Focus", StringComparison.OrdinalIgnoreCase)
             ? WorkspaceLayoutMode.Focus : WorkspaceLayoutMode.Split;
+        splitPreviewRatio = Math.Clamp(settings.SplitPreviewRatio, 0.35, 0.82);
         inspectorPinned = settings.InspectorPinned;
         showSafeArea = settings.ShowSafeArea;
         showNtsc480Guide = settings.ShowNtsc480Guide;
@@ -71,18 +73,25 @@ public sealed partial class MainWindow
             ? aspect : PreviewAspectMode.Auto;
         previewColorMatrix = Enum.TryParse<PreviewColorMatrix>(settings.PreviewColorMatrix, out var matrix)
             ? matrix : PreviewColorMatrix.Auto;
+        scopeWaveformMode = string.Equals(settings.ScopeWaveformMode, "RgbParade", StringComparison.OrdinalIgnoreCase)
+            ? VideoScopeWaveformMode.RgbParade : VideoScopeWaveformMode.Luma;
+        scopeLumaScale = string.Equals(settings.ScopeLumaScale, "Ire", StringComparison.OrdinalIgnoreCase)
+            ? ScopeLumaScaleMode.Ire : ScopeLumaScaleMode.Code;
         audioMonitorEnabled = settings.AudioMonitorEnabled;
         audioMonitorVolume = Math.Clamp(settings.AudioMonitorVolume, 0.0, 1.0);
-        analogNtscIre = settings.DeckLink.AnalogNtscIre;
-        analogComponentLevel = settings.DeckLink.AnalogComponentLevel;
-        analogAudioLevel = settings.DeckLink.AnalogAudioLevel;
-        analogAudioGainOverride = settings.DeckLink.AnalogAudioGainOverride;
-        analogAudioGainLeftDb = Math.Clamp(settings.DeckLink.AnalogAudioGainLeftDb, -12, 12);
-        analogAudioGainRightDb = Math.Clamp(settings.DeckLink.AnalogAudioGainRightDb, -12, 12);
-        analogAudioGainLinked = settings.DeckLink.AnalogAudioGainLinked;
+        deckLinkInspector.RestoreAnalogSettings(
+            settings.DeckLink.AnalogNtscIre,
+            settings.DeckLink.AnalogComponentLevel,
+            settings.DeckLink.AnalogAudioLevel,
+            settings.DeckLink.AnalogAudioGainOverride,
+            settings.DeckLink.AnalogAudioGainLeftDb,
+            settings.DeckLink.AnalogAudioGainRightDb,
+            settings.DeckLink.AnalogAudioGainLinked);
+
         ApplySettingsLanguage(language, settings.DeckLink.VideoFormat, settings.DeckLink.AudioFormat);
-        SelectDefaultLayoutPicker();
         OutputPath.Text = settings.OutputFolder ?? "";
+        RecordingLabelBox.Text = settings.RecordingLabel ?? "";
+        UpdateRecordingFilenamePreview();
         if (loaded && settings.LanguageOverride != language)
             SaveSettings(settings with { LanguageOverride = language });
         settingsReady = true;
@@ -91,61 +100,37 @@ public sealed partial class MainWindow
 
     private void ApplyThemeSelection(string? theme)
     {
-        var normalized = theme is "Dark" or "Light" or "System" ? theme : "System";
-        RootShell.RequestedTheme = normalized switch
+        activeTheme = theme is "Dark" or "Light" or "System" ? theme : "System";
+        RootShell.RequestedTheme = activeTheme switch
         {
             "Light" => ElementTheme.Light,
             "Dark" => ElementTheme.Dark,
             _ => ElementTheme.Default
         };
-        ThemePicker.SelectedItem = ThemePicker.Items.OfType<ComboBoxItem>()
-            .FirstOrDefault(item => (string)item.Tag == normalized);
+        SyncSettingsPageSelections();
         UpdateTitleBarTheme();
     }
 
-    private void SelectDefaultLayoutPicker()
+    private void SyncSettingsPageSelections()
     {
-        var tag = workspaceLayout == WorkspaceLayoutMode.Focus ? "Focus" : "Split";
-        DefaultLayoutPicker.SelectedItem = DefaultLayoutPicker.Items.OfType<ComboBoxItem>()
-            .FirstOrDefault(item => (string)item.Tag == tag);
+        var layoutTag = workspaceLayout == WorkspaceLayoutMode.Focus ? "Focus" : "Split";
+        SettingsPage.SyncSelections(
+            activeTheme,
+            settingsCulture.Name,
+            layoutTag,
+            previewDeinterlace.ToString(),
+            previewAspectMode.ToString(),
+            previewColorMatrix.ToString());
     }
 
-    private void ThemePicker_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    private void OnThemeSelectionChanged(string theme)
     {
-        if (!settingsReady || loading || ThemePicker.SelectedItem is not ComboBoxItem { Tag: string theme })
+        if (!settingsReady || loading)
             return;
 
         ApplyThemeSelection(theme);
         RefreshDynamicThemeBrushes();
         SettingsChanged();
-    }
-
-    private void DefaultLayoutPicker_SelectionChanged(object sender, SelectionChangedEventArgs e)
-    {
-        if (!settingsReady || loading || DefaultLayoutPicker.SelectedItem is not ComboBoxItem { Tag: string tag })
-            return;
-
-        SetWorkspaceLayout(tag == "Focus" ? WorkspaceLayoutMode.Focus : WorkspaceLayoutMode.Split, saveIfDefaultable: true);
-    }
-
-    private void RestoreDeviceSelections(CaptureDevice[] devices)
-    {
-        var matches = devices.Where(device => settings.DeckLink.DeviceId is { } id
-            ? device.PersistentId == id : settings.DeckLink.DeviceName == device.Name).ToArray();
-        DevicePicker.SelectedItem = settings.DeckLink.DeviceId is null && settings.DeckLink.DeviceName is null
-            ? devices.FirstOrDefault()
-            : matches.Length == 1 ? matches[0] : null;
-
-        UpdateSelectedDevice();
-        if (DevicePicker.SelectedItem is null)
-            return;
-
-        VideoInputPicker.SelectedItem = VideoInputPicker.Items.OfType<VideoInputSource>()
-            .FirstOrDefault(source => source.Id == settings.DeckLink.VideoSource);
-        AudioInputPicker.SelectedItem = AudioInputPicker.Items.OfType<AudioInputSource>()
-            .FirstOrDefault(source => source.Id == settings.DeckLink.AudioSource);
-        if (settings.DeckLink.ModeSelected)
-            ModePicker.SelectedItem = ModePicker.Items.OfType<ModeOption>().FirstOrDefault(mode => mode.Id == settings.DeckLink.ModeId);
     }
 
     private void SettingsChanged()
@@ -169,12 +154,12 @@ public sealed partial class MainWindow
         settingsSaveTimer.Stop();
         settingsPending = false;
         var deckLink = settings.DeckLink;
-        if (DevicePicker.SelectedItem is CaptureDevice device)
+        if (deckLinkInspector.SelectedDevice is { } device)
         {
             var sameDevice = deckLink.DeviceId is { } id ? device.PersistentId == id : deckLink.DeviceName == device.Name;
-            var video = VideoInputPicker.SelectedItem as VideoInputSource;
-            var audio = AudioInputPicker.SelectedItem as AudioInputSource;
-            var mode = ModePicker.SelectedItem as ModeOption;
+            var video = deckLinkInspector.SelectedVideoSource;
+            var audio = deckLinkInspector.SelectedAudioSource;
+            var mode = deckLinkInspector.SelectedMode;
             var keepMode = sameDevice && (video is null || video.Id == deckLink.VideoSource) && deckLink.ModeSelected;
             deckLink = deckLink with
             {
@@ -189,31 +174,35 @@ public sealed partial class MainWindow
 
         deckLink = deckLink with
         {
-            VideoFormat = (uint)selectedVideoFormat,
-            AudioFormat = (uint)selectedAudioFormat,
-            AnalogNtscIre = analogNtscIre,
-            AnalogComponentLevel = analogComponentLevel,
-            AnalogAudioLevel = analogAudioLevel,
-            AnalogAudioGainOverride = analogAudioGainOverride,
-            AnalogAudioGainLeftDb = analogAudioGainLeftDb,
-            AnalogAudioGainRightDb = analogAudioGainRightDb,
-            AnalogAudioGainLinked = analogAudioGainLinked
+            VideoFormat = (uint)deckLinkInspector.SelectedVideoFormat,
+            AudioFormat = (uint)deckLinkInspector.SelectedAudioFormat,
+            AnalogNtscIre = deckLinkInspector.AnalogNtscIre,
+            AnalogComponentLevel = deckLinkInspector.AnalogComponentLevel,
+            AnalogAudioLevel = deckLinkInspector.AnalogAudioLevel,
+            AnalogAudioGainOverride = deckLinkInspector.AnalogAudioGainOverride,
+            AnalogAudioGainLeftDb = deckLinkInspector.AnalogAudioGainLeftDb,
+            AnalogAudioGainRightDb = deckLinkInspector.AnalogAudioGainRightDb,
+            AnalogAudioGainLinked = deckLinkInspector.AnalogAudioGainLinked
         };
-        var theme = ThemePicker.SelectedItem is ComboBoxItem { Tag: string selectedTheme } ? selectedTheme : settings.Theme;
         var savedLayout = workspaceLayout == WorkspaceLayoutMode.Focus ? "Focus" : "Split";
         SaveSettings(settings with
         {
+            CaptureBackendId = activeModule.Descriptor.BackendId,
             DeckLink = deckLink,
             OutputFolder = OutputPath.Text.Trim(),
+            RecordingLabel = RecordingLabelBox.Text.Trim(),
             LanguageOverride = settingsCulture.Name,
-            Theme = theme,
+            Theme = activeTheme,
             WorkspaceLayout = savedLayout,
+            SplitPreviewRatio = Math.Round(splitPreviewRatio, 3),
             InspectorPinned = inspectorPinned,
             ShowSafeArea = showSafeArea,
             ShowNtsc480Guide = showNtsc480Guide,
             PreviewDeinterlace = previewDeinterlace.ToString(),
             PreviewAspectRatio = previewAspectMode.ToString(),
             PreviewColorMatrix = previewColorMatrix.ToString(),
+            ScopeWaveformMode = scopeWaveformMode.ToString(),
+            ScopeLumaScale = scopeLumaScale.ToString(),
             AudioMonitorEnabled = audioMonitorEnabled,
             AudioMonitorVolume = audioMonitorVolume
         });
@@ -244,11 +233,6 @@ public sealed partial class MainWindow
             NavigateToPage(ActiveAppPage.Settings);
     }
 
-    private void BackToWorkspace_Click(object sender, RoutedEventArgs e) => TryBackFromSettings();
-
-    private void SettingsBack_Invoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args) =>
-        args.Handled = TryBackFromSettings();
-
     private bool TryBackFromSettings()
     {
         if (activePage != ActiveAppPage.Settings)
@@ -266,21 +250,17 @@ public sealed partial class MainWindow
             ? Visibility.Visible : Visibility.Collapsed;
     }
 
-    private void RefreshTools_Click(object sender, RoutedEventArgs e) => RefreshToolchainDiagnostics();
-
     private void RefreshToolchainDiagnostics()
     {
         var (ffmpeg, ffprobe) = QcReports.FindTools();
         var ready = ffmpeg is not null && ffprobe is not null;
-        ToolchainStatusText.Text = L(ready ? "ToolchainReady" : "ToolchainMissing");
-        ToolchainStatusText.Foreground = ThemeBrush(ready ? "StudioSignalLockBrush" : "StudioCautionBrush");
-        ToolchainStatusPill.Background = ThemeBrush(ready ? "StudioSignalLockSoftBrush" : "StudioCautionSoftBrush");
-        ToolchainCard.Description = ready
-            ? Path.GetDirectoryName(ffmpeg) ?? L("QcToolsDetail")
-            : L("QcToolsDetail");
+        SettingsPage.ShowToolchainStatus(
+            ready,
+            L(ready ? "ToolchainReady" : "ToolchainMissing"),
+            ready ? Path.GetDirectoryName(ffmpeg) ?? L("QcToolsDetail") : L("QcToolsDetail"));
     }
 
-    private async void OpenSettingsFolder_Click(object sender, RoutedEventArgs e)
+    private async Task OpenSettingsFolderAsync()
     {
         try
         {
@@ -299,141 +279,61 @@ public sealed partial class MainWindow
 
     private string LocalFormat(string key, params object[] args) => string.Format(settingsCulture, L(key), args);
 
-    private void ApplySettingsLanguage(string language, uint? videoFormat, uint? audioFormat)
+    private void ApplySettingsLanguage(string language, uint? videoFormat, uint? audioFormat, bool preserveActiveRouting = false)
     {
         settingsCulture = CultureInfo.GetCultureInfo(language);
-        LanguagePicker.SelectedItem = LanguagePicker.Items.OfType<ComboBoxItem>()
-            .First(item => (string)item.Tag == language);
-
-        SettingsHeading.Text = L("Settings");
         AutomationProperties.SetName(OpenSettingsButton, L("Settings"));
         ToolTipService.SetToolTip(OpenSettingsButton, L("Settings"));
-        AutomationProperties.SetName(BackButton, L("Back"));
-        ToolTipService.SetToolTip(BackButton, L("Back"));
 
         InputHeading.Text = L("Capture");
-        RoutingSectionHeading.Text = L("RoutingHeading");
-        FormatSectionHeading.Text = L("RecordingFormats");
         OutputHeading.Text = L("Output");
-        AppearanceHeading.Text = L("Appearance");
-        ToolchainHeading.Text = L("ToolchainHeading");
-        ShortcutsHeading.Text = L("ShortcutsHeading");
-        AboutHeading.Text = L("About");
-
-        DeviceLabel.Text = L("Device");
-        AutomationProperties.SetName(DevicePicker, L("Device"));
-        RefreshLabel.Text = L("Refresh");
-        VideoSourceLabel.Text = L("VideoSource");
-        AutomationProperties.SetName(VideoInputPicker, L("VideoSource"));
-        AudioSourceLabel.Text = L("AudioSource");
-        AutomationProperties.SetName(AudioInputPicker, L("AudioSource"));
-        ModeLabel.Text = L("Mode");
-        AutomationProperties.SetName(ModePicker, L("Mode"));
-        VideoFormatLabel.Text = L("VideoFormat");
-        AudioFormatLabel.Text = L("AudioFormat");
         OutputHelpText.Text = L("OutputHelp");
         AutomationProperties.SetName(OutputPath, L("Folder"));
         OutputPath.PlaceholderText = L("ChooseFolder");
+        RecordingLabelHeading.Text = L("RecordingLabelHeading");
+        RecordingLabelBox.PlaceholderText = L("RecordingLabelPlaceholder");
         BrowseLabel.Text = L("Browse");
-        RecordingModeHint.Text = L("AutoRecordingHint");
 
-        var selectedThemeTag = (ThemePicker.SelectedItem as ComboBoxItem)?.Tag as string ?? settings.Theme;
-        ThemeCard.Header = L("Theme");
-        ThemeCard.Description = L("ThemeDescription");
-        ThemeDarkItem.Content = L("ThemeDark");
-        ThemeSystemItem.Content = L("ThemeSystem");
-        ThemeLightItem.Content = L("ThemeLight");
-        // Force WinUI ComboBox ContentPresenter to refresh its cached selected text after mutating item Content.
-        ThemePicker.SelectedIndex = -1;
-        ThemePicker.SelectedItem = ThemePicker.Items.OfType<ComboBoxItem>()
-            .FirstOrDefault(item => (string)item.Tag == selectedThemeTag) ?? ThemeSystemItem;
+        deckLinkInspector.SetFormats(videoFormat, audioFormat);
+        deckLinkInspector.ApplyLanguage(L, settingsCulture, preserveActiveRouting);
+        UpdateRecordingFilenamePreview();
 
-        LanguageCard.Header = L("Language");
-        AutomationProperties.SetName(LanguagePicker, L("Language"));
+        if (!IsDeckLinkActive)
+        {
+            plannedStageView.Bind(activeModule.Descriptor, L);
+            plannedInspectorView.Bind(activeModule.Descriptor, L);
+        }
 
-        var selectedLayoutTag = (DefaultLayoutPicker.SelectedItem as ComboBoxItem)?.Tag as string
-            ?? (workspaceLayout == WorkspaceLayoutMode.Focus ? "Focus" : "Split");
-        DefaultLayoutCard.Header = L("DefaultLayout");
-        DefaultLayoutCard.Description = L("DefaultLayoutDescription");
-        DefaultLayoutSplitItem.Content = L("LayoutSplit");
-        DefaultLayoutFocusItem.Content = L("LayoutFocus");
-        DefaultLayoutPicker.SelectedIndex = -1;
-        DefaultLayoutPicker.SelectedItem = DefaultLayoutPicker.Items.OfType<ComboBoxItem>()
-            .FirstOrDefault(item => (string)item.Tag == selectedLayoutTag) ?? DefaultLayoutSplitItem;
-        ToolchainCard.Header = L("ToolchainCardHeader");
-        OpenSettingsFolderButton.Content = L("OpenSettingsFolder");
+        var layoutTag = workspaceLayout == WorkspaceLayoutMode.Focus ? "Focus" : "Split";
+        SettingsPage.ApplyLanguage(
+            L,
+            activeTheme,
+            language,
+            layoutTag,
+            previewDeinterlace.ToString(),
+            previewAspectMode.ToString(),
+            previewColorMatrix.ToString());
 
-        ShortcutPreviewLabel.Text = L("ShortcutPreview");
-        ShortcutRecordLabel.Text = L("ShortcutRecord");
-        ShortcutFullscreenLabel.Text = L("PreviewFullScreen");
-        ShortcutInspectorLabel.Text = L("ShortcutInspector");
-        ShortcutLayoutsLabel.Text = L("ShortcutLayouts");
-        ShortcutBackLabel.Text = L("Back");
-
-        selectedVideoFormat = videoFormat == (uint)CapturePixelFormat.Uyvy ? CapturePixelFormat.Uyvy : CapturePixelFormat.V210;
-        selectedAudioFormat = audioFormat == (uint)CaptureAudioFormat.Pcm32 ? CaptureAudioFormat.Pcm32 : CaptureAudioFormat.Pcm16;
-        VideoFormat10Button.Content = L("Video10Short");
-        VideoFormat8Button.Content = L("Video8Short");
-        AudioFormat16Button.Content = L("Audio16Short");
-        AudioFormat32Button.Content = L("Audio32Short");
-        ToolTipService.SetToolTip(VideoFormat10Button, L("Video10"));
-        ToolTipService.SetToolTip(VideoFormat8Button, L("Video8"));
-        ToolTipService.SetToolTip(AudioFormat16Button, L("Audio16"));
-        ToolTipService.SetToolTip(AudioFormat32Button, L("Audio32"));
-        UpdateFormatSegmentVisuals();
-
-        var mode = ModePicker.SelectedItem as ModeOption;
         ApplySignalAndMonitorLanguage();
         ApplyWorkspaceLanguage();
-        ModePicker.SelectedItem = mode is null ? null : ModePicker.Items.OfType<ModeOption>()
-            .FirstOrDefault(candidate => candidate.Id == mode.Id);
         RefreshToolchainDiagnostics();
     }
 
-    private void LanguagePicker_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    private void OnLanguageSelectionChanged(string language)
     {
-        if (!settingsReady || loading || LanguagePicker.SelectedItem is not ComboBoxItem { Tag: string language })
+        if (!settingsReady || loading)
             return;
 
         loading = true;
-        var videoSource = (VideoInputPicker.SelectedItem as VideoInputSource)?.Id;
-        var audioSource = (AudioInputPicker.SelectedItem as AudioInputSource)?.Id;
-        var mode = ModePicker.SelectedItem as ModeOption;
-        ApplySettingsLanguage(language, (uint)selectedVideoFormat, (uint)selectedAudioFormat);
-        UpdateSelectedDevice();
-        VideoInputPicker.SelectedItem = VideoInputPicker.Items.OfType<VideoInputSource>()
-            .FirstOrDefault(source => source.Id == videoSource);
-        AudioInputPicker.SelectedItem = AudioInputPicker.Items.OfType<AudioInputSource>()
-            .FirstOrDefault(source => source.Id == audioSource);
-        UpdateModeOptions();
-        ModePicker.SelectedItem = mode is null ? null : ModePicker.Items.OfType<ModeOption>()
-            .FirstOrDefault(candidate => candidate.Id == mode.Id);
+        ApplySettingsLanguage(
+            language,
+            (uint)deckLinkInspector.SelectedVideoFormat,
+            (uint)deckLinkInspector.SelectedAudioFormat,
+            preserveActiveRouting: true);
         loading = false;
         UpdateControls();
         SettingsChanged();
     }
-
-    private string LocalVideoConnector(VideoInputSource source) => source.Id switch
-    {
-        4 => L("ConnectorOpticalSdi"),
-        8 => L("ConnectorComponent"),
-        16 => L("ConnectorComposite"),
-        64 => L("ConnectorEthernet"),
-        128 => L("ConnectorOpticalEthernet"),
-        256 => L("ConnectorInternal"),
-        _ => source.Name
-    };
-
-    private string LocalAudioConnector(AudioInputSource source) => source.Id switch
-    {
-        1 => L("ConnectorEmbedded"),
-        4 => L("ConnectorAnalog"),
-        8 => L("ConnectorXlr"),
-        16 => L("ConnectorRca"),
-        32 => L("ConnectorMicrophone"),
-        64 => L("ConnectorHeadphones"),
-        _ => source.Name
-    };
 
     private void ShowSettingsError(string key, string message)
     {
@@ -443,37 +343,54 @@ public sealed partial class MainWindow
 
     private void UpdateConfigurationStatus()
     {
-        var device = DevicePicker.SelectedItem as CaptureDevice;
-        var video = VideoInputPicker.SelectedItem as VideoInputSource;
-        var audio = AudioInputPicker.SelectedItem as AudioInputSource;
-        var mode = ModePicker.SelectedItem as ModeOption;
+        if (!IsDeckLinkActive)
+        {
+            var backendName = L(activeModule.Descriptor.DisplayNameKey);
+            var text = $"{backendName} · {L("SourceStatusPlanned")}";
+            ConfigurationSummary.Text = text;
+            AutomationProperties.SetName(QuickSourceButton, $"{L("Capture")} · {text}");
+            ToolTipService.SetToolTip(QuickSourceButton, text);
+            QuickSourceDot.Fill = ThemeBrush("StudioInfoBrush");
+            InspectorNotice.Visibility = settingsError is not null ? Visibility.Visible : Visibility.Collapsed;
+            if (settingsError is { } err)
+            {
+                InspectorNoticeText.Text = err.Message;
+                InspectorNotice.Background = ThemeBrush("StudioCautionSoftBrush");
+                InspectorNotice.BorderBrush = ThemeBrush("StudioCautionBrush");
+                InspectorNoticeIcon.Foreground = ThemeBrush("StudioCautionBrush");
+                InspectorNoticeIcon.Glyph = "\uE7BA";
+            }
+            SettingsPage.ShowNotice(
+                settingsError is { } fail ? L(fail.Key) : "",
+                settingsError?.Message ?? "",
+                InfoBarSeverity.Warning,
+                settingsError is not null);
+            ShowStorageStatus(null, null);
+            return;
+        }
+
+        var device = deckLinkInspector.SelectedDevice;
+        var video = deckLinkInspector.SelectedVideoSource;
+        var audio = deckLinkInspector.SelectedAudioSource;
+        var mode = deckLinkInspector.SelectedMode;
         var modeLabel = mode is { Id: null } && observedPreviewMode is { } activeMode
             ? observedPreviewModeIsFallback
                 ? LocalFormat("AutoFallbackMode", mode.Label, activeMode.Description)
                 : $"{mode.Label} ({activeMode.Description})"
             : mode?.Label;
-        var text = device is null || video is null || audio is null || mode is null
+        var summary = device is null || video is null || audio is null || mode is null
             ? L("Configure")
             : $"{device.Name} · {video.Name} / {audio.Name} · {modeLabel} · " +
-                $"{LocalFormat("ShortVideoFormat", DeckLinkCapture.FormatFourCc((uint)selectedVideoFormat), selectedVideoFormat == CapturePixelFormat.V210 ? 10 : 8)} / " +
-                LocalFormat("ShortPcmFormat", (uint)selectedAudioFormat);
-        ConfigurationSummary.Text = text;
-        AutomationProperties.SetName(QuickSourceButton, $"{L("Capture")} · {text}");
-        ToolTipService.SetToolTip(QuickSourceButton, text);
+                $"{LocalFormat("ShortVideoFormat", DeckLinkCapture.FormatFourCc((uint)deckLinkInspector.SelectedVideoFormat), deckLinkInspector.SelectedVideoFormat == CapturePixelFormat.V210 ? 10 : 8)} / " +
+                LocalFormat("ShortPcmFormat", (uint)deckLinkInspector.SelectedAudioFormat);
+        ConfigurationSummary.Text = summary;
+        AutomationProperties.SetName(QuickSourceButton, $"{L("Capture")} · {summary}");
+        ToolTipService.SetToolTip(QuickSourceButton, summary);
 
         var selectedMode = mode?.Id is { } id
-            ? video?.ModesFor(selectedVideoFormat).FirstOrDefault(option => option.Id == id)
+            ? video?.ModesFor(deckLinkInspector.SelectedVideoFormat).FirstOrDefault(option => option.Id == id)
             : mode is not null ? observedPreviewMode : null;
-        if (selectedMode is not null)
-        {
-            var mbps = DeckLinkCapture.EstimateRecordingBytesPerSecond(selectedMode, selectedVideoFormat, selectedAudioFormat) * 8 / 1_000_000d;
-            BitrateBadgeText.Text = $"~{mbps:0.#} Mbps";
-            BitrateBadge.Visibility = Visibility.Visible;
-        }
-        else
-        {
-            BitrateBadge.Visibility = Visibility.Collapsed;
-        }
+        deckLinkInspector.UpdateBitrateBadge(selectedMode);
 
         var missingSelection = device is not null && ((video is null && settings.DeckLink.VideoSource is not null) ||
             (audio is null && settings.DeckLink.AudioSource is not null) || (mode is null && settings.DeckLink.ModeSelected));
@@ -482,10 +399,11 @@ public sealed partial class MainWindow
             missingSelection ? L("MissingSelection") : captureTask is not null ? L("ChangeCapture") : "";
         var isWarning = settingsError is not null || missingSelection || device is null;
 
-        SettingsNotice.Title = settingsError is { } failure ? L(failure.Key) : "";
-        SettingsNotice.Message = message;
-        SettingsNotice.Severity = isWarning ? InfoBarSeverity.Warning : InfoBarSeverity.Informational;
-        SettingsNotice.IsOpen = settingsError is not null;
+        SettingsPage.ShowNotice(
+            settingsError is { } failure ? L(failure.Key) : "",
+            message,
+            isWarning ? InfoBarSeverity.Warning : InfoBarSeverity.Informational,
+            settingsError is not null);
 
         InspectorNotice.Visibility = message.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
         InspectorNoticeText.Text = message;
@@ -533,7 +451,7 @@ public sealed partial class MainWindow
             await RefreshStorageAsync();
     }
 
-    private void ShowStorageStatus(VideoMode? selectedMode, ModeOption? mode)
+    private void ShowStorageStatus(VideoMode? selectedMode, Views.DeckLinkModeOption? mode)
     {
         var directory = OutputPath.Text.Trim();
         if (directory.Length == 0)
@@ -554,12 +472,14 @@ public sealed partial class MainWindow
         else
         {
             var free = LocalFormat("StorageCapacity", (space.AvailableBytes / (double)(1L << 30)).ToString("N1", settingsCulture));
-            var estimate = selectedMode is null
-                ? L(mode is { Id: null } ? "StorageWaitingForAutoMode" : "StorageNeedsMode")
-                : LocalFormat("StorageDuration", FormatRecordingTime(space.AvailableBytes /
-                    DeckLinkCapture.EstimateRecordingBytesPerSecond(selectedMode, selectedVideoFormat, selectedAudioFormat)));
-            InspectorStorageStatus.Text = $"{free} · {estimate}";
-            StorageStatus.Text = selectedMode is not null ? estimate : free;
+            var estimate = !IsDeckLinkActive
+                ? free
+                : selectedMode is null
+                    ? L(mode is { Id: null } ? "StorageWaitingForAutoMode" : "StorageNeedsMode")
+                    : LocalFormat("StorageDuration", FormatRecordingTime(space.AvailableBytes /
+                        DeckLinkCapture.EstimateRecordingBytesPerSecond(selectedMode, deckLinkInspector.SelectedVideoFormat, deckLinkInspector.SelectedAudioFormat)));
+            InspectorStorageStatus.Text = IsDeckLinkActive ? $"{free} · {estimate}" : free;
+            StorageStatus.Text = IsDeckLinkActive && selectedMode is not null ? estimate : free;
 
             if (space.TotalBytes > 0)
             {
@@ -598,6 +518,6 @@ public sealed partial class MainWindow
             "" => L("ApiUnavailable"),
             _ => $"Blackmagic DeckLink API {sdkVersion}"
         };
-        AboutCard.Description = $"Windows {arch} · {sdk}";
+        SettingsPage.ShowAboutDescription($"Windows {arch} · {sdk}");
     }
 }

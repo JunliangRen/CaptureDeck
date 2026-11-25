@@ -54,6 +54,10 @@ public sealed class CaptureSettingsTests
         Assert.Equal("Split", restored.WorkspaceLayout);
         Assert.True(restored.InspectorPinned);
         Assert.False(restored.ShowSafeArea);
+        Assert.Equal("", restored.RecordingLabel);
+        Assert.Equal(0.63, restored.SplitPreviewRatio);
+        Assert.Equal("Luma", restored.ScopeWaveformMode);
+        Assert.Equal("Code", restored.ScopeLumaScale);
     }
 
     [Fact]
@@ -71,6 +75,10 @@ public sealed class CaptureSettingsTests
             PreviewColorMatrix = "Bt709",
             AudioMonitorEnabled = true,
             AudioMonitorVolume = 0.65,
+            RecordingLabel = "VHS_Tape07_SideA",
+            SplitPreviewRatio = 0.54,
+            ScopeWaveformMode = "RgbParade",
+            ScopeLumaScale = "Ire",
             DeckLink = new DeckLinkSettings
             {
                 AnalogNtscIre = "Ire75",

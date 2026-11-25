@@ -19,7 +19,6 @@ using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Media.Imaging;
 using Microsoft.Windows.Storage.Pickers;
-using Windows.ApplicationModel.DataTransfer;
 using Windows.Storage;
 
 namespace CaptureRack.App;
@@ -32,6 +31,15 @@ public sealed partial class MainWindow : Window
 
     private static readonly DeckLinkBackend DeckLink = new CaptureBackendRegistry(new DeckLinkBackend())
             .Get<DeckLinkBackend>(DeckLinkBackend.BackendId);
+    private readonly WorkspaceModuleRegistry moduleRegistry = new();
+    private ICaptureWorkspaceModule activeModule;
+    private readonly Views.DeckLinkInspectorView deckLinkInspector = new();
+    private readonly Controls.PreviewMonitorOptionsBar monitorOptionsBar = new();
+    private readonly Views.PlannedBackendStageView plannedStageView = new();
+    private readonly Views.PlannedBackendInspectorView plannedInspectorView = new();
+    private readonly QcSessionHistory qcHistory = new();
+    private bool IsDeckLinkActive => activeModule.Descriptor.BackendId == DeckLinkBackend.BackendId;
+
     private CancellationTokenSource? captureStop;
     private CancellationTokenSource? qcStop;
     private Task<CaptureStats>? captureTask;
@@ -42,9 +50,8 @@ public sealed partial class MainWindow : Window
     private long displayedRecordingSeconds;
     private long displayedPreviewSkips;
     private long lastMissingFrames;
-    private string? qcOutputPath;
     private string? statusFilePath;
-    private QcResult? lastQcResult;
+    private QcSessionHistoryEntry? latestQcEntry;
     private QcStage? activeQcStage;
     private PreviewFeed? preview;
     private PreviewFrame? previewFrame;
@@ -52,6 +59,7 @@ public sealed partial class MainWindow : Window
     private Stream? bitmapPixels;
     private const double DefaultPreviewAspectRatio = 4d / 3;
     private double previewAspectRatio = DefaultPreviewAspectRatio;
+    private double splitPreviewRatio = 0.63;
     private VideoMode? observedPreviewMode;
     private bool observedPreviewModeIsFallback;
     private (long? DeviceId, int? DeviceIndex, uint? Source, uint? Mode, CapturePixelFormat? Format) previewSelection;
@@ -75,11 +83,10 @@ public sealed partial class MainWindow : Window
     private bool inspectorOverlayOpen;
     private bool showSafeArea;
     private double lastWindowWidth = 1320;
-    private CapturePixelFormat selectedVideoFormat = CapturePixelFormat.V210;
-    private CaptureAudioFormat selectedAudioFormat = CaptureAudioFormat.Pcm16;
 
     public MainWindow()
     {
+        activeModule = moduleRegistry.DefaultModule;
         previewHoverTimer = DispatcherQueue.CreateTimer();
         previewHoverTimer.Interval = TimeSpan.FromMilliseconds(200);
         previewHoverTimer.IsRepeating = false;
@@ -98,6 +105,7 @@ public sealed partial class MainWindow : Window
         };
 
         InitializeComponent();
+        WireModularViews();
         ConfigureWindowChrome();
         InitializeSettings();
         InitializeSettingsInput();
@@ -119,6 +127,66 @@ public sealed partial class MainWindow : Window
         ResizeWindowForDpi(1320, 840);
         AppWindow.Closing += OnClosing;
         ((FrameworkElement)Content).Loaded += OnLoaded;
+    }
+
+    private void WireModularViews()
+    {
+        QcCenterPage.CheckFileRequested += async (_, _) => await PickAndCheckMediaFileAsync();
+        QcCenterPage.CancelQcRequested += (_, _) => CancelActiveQc();
+        QcCenterPage.FileDropped += async (_, path) =>
+        {
+            if (qcStop is null && !closing && captureTask is null && !loading && !pickingOutput && !recordingTransition)
+                await RunMediaQcFileAsync(path);
+        };
+        QcCenterPage.OpenArtifactRequested += async (_, tag) => await OpenQcArtifactAsync(tag);
+        QcCenterPage.SaveTsReportRequested += async (_, report) => await SaveTsReportAsync(report);
+        QcCenterPage.HistoryEntrySelected += (_, id) =>
+        {
+            if (qcHistory.Find(id) is { } entry)
+                QcCenterPage.RenderEntry(entry);
+        };
+
+        SettingsPage.BackRequested += (_, _) => TryBackFromSettings();
+        SettingsPage.ThemeChanged += (_, theme) => OnThemeSelectionChanged(theme);
+        SettingsPage.LanguageChanged += (_, language) => OnLanguageSelectionChanged(language);
+        SettingsPage.DefaultLayoutChanged += (_, tag) =>
+            SetWorkspaceLayout(tag == "Focus" ? WorkspaceLayoutMode.Focus : WorkspaceLayoutMode.Split, saveIfDefaultable: true);
+        SettingsPage.PreviewDeinterlaceChanged += (_, tag) => SetPreviewDeinterlace(tag);
+        SettingsPage.PreviewAspectChanged += (_, tag) => SetPreviewAspect(tag);
+        SettingsPage.PreviewMatrixChanged += (_, tag) => SetPreviewMatrix(tag);
+        SettingsPage.RefreshToolsRequested += (_, _) => RefreshToolchainDiagnostics();
+        SettingsPage.OpenSettingsFolderRequested += async (_, _) => await OpenSettingsFolderAsync();
+
+        deckLinkInspector.RefreshDevicesRequested += async (_, _) => await RefreshDevicesAsync();
+        deckLinkInspector.SelectionChanged += (_, _) =>
+        {
+            UpdateControls();
+            SettingsChanged();
+            if (!loading && captureTask is null && IsDeckLinkActive)
+                ShowInputSelectionStatus();
+        };
+        deckLinkInspector.FormatChanged += (_, _) =>
+        {
+            UpdateRecordingFilenamePreview();
+            UpdateControls();
+            SettingsChanged();
+            if (!loading && captureTask is null && IsDeckLinkActive)
+                ShowInputSelectionStatus();
+        };
+        deckLinkInspector.AnalogSettingsChanged += (_, _) => SettingsChanged();
+
+        monitorOptionsBar.DeinterlaceChanged += (_, tag) => SetPreviewDeinterlace(tag);
+        monitorOptionsBar.AspectChanged += (_, tag) => SetPreviewAspect(tag);
+        monitorOptionsBar.MatrixChanged += (_, tag) => SetPreviewMatrix(tag);
+        monitorOptionsBar.SafeAreaChanged += (_, enabled) => SetSafeArea(enabled);
+        monitorOptionsBar.Ntsc480GuideChanged += (_, enabled) => SetNtsc480Guide(enabled);
+        monitorOptionsBar.AudioMonitorToggled += (_, _) => ToggleAudioMonitor();
+        monitorOptionsBar.AudioMonitorVolumeChanged += (_, volume) => SetAudioMonitorVolume(volume);
+
+        plannedStageView.SwitchToDeckLinkRequested += (_, _) =>
+            SelectBackendModule(DeckLinkBackend.BackendId, persist: true);
+
+        MountActiveModuleSlots();
     }
 
     private void ResizeWindowForDpi(int logicalWidth, int logicalHeight)
@@ -165,17 +233,7 @@ public sealed partial class MainWindow : Window
         TitleBarRightInset.Width = new GridLength(Math.Max(136, right));
     }
 
-    private bool IsDarkTheme() => RootShell.RequestedTheme switch
-    {
-        ElementTheme.Light => false,
-        ElementTheme.Dark => true,
-        _ => RootShell.ActualTheme switch
-        {
-            ElementTheme.Light => false,
-            ElementTheme.Dark => true,
-            _ => Application.Current.RequestedTheme == ApplicationTheme.Dark
-        }
-    };
+    private bool IsDarkTheme() => StudioBrushes.IsDark(RootShell);
 
     private void UpdateTitleBarTheme()
     {
@@ -193,41 +251,146 @@ public sealed partial class MainWindow : Window
             RootShell.Background = ThemeBrush("StudioWindowBackgroundBrush");
     }
 
-    private Brush ThemeBrush(string key)
-    {
-        var themeKey = IsDarkTheme() ? "Dark" : "Light";
-        foreach (var merged in Application.Current.Resources.MergedDictionaries)
-        {
-            if (merged.ThemeDictionaries.TryGetValue(themeKey, out var obj) &&
-                obj is ResourceDictionary dict && dict.TryGetValue(key, out var themed) && themed is Brush themedBrush)
-                return themedBrush;
-        }
-        return Application.Current.Resources.TryGetValue(key, out var value) && value is Brush brush
-            ? brush : new SolidColorBrush(Colors.Transparent);
-    }
+    private Brush ThemeBrush(string key) => StudioBrushes.Resolve(RootShell, key);
 
     private void RefreshDynamicThemeBrushes()
     {
         UpdateTitleBarTheme();
         UpdateNavigationStyles();
         ApplyWorkspaceLayout();
-        UpdateFormatSegmentVisuals();
+        deckLinkInspector.RefreshTheme();
+        monitorOptionsBar.RefreshTheme();
+        UpdateScopeModeButtons();
         UpdateInspectorLayout();
         ApplySafeAreaOverlay();
-        UpdateAudioMonitorVisuals();
+        RenderSourceRackList();
         RenderCaptureActions();
-        RenderCounts(displayedStats);
+        RenderCounts(IsDeckLinkActive ? displayedStats : null);
         RenderCompactStatus();
-        RenderQcResult();
+        RenderQcSummaryBadge();
         UpdateQcNavBadge();
         UpdateConfigurationStatus();
         RefreshToolchainDiagnostics();
-        UpdatePhaseBar(displayedPhase);
-        UpdateClipBadge(LeftClipBadge, LeftChannel, "L", visibleAudio?.LeftClips ?? 0);
-        UpdateClipBadge(RightClipBadge, RightChannel, "R", visibleAudio?.RightClips ?? 0);
+        StereoMeter.RefreshTheme();
+        QcCenterPage.RefreshTheme();
+        SplitResizeGrip.Background = ThemeBrush("StudioHairlineBrush");
         UpdateRecordingIndicator(recordingClock.IsRunning);
-        if (QcPipelineCard.Visibility == Visibility.Visible)
-            UpdateQcPipeline(activeQcStage, qcStop is not null, lastQcResult?.Status);
+    }
+
+    private void MountActiveModuleSlots()
+    {
+        if (IsDeckLinkActive)
+        {
+            InspectorSlot.Content = deckLinkInspector;
+            MonitorBarSlot.Content = monitorOptionsBar;
+            MonitorBarSlot.Visibility = Visibility.Visible;
+            MonitorViewport.Visibility = Visibility.Visible;
+            StageSlot.Content = null;
+            StageSlot.Visibility = Visibility.Collapsed;
+        }
+        else
+        {
+            plannedInspectorView.Bind(activeModule.Descriptor, L);
+            plannedStageView.Bind(activeModule.Descriptor, L);
+            InspectorSlot.Content = plannedInspectorView;
+            MonitorBarSlot.Content = null;
+            MonitorBarSlot.Visibility = Visibility.Collapsed;
+            MonitorViewport.Visibility = Visibility.Collapsed;
+            StageSlot.Content = plannedStageView;
+            StageSlot.Visibility = Visibility.Visible;
+        }
+    }
+
+    private void SelectBackendModule(string backendId, bool persist)
+    {
+        if (!WorkspaceModuleRegistry.CanSwitchBackend(captureTask is not null, recordingSession, recordingTransition, qcStop is not null))
+            return;
+
+        var target = moduleRegistry.Resolve(backendId);
+        var changed = target.Descriptor.BackendId != activeModule.Descriptor.BackendId;
+        activeModule = target;
+
+        MountActiveModuleSlots();
+        ApplyModuleCapabilities();
+        RenderSourceRackList();
+        RenderCounts(IsDeckLinkActive ? displayedStats : null);
+        UpdateControls();
+        UpdateConfigurationStatus();
+
+        if (!IsDeckLinkActive)
+            SetStatus("BackendPlannedStatus", "PlannedBackendStageNotice", InfoBarSeverity.Informational);
+        else if (changed && !loading && captureTask is null)
+            ShowInputSelectionStatus();
+
+        if (persist && changed)
+            SettingsChanged();
+    }
+
+    private void SourceRackItem_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not Button { Tag: string backendId })
+            return;
+
+        SourceRackFlyout.Hide();
+        if (activePage != ActiveAppPage.Capture)
+            NavigateToPage(ActiveAppPage.Capture);
+        SelectBackendModule(backendId, persist: true);
+    }
+
+    private void ApplyModuleCapabilities()
+    {
+        var caps = activeModule.Descriptor.Capabilities;
+        var liveStage = IsDeckLinkActive;
+        LayoutSegmentTrack.Visibility = liveStage ? Visibility.Visible : Visibility.Collapsed;
+        StageSignalBadge.Visibility = liveStage ? Visibility.Visible : Visibility.Collapsed;
+        LayoutFocusBtn.Visibility = liveStage && caps.SupportsVideoPreview ? Visibility.Visible : Visibility.Collapsed;
+        LayoutSplitBtn.Visibility = liveStage && caps.SupportsVideoPreview && caps.SupportsVideoScopes ? Visibility.Visible : Visibility.Collapsed;
+        LayoutScopesBtn.Visibility = liveStage && caps.SupportsVideoScopes ? Visibility.Visible : Visibility.Collapsed;
+        LayoutSpectrumBtn.Visibility = liveStage && caps.SupportsAudioSpectrum ? Visibility.Visible : Visibility.Collapsed;
+        LayoutEventsBtn.Visibility = liveStage && caps.SupportsEvents ? Visibility.Visible : Visibility.Collapsed;
+        monitorOptionsBar.ApplyCapabilities(caps);
+        StereoMeter.Visibility = !previewFullscreen && liveStage && caps.SupportsAudioMeters && lastWindowWidth >= 680
+            ? Visibility.Visible : Visibility.Collapsed;
+        UpdateRecordingFilenamePreview();
+    }
+
+    private void RenderSourceRackList()
+    {
+        var canSwitch = WorkspaceModuleRegistry.CanSwitchBackend(
+            captureTask is not null, recordingSession, recordingTransition, qcStop is not null);
+        SourceRackLockNotice.Text = L("SourceRackLockedNotice");
+        SourceRackLockNotice.Visibility = canSwitch ? Visibility.Collapsed : Visibility.Visible;
+
+        SourceRackList.ItemsSource = moduleRegistry.Modules.Select(module =>
+        {
+            var source = module.Descriptor;
+            var selected = source.BackendId == activeModule.Descriptor.BackendId;
+            var badgeKey = selected
+                ? (source.IsImplementedInUi ? "SourceStatusActive" : "SourceStatusSelectedPlanned")
+                : (source.IsImplementedInUi ? "SourceStatusReady" : "SourceStatusPlanned");
+            var badgeBg = selected && source.IsImplementedInUi
+                ? "StudioSignalLockSoftBrush"
+                : selected
+                    ? "StudioInfoSoftBrush"
+                    : "StudioCardBrush";
+            var badgeFg = selected && source.IsImplementedInUi
+                ? "StudioSignalLockBrush"
+                : selected
+                    ? "StudioInfoBrush"
+                    : "StudioTextMutedBrush";
+            return new SourceRackRow(
+                source.BackendId,
+                source.IconGlyph,
+                L(source.DisplayNameKey),
+                L(source.SubtitleKey),
+                L(badgeKey),
+                canSwitch,
+                ThemeBrush(selected ? "StudioAccentSoftBrush" : "StudioPanelSecondaryBrush"),
+                ThemeBrush(selected ? "StudioAccentBrush" : "StudioHairlineBrush"),
+                ThemeBrush(selected ? "StudioAccentBrush" : "StudioTextSecondaryBrush"),
+                ThemeBrush(badgeBg),
+                ThemeBrush(badgeFg));
+        }).ToArray();
     }
 
     private void Viewport_SizeChanged(object sender, SizeChangedEventArgs e)
@@ -251,7 +414,8 @@ public sealed partial class MainWindow : Window
         TelemetryStrip.HorizontalAlignment = compact ? HorizontalAlignment.Left : HorizontalAlignment.Center;
         FooterStorageButton.Visibility = narrow ? Visibility.Collapsed : Visibility.Visible;
         QuickSourceButton.Visibility = width < 820 ? Visibility.Collapsed : Visibility.Visible;
-        StereoMeter.Visibility = !previewFullscreen && width >= 680 ? Visibility.Visible : Visibility.Collapsed;
+        StereoMeter.Visibility = !previewFullscreen && IsDeckLinkActive && activeModule.Descriptor.Capabilities.SupportsAudioMeters && width >= 680
+            ? Visibility.Visible : Visibility.Collapsed;
     }
 
     private void UpdateInspectorLayout()
@@ -261,6 +425,7 @@ public sealed partial class MainWindow : Window
             InspectorPanel.Visibility = Visibility.Collapsed;
             InspectorScrim.Visibility = Visibility.Collapsed;
             InspectorDockColumn.Width = new GridLength(0);
+            UpdateWheelFallbackState();
             return;
         }
 
@@ -360,7 +525,13 @@ public sealed partial class MainWindow : Window
         visual.StartAnimation(nameof(Visual.Opacity), opacity);
     }
 
-    private void QuickSourceButton_Click(object sender, RoutedEventArgs e)
+    private void SourceRackConfigure_Click(object sender, RoutedEventArgs e)
+    {
+        SourceRackFlyout.Hide();
+        OpenInspectorFromFooter_Click(sender, e);
+    }
+
+    private void OpenInspectorFromFooter_Click(object sender, RoutedEventArgs e)
     {
         if (activePage != ActiveAppPage.Capture)
             NavigateToPage(ActiveAppPage.Capture);
@@ -405,10 +576,7 @@ public sealed partial class MainWindow : Window
             return;
 
         if (activePage == ActiveAppPage.Settings)
-        {
             SavePendingSettings();
-            StopSettingsWheelFallback();
-        }
         if (target == ActiveAppPage.Settings)
             pageBeforeSettings = activePage;
 
@@ -421,7 +589,7 @@ public sealed partial class MainWindow : Window
         {
             RefreshToolchainDiagnostics();
             RevealWorkspacePanel(SettingsPage);
-            BackButton.Focus(FocusState.Programmatic);
+            SettingsPage.FocusBack();
         }
         else if (target == ActiveAppPage.QcCenter)
         {
@@ -465,6 +633,7 @@ public sealed partial class MainWindow : Window
     {
         workspaceLayout = mode;
         ApplyWorkspaceLayout();
+        SyncSettingsPageSelections();
         if (saveIfDefaultable && mode is WorkspaceLayoutMode.Split or WorkspaceLayoutMode.Focus)
             SettingsChanged();
     }
@@ -479,27 +648,30 @@ public sealed partial class MainWindow : Window
 
         var showPreview = previewFullscreen || workspaceLayout is WorkspaceLayoutMode.Focus or WorkspaceLayoutMode.Split;
         var showInstruments = !previewFullscreen && workspaceLayout != WorkspaceLayoutMode.Focus;
+        var showSplitDivider = !previewFullscreen && workspaceLayout == WorkspaceLayoutMode.Split;
 
         PreviewMonitorHousing.Visibility = showPreview ? Visibility.Visible : Visibility.Collapsed;
+        SplitResizeHandle.Visibility = showSplitDivider ? Visibility.Visible : Visibility.Collapsed;
         InstrumentsHost.Visibility = showInstruments ? Visibility.Visible : Visibility.Collapsed;
 
         if (previewFullscreen || workspaceLayout == WorkspaceLayoutMode.Focus)
         {
             PreviewStageRow.Height = new GridLength(1, GridUnitType.Star);
+            SplitDividerRow.Height = new GridLength(0);
             InstrumentsStageRow.Height = new GridLength(0);
-            MonitorViewport.RowSpacing = 0;
         }
         else if (workspaceLayout == WorkspaceLayoutMode.Split)
         {
-            PreviewStageRow.Height = new GridLength(63, GridUnitType.Star);
-            InstrumentsStageRow.Height = new GridLength(37, GridUnitType.Star);
-            MonitorViewport.RowSpacing = 10;
+            var ratio = Math.Clamp(splitPreviewRatio, 0.35, 0.82);
+            PreviewStageRow.Height = new GridLength(ratio, GridUnitType.Star);
+            SplitDividerRow.Height = GridLength.Auto;
+            InstrumentsStageRow.Height = new GridLength(1.0 - ratio, GridUnitType.Star);
         }
         else
         {
             PreviewStageRow.Height = new GridLength(0);
+            SplitDividerRow.Height = new GridLength(0);
             InstrumentsStageRow.Height = new GridLength(1, GridUnitType.Star);
-            MonitorViewport.RowSpacing = 0;
         }
 
         if (showInstruments)
@@ -508,7 +680,7 @@ public sealed partial class MainWindow : Window
             LumaCard.Visibility = twoColumns ? Visibility.Visible : Visibility.Collapsed;
             InstrumentCol0.Width = twoColumns ? new GridLength(56, GridUnitType.Star) : new GridLength(0);
             InstrumentCol1.Width = twoColumns ? new GridLength(44, GridUnitType.Star) : new GridLength(1, GridUnitType.Star);
-            InstrumentsHost.ColumnSpacing = twoColumns ? 10 : 0;
+            InstrumentsHost.ColumnSpacing = twoColumns ? 8 : 0;
 
             SplitRightSwitcher.Visibility = workspaceLayout == WorkspaceLayoutMode.Split
                 ? Visibility.Visible : Visibility.Collapsed;
@@ -525,6 +697,41 @@ public sealed partial class MainWindow : Window
 
         UpdateMonitorLayout();
     }
+
+    private void SplitResizeHandle_ManipulationDelta(object sender, ManipulationDeltaRoutedEventArgs e)
+    {
+        if (workspaceLayout != WorkspaceLayoutMode.Split)
+            return;
+
+        var totalHeight = MonitorViewport.ActualHeight - SplitResizeHandle.ActualHeight;
+        if (totalHeight <= 100)
+            return;
+
+        var currentPreviewHeight = splitPreviewRatio * totalHeight;
+        var updated = Math.Clamp((currentPreviewHeight + e.Delta.Translation.Y) / totalHeight, 0.35, 0.82);
+        if (Math.Abs(updated - splitPreviewRatio) < 0.002)
+            return;
+
+        splitPreviewRatio = updated;
+        PreviewStageRow.Height = new GridLength(splitPreviewRatio, GridUnitType.Star);
+        InstrumentsStageRow.Height = new GridLength(1.0 - splitPreviewRatio, GridUnitType.Star);
+    }
+
+    private void SplitResizeHandle_ManipulationCompleted(object sender, ManipulationCompletedRoutedEventArgs e) =>
+        SettingsChanged();
+
+    private void SplitResizeHandle_DoubleTapped(object sender, DoubleTappedRoutedEventArgs e)
+    {
+        splitPreviewRatio = 0.63;
+        ApplyWorkspaceLayout();
+        SettingsChanged();
+    }
+
+    private void SplitResizeHandle_PointerEntered(object sender, PointerRoutedEventArgs e) =>
+        SplitResizeGrip.Background = ThemeBrush("StudioAccentBrush");
+
+    private void SplitResizeHandle_PointerExited(object sender, PointerRoutedEventArgs e) =>
+        SplitResizeGrip.Background = ThemeBrush("StudioHairlineBrush");
 
     private void SplitSecondary_Click(object sender, RoutedEventArgs e)
     {
@@ -550,21 +757,10 @@ public sealed partial class MainWindow : Window
         UpdateSecondaryInstrumentHeader(instrument);
     }
 
-    private void SafeAreaToggleButton_Click(object sender, RoutedEventArgs e)
-    {
-        showSafeArea = !showSafeArea;
-        ApplySafeAreaOverlay();
-        SettingsChanged();
-    }
-
     private void ApplySafeAreaOverlay()
     {
         SafeAreaOverlay.Visibility = showSafeArea && PreviewPlaceholder.Visibility == Visibility.Collapsed
             ? Visibility.Visible : Visibility.Collapsed;
-        SafeAreaToggleButton.Background = showSafeArea
-            ? ThemeBrush("StudioSegmentActiveBrush") : new SolidColorBrush(Colors.Transparent);
-        SafeAreaCheckBox.IsChecked = showSafeArea;
-        Ntsc480GuideCheckBox.IsChecked = showNtsc480Guide;
         UpdateNtsc480GuideLayout();
     }
 
@@ -606,20 +802,20 @@ public sealed partial class MainWindow : Window
 
     private void UpdatePreviewForSelection()
     {
-        if (captureTask is not null || loading || !settingsReady)
+        if (captureTask is not null || loading || !settingsReady || !IsDeckLinkActive)
             return;
 
-        var device = DevicePicker.SelectedItem as CaptureDevice;
-        var source = VideoInputPicker.SelectedItem as VideoInputSource;
-        var selectedMode = ModePicker.SelectedItem as ModeOption;
-        var selection = (device?.PersistentId, device?.Index, source?.Id, selectedMode?.Id, selectedVideoFormat);
+        var device = deckLinkInspector.SelectedDevice;
+        var source = deckLinkInspector.SelectedVideoSource;
+        var selectedMode = deckLinkInspector.SelectedMode;
+        var selection = (device?.PersistentId, device?.Index, source?.Id, selectedMode?.Id, deckLinkInspector.SelectedVideoFormat);
         if (previewSelection == selection)
             return;
 
         previewSelection = selection;
         observedPreviewMode = null;
         var mode = selectedMode?.Id is { } id
-            ? source?.ModesFor(selectedVideoFormat).FirstOrDefault(candidate => candidate.Id == id) : null;
+            ? source?.ModesFor(deckLinkInspector.SelectedVideoFormat).FirstOrDefault(candidate => candidate.Id == id) : null;
         ResetPreview(null);
         UpdatePreviewAspectRatio(mode?.Width ?? 0, mode?.Height ?? 0);
         if (selectedMode is { Id: null })
@@ -628,10 +824,10 @@ public sealed partial class MainWindow : Window
 
     private async Task RefreshDetectedPreviewModeAsync()
     {
-        if (checkingDetectedMode || captureTask is not null || loading || closing ||
-            ModePicker.SelectedItem is not ModeOption { Id: null } ||
-            DevicePicker.SelectedItem is not CaptureDevice device ||
-            VideoInputPicker.SelectedItem is not VideoInputSource source)
+        if (checkingDetectedMode || captureTask is not null || loading || closing || !IsDeckLinkActive ||
+            deckLinkInspector.SelectedMode is not { Id: null } ||
+            deckLinkInspector.SelectedDevice is not { } device ||
+            deckLinkInspector.SelectedVideoSource is not { } source)
             return;
 
         var selection = previewSelection;
@@ -641,7 +837,7 @@ public sealed partial class MainWindow : Window
             var id = await Task.Run(() => DeckLinkCapture.GetLockedVideoInputMode(device, source.Id));
             if (!closing && captureTask is null && previewSelection == selection)
                 UpdateObservedPreviewMode(id is null ? null :
-                    source.ModesFor(selectedVideoFormat).FirstOrDefault(candidate => candidate.Id == id));
+                    source.ModesFor(deckLinkInspector.SelectedVideoFormat).FirstOrDefault(candidate => candidate.Id == id));
         }
         catch (COMException)
         {
@@ -659,24 +855,26 @@ public sealed partial class MainWindow : Window
         await RestoreSettingsAsync();
         if (closing)
             return;
+        MountActiveModuleSlots();
+        ApplyModuleCapabilities();
         UpdateTitleBarTheme();
         UpdateNavigationStyles();
         ApplyWorkspaceLayout();
         UpdateInspectorLayout();
         ApplySafeAreaOverlay();
         ApplyPreviewOptionsToUi();
-        SyncAnalogUiFromState();
-        UpdateAudioMonitorVisuals();
+        UpdateScopeModeButtons();
+        RenderSourceRackList();
         RefreshToolchainDiagnostics();
         await RefreshDevicesAsync();
         if (closing)
             return;
+        if (!IsDeckLinkActive)
+            SetStatus("BackendPlannedStatus", "PlannedBackendStageNotice", InfoBarSeverity.Informational);
         storageTimer.Start();
         detectedModeTimer.Start();
         await RefreshStorageAsync();
     }
-
-    private async void RefreshButton_Click(object sender, RoutedEventArgs e) => await RefreshDevicesAsync();
 
     private async Task RefreshDevicesAsync()
     {
@@ -686,7 +884,8 @@ public sealed partial class MainWindow : Window
         SavePendingSettings();
         loading = true;
         UpdateControls();
-        SetStatus("CheckingDevices", "CheckingDeckLink");
+        if (IsDeckLinkActive)
+            SetStatus("CheckingDevices", "CheckingDeckLink");
         try
         {
             var result = await Task.Run(() => DeckLink.ScanDevices(includeCapabilities: true));
@@ -696,10 +895,19 @@ public sealed partial class MainWindow : Window
             sdkVersion = result.ApiVersion ?? "";
             RenderApiVersion();
             var devices = result.Devices.Where(device => device.HasVideoInput).ToArray();
-            DevicePicker.ItemsSource = devices;
-            RestoreDeviceSelections(devices);
+            deckLinkInspector.SetDevices(
+                devices,
+                settings.DeckLink.DeviceId,
+                settings.DeckLink.DeviceName,
+                settings.DeckLink.VideoSource,
+                settings.DeckLink.AudioSource,
+                settings.DeckLink.ModeSelected,
+                settings.DeckLink.ModeId);
             loading = false;
             UpdateControls();
+            if (!IsDeckLinkActive)
+                return;
+
             switch (result.Availability)
             {
                 case DeckLinkAvailability.UnsupportedPlatform:
@@ -723,9 +931,9 @@ public sealed partial class MainWindow : Window
 
             sdkVersion = "";
             RenderApiVersion();
-            DevicePicker.ItemsSource = null;
-            UpdateSelectedDevice();
-            SetStatus("ScanFailed", () => ex.Message, InfoBarSeverity.Error);
+            deckLinkInspector.SetDevices(null, null, null, null, null, false, null);
+            if (IsDeckLinkActive)
+                SetStatus("ScanFailed", () => ex.Message, InfoBarSeverity.Error);
         }
         finally
         {
@@ -735,107 +943,30 @@ public sealed partial class MainWindow : Window
         }
     }
 
-    private void DevicePicker_SelectionChanged(object sender, SelectionChangedEventArgs e)
-    {
-        if (!loading)
-        {
-            UpdateSelectedDevice();
-            SettingsChanged();
-        }
-    }
-
-    private void UpdateSelectedDevice()
-    {
-        var device = DevicePicker.SelectedItem as CaptureDevice;
-        VideoInputPicker.ItemsSource = device?.VideoSources.Select(source => source with { Name = LocalVideoConnector(source) }).ToArray();
-        AudioInputPicker.ItemsSource = device?.AudioSources.Select(source => source with { Name = LocalAudioConnector(source) }).ToArray();
-        VideoInputPicker.SelectedIndex = -1;
-        AudioInputPicker.SelectedIndex = -1;
-        UpdateModeOptions();
-        if (!loading)
-            ShowInputSelectionStatus();
-    }
-
-    private void VideoInputPicker_SelectionChanged(object sender, SelectionChangedEventArgs e)
-    {
-        UpdateModeOptions();
-        SettingsChanged();
-        if (!loading && captureTask is null)
-            ShowInputSelectionStatus();
-    }
-
-    private void UpdateModeOptions()
-    {
-        var currentMode = ModePicker.SelectedItem as ModeOption;
-        List<ModeOption> options = [];
-        if (VideoInputPicker.SelectedItem is VideoInputSource video &&
-            video.ModesFor(selectedVideoFormat) is { Count: > 0 } modes)
-        {
-            if (DevicePicker.SelectedItem is CaptureDevice { SupportsFormatDetection: true })
-                options.Add(new(L("Auto"), null));
-            options.AddRange(modes.Select(mode => new ModeOption(mode.Description, mode.Id)));
-        }
-
-        ModePicker.ItemsSource = options;
-        ModePicker.SelectedItem = options.FirstOrDefault(option => currentMode is not null &&
-            option.Id == currentMode.Id) ?? options.FirstOrDefault();
-        UpdateControls();
-    }
-
-    private void InputPicker_SelectionChanged(object sender, SelectionChangedEventArgs e)
-    {
-        UpdateControls();
-        SettingsChanged();
-        if (!loading && captureTask is null)
-            ShowInputSelectionStatus();
-    }
-
-    private void VideoFormatSegment_Click(object sender, RoutedEventArgs e)
-    {
-        if (captureTask is not null || sender is not Button { Tag: string tag })
-            return;
-
-        var format = tag == "Uyvy" ? CapturePixelFormat.Uyvy : CapturePixelFormat.V210;
-        if (selectedVideoFormat == format)
-            return;
-
-        selectedVideoFormat = format;
-        UpdateFormatSegmentVisuals();
-        UpdateModeOptions();
-        SettingsChanged();
-        if (!loading && captureTask is null)
-            ShowInputSelectionStatus();
-    }
-
-    private void AudioFormatSegment_Click(object sender, RoutedEventArgs e)
-    {
-        if (captureTask is not null || sender is not Button { Tag: string tag })
-            return;
-
-        var format = tag == "Pcm32" ? CaptureAudioFormat.Pcm32 : CaptureAudioFormat.Pcm16;
-        if (selectedAudioFormat == format)
-            return;
-
-        selectedAudioFormat = format;
-        UpdateFormatSegmentVisuals();
-        UpdateControls();
-        SettingsChanged();
-        if (!loading && captureTask is null)
-            ShowInputSelectionStatus();
-    }
-
-    private void UpdateFormatSegmentVisuals()
-    {
-        ApplySegmentState(VideoFormat10Button, selectedVideoFormat == CapturePixelFormat.V210);
-        ApplySegmentState(VideoFormat8Button, selectedVideoFormat == CapturePixelFormat.Uyvy);
-        ApplySegmentState(AudioFormat16Button, selectedAudioFormat == CaptureAudioFormat.Pcm16);
-        ApplySegmentState(AudioFormat32Button, selectedAudioFormat == CaptureAudioFormat.Pcm32);
-    }
-
     private void OutputPath_TextChanged(object sender, TextChangedEventArgs e)
     {
         UpdateControls();
         SettingsChanged();
+    }
+
+    private void RecordingLabelBox_TextChanged(object sender, TextChangedEventArgs e)
+    {
+        UpdateRecordingFilenamePreview();
+        SettingsChanged();
+    }
+
+    private void UpdateRecordingFilenamePreview()
+    {
+        var sanitized = RecordingFileNaming.SanitizeLabel(RecordingLabelBox.Text);
+        var samplePrefix = sanitized.Length == 0 ? "CaptureRack_YYYYMMDD_HHmmss" : $"{sanitized}_CaptureRack_YYYYMMDD_HHmmss";
+        if (!IsDeckLinkActive)
+        {
+            RecordingFilenamePreview.Text = samplePrefix;
+            return;
+        }
+        var videoTag = deckLinkInspector.SelectedVideoFormat == CapturePixelFormat.Uyvy ? "8bit-Uncompressed" : "10bit-Uncompressed";
+        var audioTag = deckLinkInspector.SelectedAudioFormat == CaptureAudioFormat.Pcm32 ? "32bit-PCM" : "16bit-PCM";
+        RecordingFilenamePreview.Text = $"{samplePrefix}_{videoTag}_{audioTag}.mov";
     }
 
     private async void BrowseButton_Click(object sender, RoutedEventArgs e)
@@ -867,13 +998,19 @@ public sealed partial class MainWindow : Window
 
     private void ShowInputSelectionStatus()
     {
-        if (DevicePicker.SelectedItem is CaptureDevice device &&
+        if (!IsDeckLinkActive)
+        {
+            SetStatus("BackendPlannedStatus", "PlannedBackendStageNotice", InfoBarSeverity.Informational);
+            return;
+        }
+
+        if (deckLinkInspector.SelectedDevice is { } device &&
             (device.VideoSources.Count == 0 || device.AudioSources.Count == 0))
         {
             SetStatus("InputsUnavailable", "NoInputRoutes", InfoBarSeverity.Warning);
         }
-        else if (VideoInputPicker.SelectedItem is VideoInputSource video &&
-            video.ModesFor(selectedVideoFormat).Count == 0)
+        else if (deckLinkInspector.SelectedVideoSource is { } video &&
+            video.ModesFor(deckLinkInspector.SelectedVideoFormat).Count == 0)
         {
             SetStatus("NoModes", "ChooseModeSource", InfoBarSeverity.Warning);
         }
@@ -909,7 +1046,9 @@ public sealed partial class MainWindow : Window
             await BeginRecordingAsync();
     }
 
-    private void CancelQcButton_Click(object sender, RoutedEventArgs e)
+    private void CancelQcButton_Click(object sender, RoutedEventArgs e) => CancelActiveQc();
+
+    private void CancelActiveQc()
     {
         if (qcStop is { IsCancellationRequested: false } stop)
         {
@@ -995,22 +1134,17 @@ public sealed partial class MainWindow : Window
         UpdateControls();
         try
         {
-            var videoTag = selectedVideoFormat == CapturePixelFormat.Uyvy ? "8bit-Uncompressed" : "10bit-Uncompressed";
-            var audioTag = selectedAudioFormat == CaptureAudioFormat.Pcm32 ? "32bit-PCM" : "16bit-PCM";
-            var timestamp = DateTime.Now.ToString("yyyyMMdd_HHmmss_fff", CultureInfo.InvariantCulture);
-            var prefix = $"CaptureRack_{timestamp}";
-            var formats = $"{videoTag}_{audioTag}";
+            var videoTag = deckLinkInspector.SelectedVideoFormat == CapturePixelFormat.Uyvy ? "8bit-Uncompressed" : "10bit-Uncompressed";
+            var audioTag = deckLinkInspector.SelectedAudioFormat == CaptureAudioFormat.Pcm32 ? "32bit-PCM" : "16bit-PCM";
+            var label = RecordingLabelBox.Text;
+            var now = DateTime.Now;
             var opened = await Task.Run(() =>
             {
-                var path = Path.Combine(directory, $"{prefix}_{formats}.mov");
-                for (var suffix = 2; File.Exists(path); suffix++)
-                    path = Path.Combine(directory, $"{prefix}_{suffix}_{formats}.mov");
+                var path = RecordingFileNaming.BuildMovPath(directory, label, now, videoTag, audioTag);
                 return (Path: path, Started: recorder.Start(path));
             });
             if (captureTask is null)
                 throw new InvalidOperationException(L("PreviewStoppedOpening"));
-            qcOutputPath = null;
-            lastQcResult = null;
             recordingStarted = opened.Started;
             statusFilePath = opened.Path;
             recordingSession = true;
@@ -1036,9 +1170,9 @@ public sealed partial class MainWindow : Window
     private async Task FinishRecordingAsync(string? captureError = null)
     {
         if (!recordingSession || recordingTransition || previewRecorder is not { } recorder ||
-            DevicePicker.SelectedItem is not CaptureDevice device ||
-            VideoInputPicker.SelectedItem is not VideoInputSource video ||
-            AudioInputPicker.SelectedItem is not AudioInputSource audio)
+            deckLinkInspector.SelectedDevice is not { } device ||
+            deckLinkInspector.SelectedVideoSource is not { } video ||
+            deckLinkInspector.SelectedAudioSource is not { } audio)
             return;
 
         recordingTransition = true;
@@ -1070,7 +1204,7 @@ public sealed partial class MainWindow : Window
                 CaptureError = captureError ?? stats.Error,
                 UnreadableNoInputFrames = stats.UnreadableNoInputFrames
             };
-            if (!await RunQcAsync(saved.Path, log))
+            if (!await RunMovQcAsync(saved.Path, log))
                 closeAfterQc = false;
         }
         catch (Exception ex) when (IsSessionError(ex))
@@ -1099,11 +1233,11 @@ public sealed partial class MainWindow : Window
 
     private async Task RunPreviewAsync()
     {
-        if (closing || pickingOutput || captureTask is not null ||
-            DevicePicker.SelectedItem is not CaptureDevice device ||
-            VideoInputPicker.SelectedItem is not VideoInputSource video ||
-            AudioInputPicker.SelectedItem is not AudioInputSource audio ||
-            ModePicker.SelectedItem is not ModeOption mode)
+        if (closing || pickingOutput || captureTask is not null || !IsDeckLinkActive ||
+            deckLinkInspector.SelectedDevice is not { } device ||
+            deckLinkInspector.SelectedVideoSource is not { } video ||
+            deckLinkInspector.SelectedAudioSource is not { } audio ||
+            deckLinkInspector.SelectedMode is not { } mode)
             return;
 
         using var stop = new CancellationTokenSource();
@@ -1116,7 +1250,8 @@ public sealed partial class MainWindow : Window
         var feed = new PreviewFeed
         {
             DeinterlaceMode = previewDeinterlace,
-            ColorMatrix = previewColorMatrix
+            ColorMatrix = previewColorMatrix,
+            ScopeWaveformMode = scopeWaveformMode
         };
         using var audioMonitor = new LocalAudioMonitor
         {
@@ -1134,10 +1269,10 @@ public sealed partial class MainWindow : Window
         {
             Routing = new CaptureRouting(video.Id, audio.Id),
             Preview = feed,
-            PixelFormat = selectedVideoFormat,
-            AudioFormat = selectedAudioFormat,
+            PixelFormat = deckLinkInspector.SelectedVideoFormat,
+            AudioFormat = deckLinkInspector.SelectedAudioFormat,
             PreviewRecorder = recorder,
-            AnalogOptions = BuildAnalogInputOptions(),
+            AnalogOptions = deckLinkInspector.BuildAnalogInputOptions(),
             LocalAudioMonitor = audioMonitor
         };
         var task = Task.Factory.StartNew(() => DeckLink.Run(request,
@@ -1255,9 +1390,9 @@ public sealed partial class MainWindow : Window
         DispatcherQueue.TryEnqueue(() => Close());
     }
 
-    private async void CheckMovButton_Click(object sender, RoutedEventArgs e)
+    private async Task PickAndCheckMediaFileAsync()
     {
-        if (!CheckMovButton.IsEnabled)
+        if (!QcCenterPage.CanCheckFile)
             return;
 
         pickingOutput = true;
@@ -1265,8 +1400,11 @@ public sealed partial class MainWindow : Window
         PickFileResult? file;
         try
         {
-            var picker = new FileOpenPicker(AppWindow.Id) { Title = L("CheckMov") };
+            var picker = new FileOpenPicker(AppWindow.Id) { Title = L("CheckMediaFile") };
             picker.FileTypeFilter.Add(".mov");
+            picker.FileTypeFilter.Add(".ts");
+            picker.FileTypeFilter.Add(".ts192");
+            picker.FileTypeFilter.Add(".m2t");
             file = await picker.PickSingleFileAsync();
         }
         catch (Exception ex) when (IsSessionError(ex))
@@ -1285,64 +1423,82 @@ public sealed partial class MainWindow : Window
         if (file is not null && !closing)
         {
             NavigateToPage(ActiveAppPage.QcCenter);
-            await RunQcAsync(file.Path, null);
+            await RunMediaQcFileAsync(file.Path);
             CloseAfterRecordingIfRequested();
         }
     }
 
-    private void QcDropZone_DragOver(object sender, DragEventArgs e)
+    private async Task RunMediaQcFileAsync(string path)
     {
-        if (CheckMovButton.IsEnabled && e.DataView.Contains(StandardDataFormats.StorageItems))
-            e.AcceptedOperation = DataPackageOperation.Copy;
+        if (string.Equals(Path.GetExtension(path), ".mov", StringComparison.OrdinalIgnoreCase))
+            await RunMovQcAsync(path, null);
         else
-            e.AcceptedOperation = DataPackageOperation.None;
+            await RunTsQcAsync(path);
     }
 
-    private async void QcDropZone_Drop(object sender, DragEventArgs e)
-    {
-        if (!CheckMovButton.IsEnabled || !e.DataView.Contains(StandardDataFormats.StorageItems))
-            return;
-
-        try
-        {
-            var items = await e.DataView.GetStorageItemsAsync();
-            var mov = items.OfType<StorageFile>().FirstOrDefault(item =>
-                string.Equals(Path.GetExtension(item.Path), ".mov", StringComparison.OrdinalIgnoreCase));
-            if (mov is not null && !closing)
-            {
-                await RunQcAsync(mov.Path, null);
-                CloseAfterRecordingIfRequested();
-            }
-        }
-        catch (Exception ex) when (IsSessionError(ex))
-        {
-            if (!closing)
-                SetStatus("CheckMovOpenFailed", () => ex.Message, InfoBarSeverity.Error);
-        }
-    }
-
-    private async Task<bool> RunQcAsync(string path, QcCaptureLog? log)
+    private async Task RunTsQcAsync(string path)
     {
         using var cancellation = new CancellationTokenSource();
         qcStop = cancellation;
         activeQcStage = null;
         statusFilePath = path;
-        qcOutputPath = path;
-        lastQcResult = null;
-        QcFileName.Text = Path.GetFileName(path);
-        QcFilePathText.Text = path;
-        QcInlineLogText.Text = "";
-        QcInlineLogText.Visibility = Visibility.Collapsed;
-        QcResultSection.Visibility = Visibility.Collapsed;
-        QcPipelineCard.Visibility = Visibility.Visible;
-        QcProgressBar.Visibility = Visibility.Visible;
-        UpdateQcPipeline(null, running: true, finalStatus: null);
+        QcCenterPage.BeginRunning(path, QcEntryKind.TransportStream);
+        FooterQcStageText.Text = L("TsChecking");
+        SetStatus("TsChecking", "TsCheckingDetail");
+        UpdateControls();
+
+        try
+        {
+            var report = await Task.Run(() => TsFile.Analyze(path, cancellation: cancellation.Token), cancellation.Token);
+            var (titleKey, detailKey, severity, barSeverity) = !report.Success
+                ? ("TsCheckFailed", "TsCheckFailedDetail", TelemetrySeverity.Danger, InfoBarSeverity.Error)
+                : report.Analysis.HasTransportWarnings
+                    ? ("TsCheckWarnings", "TsCheckWarningsDetail", TelemetrySeverity.Caution, InfoBarSeverity.Warning)
+                    : ("TsCheckPassed", "TsCheckPassedDetail", TelemetrySeverity.Normal, InfoBarSeverity.Success);
+            var entry = new QcSessionHistoryEntry(
+                Guid.NewGuid(), path, Path.GetFileName(path), QcEntryKind.TransportStream,
+                DateTimeOffset.UtcNow, titleKey, L(detailKey), severity, [], SummaryKey: detailKey, TsReport: report);
+            RecordAndDisplayQcEntry(entry);
+            SetStatus(titleKey, detailKey, barSeverity);
+        }
+        catch (OperationCanceledException) when (cancellation.IsCancellationRequested)
+        {
+            var entry = new QcSessionHistoryEntry(
+                Guid.NewGuid(), path, Path.GetFileName(path), QcEntryKind.TransportStream,
+                DateTimeOffset.UtcNow, "QcCancelled", L("QcCancelledDetail"), TelemetrySeverity.Caution, [], SummaryKey: "QcCancelledDetail");
+            RecordAndDisplayQcEntry(entry);
+            SetStatus("QcCancelled", "QcCancelledDetail", InfoBarSeverity.Warning);
+        }
+        catch (Exception ex) when (IsSessionError(ex) || ex is InvalidDataException)
+        {
+            var entry = new QcSessionHistoryEntry(
+                Guid.NewGuid(), path, Path.GetFileName(path), QcEntryKind.TransportStream,
+                DateTimeOffset.UtcNow, "TsCheckFailed", ex.Message, TelemetrySeverity.Danger, []);
+            RecordAndDisplayQcEntry(entry);
+            SetStatus("TsCheckFailed", () => ex.Message, InfoBarSeverity.Error);
+        }
+        finally
+        {
+            qcStop = null;
+            QcCenterPage.FinishRunning();
+            if (!closing)
+                UpdateControls();
+        }
+    }
+
+    private async Task<bool> RunMovQcAsync(string path, QcCaptureLog? log)
+    {
+        using var cancellation = new CancellationTokenSource();
+        qcStop = cancellation;
+        activeQcStage = null;
+        statusFilePath = path;
+        QcCenterPage.BeginRunning(path, QcEntryKind.Mov);
 
         void SetQcProgress(string stageKey, QcStage? stage)
         {
             activeQcStage = stage;
             FooterQcStageText.Text = L(stageKey);
-            UpdateQcPipeline(stage, running: true, finalStatus: null);
+            QcCenterPage.UpdateMovStage(stage);
             SetStatus(log is null ? "QcChecking" : "RecordingSaved",
                 () => log is null ? L(stageKey) : WithModeChangeNotice(LocalFormat("SavedQcProgress", L(stageKey))),
                 log is { InputModeChanged: true } ? InfoBarSeverity.Warning : InfoBarSeverity.Informational);
@@ -1364,142 +1520,70 @@ public sealed partial class MainWindow : Window
                         SetQcProgress($"Qc{stage}", stage);
                 });
             }));
-            var (title, severity) = result.Status switch
+            var warnings = BuildMovWarnings(log, result);
+            var (title, barSeverity, entrySeverity) = result.Status switch
             {
-                QcStatus.Passed => ("QcPassed", InfoBarSeverity.Success),
-                QcStatus.Cancelled => ("QcCancelled", InfoBarSeverity.Warning),
-                QcStatus.ToolsUnavailable => ("QcUnavailable", InfoBarSeverity.Warning),
-                _ => ("QcFailed", InfoBarSeverity.Error)
+                QcStatus.Passed when warnings.Count == 0 => ("QcPassed", InfoBarSeverity.Success, TelemetrySeverity.Normal),
+                QcStatus.Passed => ("QcPassed", InfoBarSeverity.Warning, TelemetrySeverity.Caution),
+                QcStatus.Cancelled => ("QcCancelled", InfoBarSeverity.Warning, TelemetrySeverity.Caution),
+                QcStatus.ToolsUnavailable => ("QcUnavailable", InfoBarSeverity.Warning, TelemetrySeverity.Caution),
+                _ => ("QcFailed", InfoBarSeverity.Error, TelemetrySeverity.Danger)
             };
-            if (severity == InfoBarSeverity.Success && log is { InputModeChanged: true })
-                severity = InfoBarSeverity.Warning;
-            UpdateQcPipeline(activeQcStage, running: false, finalStatus: result.Status);
-            ShowQcResult(path, result, log, title, () => DescribeQcResult(result));
-            SetStatus(title, () => QcDetail(DescribeQcResult(result)), severity);
+            var entry = new QcSessionHistoryEntry(
+                Guid.NewGuid(), path, Path.GetFileName(path), QcEntryKind.Mov,
+                DateTimeOffset.UtcNow, title, DescribeQcResult(result), entrySeverity, warnings,
+                LastStage: activeQcStage, MovResult: result, CaptureLog: log);
+            RecordAndDisplayQcEntry(entry);
+            SetStatus(title, () => QcDetail(DescribeQcResult(result)), barSeverity);
             return result.Status is QcStatus.Passed or QcStatus.Cancelled;
         }
         catch (Exception ex) when (IsSessionError(ex))
         {
             const string title = "QcWriteFailed";
-            UpdateQcPipeline(activeQcStage, running: false, finalStatus: QcStatus.Failed);
-            ShowQcResult(path, null, log, title, () => ex.Message);
+            var entry = new QcSessionHistoryEntry(
+                Guid.NewGuid(), path, Path.GetFileName(path), QcEntryKind.Mov,
+                DateTimeOffset.UtcNow, title, ex.Message, TelemetrySeverity.Danger,
+                BuildMovWarnings(log, null), LastStage: activeQcStage, CaptureLog: log);
+            RecordAndDisplayQcEntry(entry);
             SetStatus(title, () => QcDetail(ex.Message), InfoBarSeverity.Error);
             return false;
         }
         finally
         {
             qcStop = null;
-            QcProgressBar.Visibility = Visibility.Collapsed;
+            QcCenterPage.FinishRunning();
             if (!closing)
                 UpdateControls();
         }
     }
 
-    private void UpdateQcPipeline(QcStage? stage, bool running, QcStatus? finalStatus)
+    private void RecordAndDisplayQcEntry(QcSessionHistoryEntry entry)
     {
-        var stepIndex = stage switch
-        {
-            QcStage.Inspecting => 1,
-            QcStage.Decoding => 2,
-            QcStage.Analyzing => 3,
-            _ => 0
-        };
-
-        void StyleStep(Border card, FontIcon icon, int index)
-        {
-            var completed = finalStatus == QcStatus.Passed || (!running && index < stepIndex) || (running && index < stepIndex);
-            var active = running && index == stepIndex;
-            var failed = !running && finalStatus is QcStatus.Failed or QcStatus.ToolsUnavailable && index == Math.Max(1, stepIndex);
-
-            if (completed)
-            {
-                card.Background = ThemeBrush("StudioSignalLockSoftBrush");
-                card.BorderBrush = ThemeBrush("StudioSignalLockBrush");
-                icon.Glyph = "\uE73E";
-                icon.Foreground = ThemeBrush("StudioSignalLockBrush");
-            }
-            else if (active)
-            {
-                card.Background = ThemeBrush("StudioInfoSoftBrush");
-                card.BorderBrush = ThemeBrush("StudioInfoBrush");
-                icon.Glyph = "\uE895";
-                icon.Foreground = ThemeBrush("StudioInfoBrush");
-            }
-            else if (failed)
-            {
-                card.Background = ThemeBrush("StudioDangerSoftBrush");
-                card.BorderBrush = ThemeBrush("StudioDangerBrush");
-                icon.Glyph = "\uE783";
-                icon.Foreground = ThemeBrush("StudioDangerBrush");
-            }
-            else
-            {
-                card.Background = ThemeBrush("StudioPanelSecondaryBrush");
-                card.BorderBrush = ThemeBrush("StudioHairlineBrush");
-                icon.Glyph = "\uE91F";
-                icon.Foreground = ThemeBrush("StudioTextMutedBrush");
-            }
-        }
-
-        StyleStep(QcStep1Card, QcStep1Icon, 1);
-        StyleStep(QcStep2Card, QcStep2Icon, 2);
-        StyleStep(QcStep3Card, QcStep3Icon, 3);
+        latestQcEntry = entry;
+        qcHistory.Record(entry);
+        QcCenterPage.RenderEntry(entry);
+        QcCenterPage.RenderHistory(qcHistory.Entries, entry.Id);
+        RenderQcSummaryBadge();
     }
 
-    private void ShowQcResult(string path, QcResult? result, QcCaptureLog? capture, string title, Func<string> summary)
+    private IReadOnlyList<string> BuildMovWarnings(QcCaptureLog? capture, QcResult? result) =>
+        QcWarningFormatter.BuildMovWarnings(capture, result, L, settingsCulture);
+
+    private async Task OpenQcArtifactAsync(string artifact)
     {
-        qcOutputPath = path;
-        lastQcResult = result;
-        lastQcPresentation = new(capture, title, summary);
-        QcFileName.Text = Path.GetFileName(path);
-        QcFilePathText.Text = path;
-        QcResultSection.Visibility = Visibility.Visible;
-        QcLogButton.Visibility = result?.CaptureLog is null ? Visibility.Collapsed : Visibility.Visible;
-        QcToggleInlineLogButton.Visibility = result?.CaptureLog is null ? Visibility.Collapsed : Visibility.Visible;
-        QcHashButton.Visibility = result?.FrameMd5 is null ? Visibility.Collapsed : Visibility.Visible;
-        QcReportButton.Visibility = result?.QcToolsReport is null ? Visibility.Collapsed : Visibility.Visible;
-        RenderQcResult();
-    }
-
-    private async void QcToggleInlineLog_Click(object sender, RoutedEventArgs e)
-    {
-        if (lastQcResult?.CaptureLog is not { } logPath)
-            return;
-
-        if (QcInlineLogText.Visibility == Visibility.Visible)
-        {
-            QcInlineLogText.Visibility = Visibility.Collapsed;
-            QcToggleInlineLogLabel.Text = L("QcViewInlineLog");
-            return;
-        }
-
-        try
-        {
-            QcInlineLogText.Text = await File.ReadAllTextAsync(logPath);
-            QcInlineLogText.Visibility = Visibility.Visible;
-            QcToggleInlineLogLabel.Text = L("QcHideInlineLog");
-        }
-        catch (Exception ex) when (IsSessionError(ex))
-        {
-            QcOpenStatus.Message = ex.Message;
-            QcOpenStatus.IsOpen = true;
-        }
-    }
-
-    private async void OpenQcArtifact_Click(object sender, RoutedEventArgs e)
-    {
-        if (qcOutputPath is not { } output || ((Button)sender).Tag is not string artifact)
+        if (QcCenterPage.DisplayedEntry is not { } entry)
             return;
 
         try
         {
-            QcOpenStatus.IsOpen = false;
+            QcCenterPage.ClearArtifactOpenError();
+            var output = entry.FilePath;
             var path = artifact switch
             {
                 "video" => output,
-                "log" => lastQcResult?.CaptureLog,
-                "hash" => lastQcResult?.FrameMd5,
-                "report" => lastQcResult?.QcToolsReport,
+                "log" => entry.MovResult?.CaptureLog,
+                "hash" => entry.MovResult?.FrameMd5,
+                "report" => entry.MovResult?.QcToolsReport,
                 _ => null
             };
             if (artifact == "folder")
@@ -1522,13 +1606,44 @@ public sealed partial class MainWindow : Window
                     return;
             }
 
-            QcOpenStatus.Message = L("QcOpenError");
+            QcCenterPage.ShowArtifactOpenError(L("QcOpenError"));
         }
         catch (Exception ex) when (IsSessionError(ex))
         {
-            QcOpenStatus.Message = ex.Message;
+            QcCenterPage.ShowArtifactOpenError(ex.Message);
         }
-        QcOpenStatus.IsOpen = true;
+    }
+
+    private async Task SaveTsReportAsync(TsFileReport report)
+    {
+        pickingOutput = true;
+        UpdateControls();
+        try
+        {
+            var picker = new FileSavePicker(AppWindow.Id)
+            {
+                SuggestedFileName = Path.GetFileNameWithoutExtension(report.InputPath) + ".ts-qc.json"
+            };
+            picker.FileTypeChoices.Add("JSON report", [".json"]);
+            var file = await picker.PickSaveFileAsync();
+            if (file is null || closing)
+                return;
+            if (string.Equals(Path.GetFullPath(file.Path), report.InputPath, StringComparison.OrdinalIgnoreCase))
+                throw new IOException(L("TsSaveDifferentFile"));
+
+            await File.WriteAllTextAsync(file.Path, report.ToJson(indented: true));
+            QcCenterPage.ShowTsSaveStatus(L("TsJsonSaved"), file.Path, InfoBarSeverity.Success);
+        }
+        catch (Exception ex) when (IsSessionError(ex))
+        {
+            QcCenterPage.ShowTsSaveStatus(L("TsJsonSaveFailed"), ex.Message, InfoBarSeverity.Error);
+        }
+        finally
+        {
+            pickingOutput = false;
+            if (!closing)
+                UpdateControls();
+        }
     }
 
     private VideoSignal liveSignal;
@@ -1549,7 +1664,7 @@ public sealed partial class MainWindow : Window
 
     private void ShowCapture(VideoMode mode, CaptureStats stats)
     {
-        var autoMode = ModePicker.SelectedItem is ModeOption { Id: null };
+        var autoMode = deckLinkInspector.SelectedMode is { Id: null };
         var recordingAvailabilityChanged = displayedStats?.CanStartRecording != stats.CanStartRecording;
         var recordingInCurrentMode = recordingClock.IsRunning && !stats.RecordingModeChanged;
         var activeMode = !autoMode || stats.CanStartRecording || recordingInCurrentMode ? mode : null;
@@ -1581,7 +1696,7 @@ public sealed partial class MainWindow : Window
         switch (liveSignal)
         {
             case VideoSignal.NoInput:
-                SetStatus("NoInputSignal", ModePicker.SelectedItem is ModeOption { Id: null }
+                SetStatus("NoInputSignal", deckLinkInspector.SelectedMode is { Id: null }
                     ? displayedStats?.CanStartRecording == true ? "AutoNoInputRecordable" : "AutoRecordingHint"
                     : "PreviewingNoInput", InfoBarSeverity.Warning);
                 break;
@@ -1639,7 +1754,6 @@ public sealed partial class MainWindow : Window
     {
         var animationsEnabled = new Windows.UI.ViewManagement.UISettings().AnimationsEnabled;
 
-        // 1. Pulsing REC tally dots
         foreach (var dot in new UIElement[] { RecordingIndicator, PreviewRecTallyDot })
         {
             var visual = ElementCompositionPreview.GetElementVisual(dot);
@@ -1657,7 +1771,6 @@ public sealed partial class MainWindow : Window
             visual.StartAnimation(nameof(Visual.Opacity), pulse);
         }
 
-        // 2. Rotating precision tape reel next to timecode
         var reelVisual = ElementCompositionPreview.GetElementVisual(RecordingReelRotor);
         reelVisual.StopAnimation(nameof(Visual.RotationAngleInDegrees));
         reelVisual.CenterPoint = new Vector3(7.5f, 7.5f, 0f);
@@ -1673,7 +1786,6 @@ public sealed partial class MainWindow : Window
             reelVisual.StartAnimation(nameof(Visual.RotationAngleInDegrees), spin);
         }
 
-        // 3. 3-bar live write-activity equalizer inside top-right REC tally tag
         var bars = new[] { (RecBar1, 460, 0), (RecBar2, 580, 150), (RecBar3, 410, 290) };
         foreach (var (bar, durationMs, delayMs) in bars)
         {
@@ -1694,7 +1806,6 @@ public sealed partial class MainWindow : Window
             visual.StartAnimation("Scale.Y", bounce);
         }
 
-        // 4. Breathing crimson Tally border on Video Monitor
         PreviewRecFrameGlow.Visibility = active && !previewFullscreen ? Visibility.Visible : Visibility.Collapsed;
         var glowVisual = ElementCompositionPreview.GetElementVisual(PreviewRecFrameGlow);
         glowVisual.StopAnimation(nameof(Visual.Opacity));
@@ -1710,7 +1821,6 @@ public sealed partial class MainWindow : Window
             glowVisual.StartAnimation(nameof(Visual.Opacity), breathe);
         }
 
-        // 5. Continuous 2px crimson stream sweep bar along top of Footer
         RecordingSweepTrack.Visibility = active ? Visibility.Visible : Visibility.Collapsed;
         StartRecordingSweepAnimation();
 
@@ -1742,12 +1852,12 @@ public sealed partial class MainWindow : Window
         visual.StartAnimation(nameof(Visual.Offset), offset);
     }
 
-    private static void PulseWarningChip(UIElement chip)
+    private static void PulseWarningChip(UIElement element)
     {
         if (!new Windows.UI.ViewManagement.UISettings().AnimationsEnabled)
             return;
 
-        var visual = ElementCompositionPreview.GetElementVisual(chip);
+        var visual = ElementCompositionPreview.GetElementVisual(element);
         var pulse = visual.Compositor.CreateScalarKeyFrameAnimation();
         pulse.InsertKeyFrame(0f, 1f);
         pulse.InsertKeyFrame(0.35f, 0.55f);
@@ -1819,7 +1929,7 @@ public sealed partial class MainWindow : Window
         displayedStats = stats;
         displayedPreviewSkips = preview?.SkippedFrames ?? displayedPreviewSkips;
         if (stats.MissingVideoFrames > lastMissingFrames)
-            PulseWarningChip(MissingFramesChip);
+            PulseWarningChip(TelemetryStrip);
         lastMissingFrames = stats.MissingVideoFrames;
         RenderCounts(stats);
         ShowMonitoring(stats);
@@ -1829,45 +1939,34 @@ public sealed partial class MainWindow : Window
     {
         var active = captureTask is not null;
         var idle = settingsReady && !closing && !loading && !pickingOutput && !active && qcStop is null;
-        CheckMovButton.IsEnabled = idle && !recordingTransition;
-        RefreshButton.IsEnabled = idle;
-        DevicePicker.IsEnabled = idle && DevicePicker.Items.Count != 0;
-        VideoInputPicker.IsEnabled = idle && VideoInputPicker.Items.Count != 0;
-        AudioInputPicker.IsEnabled = idle && AudioInputPicker.Items.Count != 0;
-        ModePicker.IsEnabled = idle && ModePicker.Items.Count != 0;
-        VideoFormat10Button.IsEnabled = idle;
-        VideoFormat8Button.IsEnabled = idle;
-        AudioFormat16Button.IsEnabled = idle;
-        AudioFormat32Button.IsEnabled = idle;
-        UpdateAnalogControlsState(idle);
-        var canStart = idle && !recordingTransition && DevicePicker.SelectedItem is CaptureDevice &&
-            VideoInputPicker.SelectedItem is VideoInputSource && AudioInputPicker.SelectedItem is AudioInputSource &&
-            ModePicker.SelectedItem is ModeOption;
+        QcCenterPage.CanCheckFile = idle && !recordingTransition;
+        deckLinkInspector.UpdateEnabledState(idle && IsDeckLinkActive);
+        var canStart = IsDeckLinkActive && idle && !recordingTransition && deckLinkInspector.HasCompleteSelection;
         var changingRecording = recordingSession || recordingTransition;
         var canChooseOutput = settingsReady && !closing && !loading && !pickingOutput && !changingRecording;
         OutputPath.IsEnabled = canChooseOutput;
+        RecordingLabelBox.IsEnabled = canChooseOutput;
         BrowseButton.IsEnabled = canChooseOutput;
         var previewCanStop = active && !closing && !changingRecording &&
             captureStop is { IsCancellationRequested: false };
         RenderCaptureActions();
         StartButton.IsEnabled = active ? previewCanStop : canStart;
         PlaceholderStartButton.IsEnabled = canStart;
-        PlaceholderStartButton.Visibility = !active && canStart ? Visibility.Visible : Visibility.Collapsed;
-        var recordEnabled = qcStop is null && !closing && active && !recordingTransition && (recordingSession ||
+        PlaceholderStartButton.Visibility = IsDeckLinkActive && !active && canStart ? Visibility.Visible : Visibility.Collapsed;
+        var recordEnabled = IsDeckLinkActive && qcStop is null && !closing && active && !recordingTransition && (recordingSession ||
             (previewReady && displayedStats?.CanStartRecording == true && previewRecorder is not null && !pickingOutput &&
                 captureStop is { IsCancellationRequested: false } && !string.IsNullOrWhiteSpace(OutputPath.Text)));
         RecordButton.IsEnabled = recordEnabled;
         FullscreenRecordButton.IsEnabled = recordEnabled;
         CancelQcButton.IsEnabled = qcStop is { IsCancellationRequested: false };
-        QcCenterCancelButton.IsEnabled = CancelQcButton.IsEnabled;
+        QcCenterPage.IsCancelEnabled = CancelQcButton.IsEnabled;
         FooterQcActivePill.Visibility = qcStop is null ? Visibility.Collapsed : Visibility.Visible;
-        QcCenterCancelButton.Visibility = qcStop is null ? Visibility.Collapsed : Visibility.Visible;
-        RecordingModeHint.Visibility = ModePicker.SelectedItem is ModeOption { Id: null }
-            ? Visibility.Visible : Visibility.Collapsed;
+        QcCenterPage.IsCancelVisible = qcStop is not null;
         RecordingClock.Visibility = recordingClock.IsRunning ? Visibility.Visible : Visibility.Collapsed;
         FullscreenClockText.Visibility = recordingClock.IsRunning ? Visibility.Visible : Visibility.Collapsed;
-        QcResultsButton.Visibility = !changingRecording && qcStop is null && lastQcPresentation is not null
+        QcResultsButton.Visibility = !changingRecording && qcStop is null && latestQcEntry is not null
             ? Visibility.Visible : Visibility.Collapsed;
+        RenderSourceRackList();
         UpdateQcNavBadge();
         UpdateCaptureFooter();
         UpdateLivePreviewStatus();
@@ -1882,17 +1981,17 @@ public sealed partial class MainWindow : Window
             QcNavBadgeDot.Visibility = Visibility.Visible;
             QcNavBadgeDot.Fill = ThemeBrush("StudioInfoBrush");
         }
-        else if (lastQcResult is { Status: QcStatus.Failed })
+        else if (latestQcEntry is { Severity: TelemetrySeverity.Danger })
         {
             QcNavBadgeDot.Visibility = Visibility.Visible;
             QcNavBadgeDot.Fill = ThemeBrush("StudioDangerBrush");
         }
-        else if (lastQcResult is not null && QcWarningsPanel.Visibility == Visibility.Visible)
+        else if (latestQcEntry is { Severity: TelemetrySeverity.Caution })
         {
             QcNavBadgeDot.Visibility = Visibility.Visible;
             QcNavBadgeDot.Fill = ThemeBrush("StudioCautionBrush");
         }
-        else if (lastQcResult is { Status: QcStatus.Passed })
+        else if (latestQcEntry is { Severity: TelemetrySeverity.Normal })
         {
             QcNavBadgeDot.Visibility = Visibility.Visible;
             QcNavBadgeDot.Fill = ThemeBrush("StudioSignalLockBrush");
@@ -1932,7 +2031,18 @@ public sealed partial class MainWindow : Window
         RenderStatus();
     }
 
-    private sealed record ModeOption(string Label, uint? Id);
+    private sealed record SourceRackRow(
+        string BackendId,
+        string IconGlyph,
+        string Name,
+        string Subtitle,
+        string BadgeText,
+        bool IsSelectable,
+        Brush CardBackground,
+        Brush CardBorder,
+        Brush IconForeground,
+        Brush BadgeBackground,
+        Brush BadgeForeground);
 
     private static bool IsSessionError(Exception ex) =>
         ex is COMException or InvalidOperationException or InvalidCastException or IOException or

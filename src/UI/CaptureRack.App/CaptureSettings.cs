@@ -11,15 +11,19 @@ internal sealed record CaptureSettings
     public DeckLinkSettings DeckLink { get; init; } = new();
     public ControlDeviceAddress? ControlDevice { get; init; }
     public string OutputFolder { get; init; } = "";
+    public string RecordingLabel { get; init; } = "";
     public string? LanguageOverride { get; init; }
     public string Theme { get; init; } = "System";
     public string WorkspaceLayout { get; init; } = "Split";
+    public double SplitPreviewRatio { get; init; } = 0.63;
     public bool InspectorPinned { get; init; } = true;
     public bool ShowSafeArea { get; init; }
     public bool ShowNtsc480Guide { get; init; }
     public string PreviewDeinterlace { get; init; } = "BobWeave";
     public string PreviewAspectRatio { get; init; } = "Auto";
     public string PreviewColorMatrix { get; init; } = "Auto";
+    public string ScopeWaveformMode { get; init; } = "Luma";
+    public string ScopeLumaScale { get; init; } = "Code";
     public bool AudioMonitorEnabled { get; init; }
     public double AudioMonitorVolume { get; init; } = 0.8;
 }

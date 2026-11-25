@@ -82,7 +82,7 @@ public sealed partial class MainWindow
 
     private void PreviewFullscreen_Invoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
     {
-        if (activePage != ActiveAppPage.Capture ||
+        if (activePage != ActiveAppPage.Capture || !IsDeckLinkActive ||
             workspaceLayout is not (WorkspaceLayoutMode.Focus or WorkspaceLayoutMode.Split))
             return;
 
@@ -173,7 +173,8 @@ public sealed partial class MainWindow
         PreviewSurface.BorderThickness = fullscreen ? new Thickness(0) : new Thickness(1);
         PreviewSurface.CornerRadius = new CornerRadius(0);
         PreviewHudPill.Visibility = !fullscreen && previewCaption is not null ? Visibility.Visible : Visibility.Collapsed;
-        StereoMeter.Visibility = !fullscreen && lastWindowWidth >= 680 ? Visibility.Visible : Visibility.Collapsed;
+        StereoMeter.Visibility = !fullscreen && IsDeckLinkActive && activeModule.Descriptor.Capabilities.SupportsAudioMeters && lastWindowWidth >= 680
+            ? Visibility.Visible : Visibility.Collapsed;
 
         UpdateInspectorLayout();
         ApplyWorkspaceLayout();

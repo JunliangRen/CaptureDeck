@@ -16,10 +16,12 @@
     <ProjectReference Include="../../src/Capture/CaptureRack.Core/CaptureRack.Core.csproj" />
     <ProjectReference Include="../../src/Capture/CaptureCards/CaptureRack.DeckLink/CaptureRack.DeckLink.csproj" />
     <ProjectReference Include="../../src/Capture/CaptureRack.DirectShow/CaptureRack.DirectShow.csproj" />
+    <ProjectReference Include="../../src/Processing/CaptureRack.QualityControl/CaptureRack.QualityControl.csproj" />
     <ProjectReference Include="../../src/Processing/CaptureRack.Recording/CaptureRack.Recording.csproj" />
     <ProjectReference Include="../../src/Capture/CaptureRack.SignalCapture/CaptureRack.SignalCapture.csproj" />
     <ProjectReference Include="../../src/CaptureRack.DeviceControl/CaptureRack.DeviceControl.csproj" />
     <Compile Include="../../src/UI/CaptureRack.App/CaptureSettings.cs" Link="CaptureSettings.cs" />
     <Compile Include="../../src/UI/CaptureRack.App/SettingsLanguage.cs" Link="SettingsLanguage.cs" />
+    <Compile Include="../../src/UI/CaptureRack.App/Architecture/WorkspaceContracts.cs" Link="WorkspaceContracts.cs" />
   </ItemGroup>
 </Project>

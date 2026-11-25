@@ -1,6 +1,5 @@
 using System.Runtime.InteropServices.WindowsRuntime;
 using CaptureRack.DeckLink;
-using Microsoft.UI;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Controls;
@@ -14,11 +13,14 @@ namespace CaptureRack.App;
 public sealed partial class MainWindow
 {
     private enum EventFilterMode { All, Drops, Signal }
+    private enum ScopeLumaScaleMode { Code, Ire }
 
     private IReadOnlyList<CaptureEvent>? visibleEvents;
     private VideoScopes? visibleScopes;
     private StereoLevels? visibleAudio;
     private EventFilterMode eventFilter = EventFilterMode.All;
+    private VideoScopeWaveformMode scopeWaveformMode = VideoScopeWaveformMode.Luma;
+    private ScopeLumaScaleMode scopeLumaScale = ScopeLumaScaleMode.Code;
 
     private readonly SolidColorBrush spectrumGridBrush = new(Windows.UI.Color.FromArgb(255, 42, 49, 61));
     private readonly SolidColorBrush spectrumAxisBrush = new(Windows.UI.Color.FromArgb(255, 155, 165, 184));
@@ -26,18 +28,6 @@ public sealed partial class MainWindow
     private readonly SolidColorBrush eventCautionBrush = new(Windows.UI.Color.FromArgb(255, 245, 158, 11));
     private readonly SolidColorBrush eventLockBrush = new(Windows.UI.Color.FromArgb(255, 34, 197, 94));
     private readonly SolidColorBrush eventInfoBrush = new(Windows.UI.Color.FromArgb(255, 56, 189, 248));
-
-    // Broadcast meter ballistics state (60Hz smooth decay & peak hold)
-    private double leftTargetDb = -60;
-    private double rightTargetDb = -60;
-    private double leftDisplayedDb = -60;
-    private double rightDisplayedDb = -60;
-    private double leftPeakHoldDb = -60;
-    private double rightPeakHoldDb = -60;
-    private int leftPeakHoldFrames;
-    private int rightPeakHoldFrames;
-    private double meterRailHeight;
-    private double? displayedPhase;
     private float[]? spectrumPeakHoldValues;
 
     private void ResetMonitoring()
@@ -45,12 +35,7 @@ public sealed partial class MainWindow
         visibleEvents = null;
         visibleAudio = null;
         visibleScopes = null;
-        displayedPhase = null;
         spectrumPeakHoldValues = null;
-        leftTargetDb = rightTargetDb = -60;
-        leftDisplayedDb = rightDisplayedDb = -60;
-        leftPeakHoldDb = rightPeakHoldDb = -60;
-        leftPeakHoldFrames = rightPeakHoldFrames = 0;
 
         EventList.ItemsSource = null;
         EventList.Visibility = Visibility.Collapsed;
@@ -58,7 +43,7 @@ public sealed partial class MainWindow
         EventsSummary.Text = L("EventsEmpty");
         ScopeStatus.Text = L("ScopeWaiting");
         WaveformPlot.Source = null;
-        LumaScaleTop.Text = LumaScaleHigh.Text = LumaScaleMid.Text = LumaScaleLow.Text = "—";
+        RenderScopeScaleAxis(null);
         LumaScaleDescription.Text = L("LumaWaiting");
         AutomationProperties.SetName(WaveformPlot, L("LumaHeading"));
         VectorPlot.Source = null;
@@ -67,15 +52,7 @@ public sealed partial class MainWindow
         SpectrumPeakHold.Points.Clear();
         PaintSpectrumScale(null);
         SpectrumMidFrequency.Text = SpectrumMaxFrequency.Text = "—";
-        LeftMeterFill.ScaleY = RightMeterFill.ScaleY = 0;
-        LeftPeakHoldBar.Opacity = RightPeakHoldBar.Opacity = 0;
-        LeftLevel.Text = RightLevel.Text = "—";
-        AutomationProperties.SetName(LeftLevel, LocalFormat("PeakUnavailable", L("LeftChannel")));
-        AutomationProperties.SetName(RightLevel, LocalFormat("PeakUnavailable", L("RightChannel")));
-        UpdateClipBadge(LeftClipBadge, LeftChannel, "L", 0);
-        UpdateClipBadge(RightClipBadge, RightChannel, "R", 0);
-        PhaseLevel.Text = "—";
-        UpdatePhaseBar(null);
+        StereoMeter.Reset();
         UpdateSecondaryInstrumentHeader(GetDisplayedSecondaryInstrument());
     }
 
@@ -95,6 +72,42 @@ public sealed partial class MainWindow
         RenderStereoLevels(audio);
         if (spectrumScaleChanged)
             PaintSpectrumScale(audio.SpectrumFloorDbfs);
+    }
+
+    private void ScopeWaveformMode_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not Button { Tag: string tag })
+            return;
+
+        scopeWaveformMode = tag == "RgbParade" ? VideoScopeWaveformMode.RgbParade : VideoScopeWaveformMode.Luma;
+        if (preview is { } feed)
+            feed.ScopeWaveformMode = scopeWaveformMode;
+        UpdateScopeModeButtons();
+        if (visibleScopes is { } scopes)
+            RenderScopeLabels(scopes);
+        SettingsChanged();
+    }
+
+    private void ScopeLumaScale_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not Button { Tag: string tag })
+            return;
+
+        scopeLumaScale = tag == "Ire" ? ScopeLumaScaleMode.Ire : ScopeLumaScaleMode.Code;
+        UpdateScopeModeButtons();
+        RenderScopeScaleAxis(visibleScopes);
+        if (visibleScopes is { } scopes)
+            RenderScopeLabels(scopes);
+        SettingsChanged();
+    }
+
+    private void UpdateScopeModeButtons()
+    {
+        ApplySegmentState(ScopeLumaBtn, scopeWaveformMode == VideoScopeWaveformMode.Luma);
+        ApplySegmentState(ScopeParadeBtn, scopeWaveformMode == VideoScopeWaveformMode.RgbParade);
+        ApplySegmentState(ScopeScaleCodeBtn, scopeLumaScale == ScopeLumaScaleMode.Code);
+        ApplySegmentState(ScopeScaleIreBtn, scopeLumaScale == ScopeLumaScaleMode.Ire);
+        LumaHeading.Text = L(scopeWaveformMode == VideoScopeWaveformMode.RgbParade ? "RgbParadeHeading" : "LumaHeading");
     }
 
     private void EventsFilter_Click(object sender, RoutedEventArgs e)
@@ -166,21 +179,7 @@ public sealed partial class MainWindow
     {
         SpectrumMidFrequency.Text = (audio.SampleRate / 4000d).ToString("0.##", settingsCulture) + " kHz";
         SpectrumMaxFrequency.Text = (audio.SampleRate / 2000d).ToString("0.##", settingsCulture) + " kHz";
-
-        leftTargetDb = audio.LeftPeak > 0 ? Math.Clamp(20 * Math.Log10(audio.LeftPeak), -60, 0) : -60;
-        rightTargetDb = audio.RightPeak > 0 ? Math.Clamp(20 * Math.Log10(audio.RightPeak), -60, 0) : -60;
-
-        LeftLevel.Text = audio.LeftPeak > 0 ? (20 * Math.Log10(audio.LeftPeak)).ToString("0.0", settingsCulture) : "−∞";
-        RightLevel.Text = audio.RightPeak > 0 ? (20 * Math.Log10(audio.RightPeak)).ToString("0.0", settingsCulture) : "−∞";
-        AutomationProperties.SetName(LeftLevel, LocalFormat("PeakValue", L("LeftChannel"), LeftLevel.Text));
-        AutomationProperties.SetName(RightLevel, LocalFormat("PeakValue", L("RightChannel"), RightLevel.Text));
-
-        UpdateClipBadge(LeftClipBadge, LeftChannel, "L", audio.LeftClips);
-        UpdateClipBadge(RightClipBadge, RightChannel, "R", audio.RightClips);
-
-        displayedPhase = audio.PhaseCorrelation;
-        PhaseLevel.Text = audio.PhaseCorrelation?.ToString("+0.00;-0.00;0.00", settingsCulture) ?? "—";
-        UpdatePhaseBar(audio.PhaseCorrelation);
+        StereoMeter.UpdateLevels(audio, settingsCulture);
 
         if (audio.Spectrum is { } spectrum)
             PaintSpectrum(spectrum, audio.SpectrumFloorDbfs);
@@ -189,107 +188,7 @@ public sealed partial class MainWindow
             UpdateSecondaryInstrumentHeader(SplitSecondaryInstrument.Spectrum);
     }
 
-    private void UpdateClipBadge(Border badge, TextBlock label, string channelCode, long clips)
-    {
-        if (clips > 0)
-        {
-            badge.Background = ThemeBrush("StudioDangerBrush");
-            badge.BorderBrush = ThemeBrush("StudioDangerBrush");
-            label.Foreground = new SolidColorBrush(Colors.White);
-            label.Text = "CLIP";
-            var tip = LocalFormat("ClipCount", L(channelCode == "L" ? "LeftChannel" : "RightChannel"), clips);
-            ToolTipService.SetToolTip(badge, tip);
-        }
-        else
-        {
-            badge.Background = ThemeBrush("StudioMeterTrackBrush");
-            badge.BorderBrush = ThemeBrush("StudioSubtleBorderBrush");
-            label.Foreground = ThemeBrush("StudioTextSecondaryBrush");
-            label.Text = channelCode;
-            ToolTipService.SetToolTip(badge, L(channelCode == "L" ? "LeftChannel" : "RightChannel"));
-        }
-    }
-
-    private void MeterRail_SizeChanged(object sender, SizeChangedEventArgs e)
-    {
-        meterRailHeight = Math.Max(0, e.NewSize.Height - 4);
-        ApplyMeterTransforms();
-    }
-
-    private void PhaseBarRail_SizeChanged(object sender, SizeChangedEventArgs e) =>
-        UpdatePhaseBar(displayedPhase);
-
-    private void UpdatePhaseBar(double? correlation)
-    {
-        var width = PhaseBarRail.ActualWidth;
-        if (width <= 2 || correlation is not { } value)
-        {
-            PhaseIndicatorFill.Width = 0;
-            return;
-        }
-
-        var clamped = Math.Clamp(value, -1, 1);
-        var center = width / 2;
-        var span = Math.Max(2, Math.Abs(clamped) * (center - 1));
-        PhaseIndicatorFill.Width = span;
-        PhaseIndicatorFill.Margin = clamped >= 0
-            ? new Thickness(center, 0, 0, 0)
-            : new Thickness(center - span, 0, 0, 0);
-        PhaseIndicatorFill.Background = clamped >= 0.25
-            ? ThemeBrush("StudioSignalLockBrush")
-            : clamped >= -0.15
-                ? ThemeBrush("StudioCautionBrush")
-                : ThemeBrush("StudioDangerBrush");
-    }
-
-    private void UpdateMeterBallistics()
-    {
-        // Fast attack, broadcast ~24 dB/s gravity decay, 1.2s peak hold (~72 frames at 60Hz)
-        const double decayPerFrame = 0.42;
-        const double peakHoldDecay = 0.22;
-        const int holdFrames = 72;
-
-        StepChannel(leftTargetDb, ref leftDisplayedDb, ref leftPeakHoldDb, ref leftPeakHoldFrames, decayPerFrame, peakHoldDecay, holdFrames);
-        StepChannel(rightTargetDb, ref rightDisplayedDb, ref rightPeakHoldDb, ref rightPeakHoldFrames, decayPerFrame, peakHoldDecay, holdFrames);
-        ApplyMeterTransforms();
-    }
-
-    private static void StepChannel(double targetDb, ref double displayedDb, ref double peakHoldDb, ref int peakHoldFrames,
-        double decayPerFrame, double peakHoldDecay, int holdFrames)
-    {
-        displayedDb = targetDb >= displayedDb
-            ? targetDb
-            : Math.Max(targetDb, displayedDb - decayPerFrame);
-
-        if (displayedDb >= peakHoldDb)
-        {
-            peakHoldDb = displayedDb;
-            peakHoldFrames = holdFrames;
-        }
-        else if (peakHoldFrames > 0)
-        {
-            peakHoldFrames--;
-        }
-        else
-        {
-            peakHoldDb = Math.Max(displayedDb, peakHoldDb - peakHoldDecay);
-        }
-    }
-
-    private void ApplyMeterTransforms()
-    {
-        var leftNorm = Math.Clamp((60 + leftDisplayedDb) / 60, 0, 1);
-        var rightNorm = Math.Clamp((60 + rightDisplayedDb) / 60, 0, 1);
-        LeftMeterFill.ScaleY = leftNorm;
-        RightMeterFill.ScaleY = rightNorm;
-
-        var leftPeakNorm = Math.Clamp((60 + leftPeakHoldDb) / 60, 0, 1);
-        var rightPeakNorm = Math.Clamp((60 + rightPeakHoldDb) / 60, 0, 1);
-        LeftPeakHoldBar.Opacity = leftPeakNorm > 0.01 ? 0.92 : 0;
-        RightPeakHoldBar.Opacity = rightPeakNorm > 0.01 ? 0.92 : 0;
-        LeftPeakHoldOffset.Y = -leftPeakNorm * meterRailHeight;
-        RightPeakHoldOffset.Y = -rightPeakNorm * meterRailHeight;
-    }
+    private void UpdateMeterBallistics() => StereoMeter.StepBallistics();
 
     private SplitSecondaryInstrument GetDisplayedSecondaryInstrument() => workspaceLayout switch
     {
@@ -324,27 +223,22 @@ public sealed partial class MainWindow
 
     private void RefreshLocalizedMonitoring()
     {
+        UpdateScopeModeButtons();
         RenderEvents();
         if (visibleScopes is { } scopes)
             RenderScopeLabels(scopes);
         else
         {
             ScopeStatus.Text = L("ScopeWaiting");
+            RenderScopeScaleAxis(null);
             LumaScaleDescription.Text = L("LumaWaiting");
             AutomationProperties.SetName(WaveformPlot, L("LumaHeading"));
         }
+        StereoMeter.ApplyLanguage(L, settingsCulture);
         if (visibleAudio is { } audio)
         {
             RenderStereoLevels(audio);
             PaintSpectrumScale(audio.SpectrumFloorDbfs);
-        }
-        else
-        {
-            PhaseLevel.Text = "—";
-            AutomationProperties.SetName(LeftLevel, LocalFormat("PeakUnavailable", L("LeftChannel")));
-            AutomationProperties.SetName(RightLevel, LocalFormat("PeakUnavailable", L("RightChannel")));
-            UpdateClipBadge(LeftClipBadge, LeftChannel, "L", 0);
-            UpdateClipBadge(RightClipBadge, RightChannel, "R", 0);
         }
         UpdateSecondaryInstrumentHeader(GetDisplayedSecondaryInstrument());
     }
@@ -357,7 +251,9 @@ public sealed partial class MainWindow
             return;
 
         if (visibleScopes?.LumaScaleBits != scopes.LumaScaleBits ||
-            visibleScopes?.InputBits != scopes.InputBits || visibleScopes?.NoInput != scopes.NoInput)
+            visibleScopes?.InputBits != scopes.InputBits ||
+            visibleScopes?.NoInput != scopes.NoInput ||
+            visibleScopes?.WaveformMode != scopes.WaveformMode)
             RenderScopeLabels(scopes);
 
         visibleScopes = scopes;
@@ -365,18 +261,56 @@ public sealed partial class MainWindow
         PaintPlot(VectorPlot, scopes.Vectorscope, VideoScopes.VectorSize, VideoScopes.VectorSize);
     }
 
-    private void RenderScopeLabels(VideoScopes scopes)
+    private void RenderScopeScaleAxis(VideoScopes? scopes)
     {
-        var maximum = (1 << scopes.LumaScaleBits) - 1;
+        if (scopeLumaScale == ScopeLumaScaleMode.Ire)
+        {
+            LumaScaleTop.Text = "100";
+            LumaScaleHigh.Text = "75";
+            LumaScaleMid.Text = "50";
+            LumaScaleLow.Text = "25";
+            LumaScaleZero.Text = "0";
+            return;
+        }
+
+        LumaScaleZero.Text = "0";
+        if (scopes is null)
+        {
+            LumaScaleTop.Text = LumaScaleHigh.Text = LumaScaleMid.Text = LumaScaleLow.Text = "—";
+            return;
+        }
+
+        var maximum = scopeWaveformMode == VideoScopeWaveformMode.RgbParade
+            ? 255 : (1 << scopes.LumaScaleBits) - 1;
         var quarter = (maximum + 1) / 4;
         LumaScaleTop.Text = maximum.ToString(settingsCulture);
         LumaScaleHigh.Text = (quarter * 3).ToString(settingsCulture);
         LumaScaleMid.Text = (quarter * 2).ToString(settingsCulture);
         LumaScaleLow.Text = quarter.ToString(settingsCulture);
-        LumaScaleDescription.Text = scopes.LumaScaleBits == scopes.InputBits
-            ? LocalFormat("LumaNative", maximum, scopes.InputBits)
-            : LocalFormat("LumaScaled", maximum, scopes.LumaScaleBits, scopes.InputBits);
-        AutomationProperties.SetName(WaveformPlot, LocalFormat("LumaPlotRange", maximum));
+    }
+
+    private void RenderScopeLabels(VideoScopes scopes)
+    {
+        RenderScopeScaleAxis(scopes);
+        if (scopeWaveformMode == VideoScopeWaveformMode.RgbParade)
+        {
+            LumaScaleDescription.Text = scopeLumaScale == ScopeLumaScaleMode.Ire
+                ? "R · G · B · 0–100 IRE" : "R · G · B · 0–255";
+            AutomationProperties.SetName(WaveformPlot, L("RgbParadeHeading"));
+        }
+        else if (scopeLumaScale == ScopeLumaScaleMode.Ire)
+        {
+            LumaScaleDescription.Text = $"Y′ 0–100 IRE ({scopes.InputBits}-bit)";
+            AutomationProperties.SetName(WaveformPlot, L("LumaHeading"));
+        }
+        else
+        {
+            var maximum = (1 << scopes.LumaScaleBits) - 1;
+            LumaScaleDescription.Text = scopes.LumaScaleBits == scopes.InputBits
+                ? LocalFormat("LumaNative", maximum, scopes.InputBits)
+                : LocalFormat("LumaScaled", maximum, scopes.LumaScaleBits, scopes.InputBits);
+            AutomationProperties.SetName(WaveformPlot, LocalFormat("LumaPlotRange", maximum));
+        }
         ScopeStatus.Text = L(scopes.NoInput ? "ScopeNoInput" : "ScopeLive");
     }
 
@@ -427,7 +361,6 @@ public sealed partial class MainWindow
             SpectrumLevelAxis.Children.Add(label);
         }
 
-        // Subtle vertical quarter frequency guides
         for (var q = 1; q <= 3; q++)
         {
             var x = 1 + width * q / 4.0;

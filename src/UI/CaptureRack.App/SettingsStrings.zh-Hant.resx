@@ -888,4 +888,199 @@
   <data name="QcWarnUnreadableNoInput" xml:space="preserve">
     <value>{0:N0} 個無訊號畫格缺少可寫入的視訊資料。</value>
   </data>
+  <data name="BackendDeckLinkName" xml:space="preserve">
+    <value>Blackmagic DeckLink</value>
+  </data>
+  <data name="BackendDeckLinkDesc" xml:space="preserve">
+    <value>無損 SDI / HDMI / 類比視訊與 48 kHz PCM 音訊擷取。</value>
+  </data>
+  <data name="BackendDirectShowName" xml:space="preserve">
+    <value>DirectShow 擷取裝置</value>
+  </data>
+  <data name="BackendDirectShowDesc" xml:space="preserve">
+    <value>通用 Windows DirectShow 擷取卡與 USB 擷取裝置，支援 Crossbar 路由。</value>
+  </data>
+  <data name="BackendFireWireName" xml:space="preserve">
+    <value>FireWire / i.LINK (MSTape)</value>
+  </data>
+  <data name="BackendFireWireDesc" xml:space="preserve">
+    <value>原位元組保留的 IEEE 1394 MPEG-TS、D-VHS、HDV 與 DV 磁帶擷取。</value>
+  </data>
+  <data name="BackendRfName" xml:space="preserve">
+    <value>RF / 基頻訊號擷取 (SignalCapture)</value>
+  </data>
+  <data name="BackendRfDesc" xml:space="preserve">
+    <value>支援 Domesday Duplicator、MISRC 與 RTL-SDR 的高頻 RF / CVBS 取樣擷取。</value>
+  </data>
+  <data name="BackendAudioName" xml:space="preserve">
+    <value>獨立音訊介面 (WASAPI / ASIO)</value>
+  </data>
+  <data name="BackendAudioDesc" xml:space="preserve">
+    <value>適用於 Hi-Fi 音軌、線性音軌或獨立錄音的多聲道 PCM 音訊裝置。</value>
+  </data>
+  <data name="SourceRackHeading" xml:space="preserve">
+    <value>擷取來源機架</value>
+  </data>
+  <data name="SourceRackConfigure" xml:space="preserve">
+    <value>開啟擷取設定面板</value>
+  </data>
+  <data name="SourceStatusActive" xml:space="preserve">
+    <value>使用中</value>
+  </data>
+  <data name="SourceStatusPlanned" xml:space="preserve">
+    <value>規劃中</value>
+  </data>
+  <data name="RgbParadeHeading" xml:space="preserve">
+    <value>RGB 分量波形</value>
+  </data>
+  <data name="ScopeScaleCode" xml:space="preserve">
+    <value>碼值</value>
+  </data>
+  <data name="SplitResizeTooltip" xml:space="preserve">
+    <value>上下拖曳調整預覽與示波器比例 · 雙擊重設</value>
+  </data>
+  <data name="ClipResetHint" xml:space="preserve">
+    <value>點擊清除監看削波鎖定（不影響錄製統計）</value>
+  </data>
+  <data name="RecordingLabelHeading" xml:space="preserve">
+    <value>磁帶 / 卷號標籤（選填）</value>
+  </data>
+  <data name="RecordingLabelPlaceholder" xml:space="preserve">
+    <value>例如 Tape04_SideA</value>
+  </data>
+  <data name="QcCenterSubtitleMulti" xml:space="preserve">
+    <value>驗證 MOV 影音串流（FrameMD5、場序、QCTools）或離線分析 188 / 192 位元組 MPEG-TS 檔案。</value>
+  </data>
+  <data name="CheckMediaFile" xml:space="preserve">
+    <value>檢查 MOV / TS 檔案</value>
+  </data>
+  <data name="QcDropPromptMulti" xml:space="preserve">
+    <value>將 MOV 或 TS 檔案拖曳至此處，或點擊右上角選擇檔案</value>
+  </data>
+  <data name="QcHistoryHeading" xml:space="preserve">
+    <value>本次工作階段品管紀錄</value>
+  </data>
+  <data name="SaveTsJson" xml:space="preserve">
+    <value>匯出 JSON 報告</value>
+  </data>
+  <data name="TsDecodeNote" xml:space="preserve">
+    <value>傳輸串流分析會驗證封包結構、同步位元組、TEI 旗標、連續性計數與 PCR/PTS 時間戳記，不會解碼影音內容。</value>
+  </data>
+  <data name="TsPacketsUnit" xml:space="preserve">
+    <value>個封包</value>
+  </data>
+  <data name="TsMetricSync" xml:space="preserve">
+    <value>同步錯誤</value>
+  </data>
+  <data name="TsMetricMalformed" xml:space="preserve">
+    <value>異常封包</value>
+  </data>
+  <data name="TsMetricTei" xml:space="preserve">
+    <value>TEI 錯誤旗標</value>
+  </data>
+  <data name="TsMetricContinuity" xml:space="preserve">
+    <value>連續性錯誤</value>
+  </data>
+  <data name="TsMetricTrailing" xml:space="preserve">
+    <value>尾端殘留位元組</value>
+  </data>
+  <data name="TsMetricPcr" xml:space="preserve">
+    <value>PCR 數量</value>
+  </data>
+  <data name="TsMetricBackwardPcr" xml:space="preserve">
+    <value>PCR 倒退</value>
+  </data>
+  <data name="TsMetricPts" xml:space="preserve">
+    <value>PTS 數量</value>
+  </data>
+  <data name="TsFirstAffectedHeading" xml:space="preserve">
+    <value>首個異常封包位置</value>
+  </data>
+  <data name="TsChecking" xml:space="preserve">
+    <value>正在分析傳輸串流…</value>
+  </data>
+  <data name="TsCheckingDetail" xml:space="preserve">
+    <value>正在檢查 188 / 192 位元組封包同步、連續性計數與 PCR/PTS 時間戳記。</value>
+  </data>
+  <data name="TsCheckPassed" xml:space="preserve">
+    <value>TS 傳輸串流檢查通過</value>
+  </data>
+  <data name="TsCheckPassedDetail" xml:space="preserve">
+    <value>未偵測到同步錯誤、異常封包、TEI、連續性中斷、尾端殘留位元組或 PCR 倒退。</value>
+  </data>
+  <data name="TsCheckWarnings" xml:space="preserve">
+    <value>TS 傳輸串流有警示</value>
+  </data>
+  <data name="TsCheckWarningsDetail" xml:space="preserve">
+    <value>已完成傳輸串流解析，但偵測到連續性、TEI 或時間戳記警示。</value>
+  </data>
+  <data name="TsCheckFailed" xml:space="preserve">
+    <value>TS 檢查失敗</value>
+  </data>
+  <data name="TsCheckFailedDetail" xml:space="preserve">
+    <value>無法將此檔案驗證為有效的 188 或 192 位元組 MPEG 傳輸串流。</value>
+  </data>
+  <data name="TsSaveDifferentFile" xml:space="preserve">
+    <value>請選擇其他儲存路徑，避免覆寫原始 TS 檔案。</value>
+  </data>
+  <data name="TsJsonSaved" xml:space="preserve">
+    <value>TS JSON 報告已儲存</value>
+  </data>
+  <data name="TsJsonSaveFailed" xml:space="preserve">
+    <value>無法儲存 TS JSON 報告</value>
+  </data>
+  <data name="SourceRackStatusLabel" xml:space="preserve">
+    <value>狀態</value>
+  </data>
+  <data name="SourceRackLockedNotice" xml:space="preserve">
+    <value>請先停止目前預覽、錄製或品管檢查，再切換擷取後端。</value>
+  </data>
+  <data name="SourceStatusReady" xml:space="preserve">
+    <value>就緒</value>
+  </data>
+  <data name="SourceStatusSelectedPlanned" xml:space="preserve">
+    <value>已選取 · 規劃中</value>
+  </data>
+  <data name="BackendPlannedStatus" xml:space="preserve">
+    <value>規劃中的擷取後端</value>
+  </data>
+  <data name="PlannedCapabilitiesHeading" xml:space="preserve">
+    <value>規劃的工作台能力</value>
+  </data>
+  <data name="PlannedCliHeading" xml:space="preserve">
+    <value>目前可用的 CLI 探測命令</value>
+  </data>
+  <data name="PlannedBackendStageNotice" xml:space="preserve">
+    <value>此後端已註冊至 CaptureRack 的可插拔 Source Rack 架構，待即時介面模組完成後將直接掛載至此舞台與檢查器插槽。</value>
+  </data>
+  <data name="PlannedInspectorHint" xml:space="preserve">
+    <value>下方的共享輸出資料夾與磁帶標籤設定在所有擷取後端間通用並會自動保存。</value>
+  </data>
+  <data name="SwitchBackToDeckLink" xml:space="preserve">
+    <value>切換回 Blackmagic DeckLink</value>
+  </data>
+  <data name="CapVideoPreview" xml:space="preserve">
+    <value>視訊預覽</value>
+  </data>
+  <data name="CapTransportControl" xml:space="preserve">
+    <value>磁帶走帶控制</value>
+  </data>
+  <data name="CapAudioOverlay" xml:space="preserve">
+    <value>疊加獨立音訊</value>
+  </data>
+  <data name="TsMetricPackets" xml:space="preserve">
+    <value>TS 封包</value>
+  </data>
+  <data name="RfMetricSampleRate" xml:space="preserve">
+    <value>取樣率</value>
+  </data>
+  <data name="RfMetricOverruns" xml:space="preserve">
+    <value>緩衝區溢位</value>
+  </data>
+  <data name="RfMetricAdcClips" xml:space="preserve">
+    <value>削波</value>
+  </data>
+  <data name="AudioMetricChannels" xml:space="preserve">
+    <value>聲道數</value>
+  </data>
 </root>

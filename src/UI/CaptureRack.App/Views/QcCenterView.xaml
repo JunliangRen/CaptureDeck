@@ -1,0 +1,305 @@
+<UserControl
+    x:Class="CaptureRack.App.Views.QcCenterView"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    AllowDrop="True" DragOver="QcDropZone_DragOver" Drop="QcDropZone_Drop">
+    <ScrollView x:Name="QcCenterScroller" Background="Transparent"
+                ContentOrientation="Vertical" VerticalScrollMode="Enabled" VerticalScrollBarVisibility="Auto"
+                HorizontalScrollMode="Disabled" HorizontalScrollBarVisibility="Hidden"
+                HorizontalContentAlignment="Stretch">
+        <Grid MaxWidth="1040" Padding="24,18,24,28" ColumnSpacing="16">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition x:Name="HistoryColumn" Width="0" />
+            </Grid.ColumnDefinitions>
+
+            <!-- Main QC Report Area -->
+            <StackPanel Spacing="14">
+                <Grid ColumnSpacing="12">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <StackPanel Spacing="2">
+                        <TextBlock x:Name="QcHeading" Text="Quality Control" FontSize="20" FontWeight="SemiBold"
+                                   Foreground="{ThemeResource StudioTextPrimaryBrush}" />
+                        <TextBlock x:Name="QcCenterSubtitle" FontSize="12"
+                                   Foreground="{ThemeResource StudioTextSecondaryBrush}" TextWrapping="Wrap" />
+                    </StackPanel>
+                    <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                        <Button x:Name="CheckFileButton" Style="{StaticResource StudioTransportPrimaryButtonStyle}"
+                                Click="CheckFileButton_Click" IsEnabled="False">
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <FontIcon Glyph="&#xE8E5;" FontSize="13" />
+                                <TextBlock x:Name="CheckFileLabel" />
+                            </StackPanel>
+                        </Button>
+                        <Button x:Name="QcCancelButton" Style="{StaticResource StudioRecordIdleButtonStyle}"
+                                Visibility="Collapsed" Click="CancelQcButton_Click" />
+                    </StackPanel>
+                </Grid>
+
+                <!-- Active File / Drop Zone Card -->
+                <Border x:Name="QcFileCard" Style="{StaticResource StudioInspectorCardStyle}" Padding="16">
+                    <Grid ColumnSpacing="14">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <Border Width="40" Height="40" CornerRadius="4"
+                                Background="{ThemeResource StudioPanelSecondaryBrush}"
+                                BorderBrush="{ThemeResource StudioHairlineBrush}" BorderThickness="1">
+                            <FontIcon x:Name="QcFileIcon" Glyph="&#xE8B2;" FontSize="18"
+                                      Foreground="{ThemeResource StudioAccentBrush}" />
+                        </Border>
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="3">
+                            <TextBlock x:Name="QcFileName" FontSize="14" FontWeight="SemiBold"
+                                       Foreground="{ThemeResource StudioTextPrimaryBrush}" TextWrapping="Wrap" />
+                            <TextBlock x:Name="QcFilePathText" FontSize="12" IsTextSelectionEnabled="True"
+                                       Foreground="{ThemeResource StudioTextSecondaryBrush}" TextWrapping="Wrap" />
+                        </StackPanel>
+                        <Border x:Name="QcStatusPill" Grid.Column="2" CornerRadius="3" Padding="9,4"
+                                VerticalAlignment="Center" Visibility="Collapsed"
+                                Background="{ThemeResource StudioPanelSecondaryBrush}">
+                            <TextBlock x:Name="QcStatusPillText" FontSize="12" FontWeight="SemiBold" />
+                        </Border>
+                    </Grid>
+                </Border>
+
+                <!-- 3-Stage MOV QC Pipeline Progress -->
+                <Border x:Name="QcPipelineCard" Style="{StaticResource StudioInspectorCardStyle}"
+                        Padding="14" Visibility="Collapsed">
+                    <StackPanel Spacing="10">
+                        <Grid ColumnSpacing="10">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <Border x:Name="QcStep1Card" CornerRadius="3" Padding="10,8"
+                                    Background="{ThemeResource StudioPanelSecondaryBrush}"
+                                    BorderBrush="{ThemeResource StudioHairlineBrush}" BorderThickness="1">
+                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                    <FontIcon x:Name="QcStep1Icon" Glyph="&#xE91F;" FontSize="13" />
+                                    <TextBlock x:Name="QcStep1Label" FontSize="12" FontWeight="SemiBold"
+                                               VerticalAlignment="Center" TextWrapping="Wrap" />
+                                </StackPanel>
+                            </Border>
+                            <Border x:Name="QcStep2Card" Grid.Column="1" CornerRadius="3" Padding="10,8"
+                                    Background="{ThemeResource StudioPanelSecondaryBrush}"
+                                    BorderBrush="{ThemeResource StudioHairlineBrush}" BorderThickness="1">
+                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                    <FontIcon x:Name="QcStep2Icon" Glyph="&#xE91F;" FontSize="13" />
+                                    <TextBlock x:Name="QcStep2Label" FontSize="12" FontWeight="SemiBold"
+                                               VerticalAlignment="Center" TextWrapping="Wrap" />
+                                </StackPanel>
+                            </Border>
+                            <Border x:Name="QcStep3Card" Grid.Column="2" CornerRadius="3" Padding="10,8"
+                                    Background="{ThemeResource StudioPanelSecondaryBrush}"
+                                    BorderBrush="{ThemeResource StudioHairlineBrush}" BorderThickness="1">
+                                <StackPanel Orientation="Horizontal" Spacing="8">
+                                    <FontIcon x:Name="QcStep3Icon" Glyph="&#xE91F;" FontSize="13" />
+                                    <TextBlock x:Name="QcStep3Label" FontSize="12" FontWeight="SemiBold"
+                                               VerticalAlignment="Center" TextWrapping="Wrap" />
+                                </StackPanel>
+                            </Border>
+                        </Grid>
+                        <ProgressBar x:Name="QcProgressBar" IsIndeterminate="True" Visibility="Collapsed" />
+                    </StackPanel>
+                </Border>
+
+                <!-- Shared Outcome Banner -->
+                <Border x:Name="QcOutcomeBanner" CornerRadius="4" Padding="14" BorderThickness="1"
+                        Visibility="Collapsed"
+                        Background="{ThemeResource StudioCardBrush}"
+                        BorderBrush="{ThemeResource StudioHairlineBrush}">
+                    <Grid ColumnSpacing="12">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <FontIcon x:Name="QcOutcomeIcon" Glyph="&#xE73E;" FontSize="20" VerticalAlignment="Top" Margin="0,2,0,0" />
+                        <StackPanel Grid.Column="1" Spacing="4">
+                            <TextBlock x:Name="QcOutcome" FontSize="14" FontWeight="SemiBold"
+                                       Foreground="{ThemeResource StudioTextPrimaryBrush}" TextWrapping="Wrap" />
+                            <TextBlock x:Name="QcSummary" FontSize="12"
+                                       Foreground="{ThemeResource StudioTextSecondaryBrush}" TextWrapping="Wrap" />
+                        </StackPanel>
+                    </Grid>
+                </Border>
+
+                <!-- MOV QC Result Details -->
+                <StackPanel x:Name="MovResultSection" Spacing="12" Visibility="Collapsed">
+                    <Grid ColumnSpacing="8">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <Border Style="{StaticResource StudioInspectorCardStyle}">
+                            <StackPanel Spacing="4">
+                                <TextBlock x:Name="QcMetricVideoLabel" Style="{StaticResource StudioSectionHeadingStyle}" />
+                                <TextBlock x:Name="QcMetricVideoValue" Text="—" Style="{StaticResource StudioTimecodeTextStyle}"
+                                           FontSize="19" Foreground="{ThemeResource StudioTextPrimaryBrush}" />
+                            </StackPanel>
+                        </Border>
+                        <Border Grid.Column="1" Style="{StaticResource StudioInspectorCardStyle}">
+                            <StackPanel Spacing="4">
+                                <TextBlock x:Name="QcMetricAudioLabel" Style="{StaticResource StudioSectionHeadingStyle}" />
+                                <TextBlock x:Name="QcMetricAudioValue" Text="—" Style="{StaticResource StudioTimecodeTextStyle}"
+                                           FontSize="19" Foreground="{ThemeResource StudioTextPrimaryBrush}" />
+                            </StackPanel>
+                        </Border>
+                        <Border Grid.Column="2" Style="{StaticResource StudioInspectorCardStyle}">
+                            <StackPanel Spacing="4">
+                                <TextBlock x:Name="QcMetricWarningsLabel" Style="{StaticResource StudioSectionHeadingStyle}" />
+                                <TextBlock x:Name="QcMetricWarningsValue" Text="0" Style="{StaticResource StudioTimecodeTextStyle}"
+                                           FontSize="19" Foreground="{ThemeResource StudioTextPrimaryBrush}" />
+                            </StackPanel>
+                        </Border>
+                    </Grid>
+
+                    <Border x:Name="QcWarningsPanel" Visibility="Collapsed" CornerRadius="4" Padding="14"
+                            Background="{ThemeResource StudioCautionSoftBrush}"
+                            BorderBrush="{ThemeResource StudioCautionBrush}" BorderThickness="1">
+                        <StackPanel Spacing="8">
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <FontIcon Glyph="&#xE7BA;" FontSize="14" Foreground="{ThemeResource StudioCautionBrush}" />
+                                <TextBlock x:Name="QcWarningsHeading" Text="Warnings" FontSize="13" FontWeight="SemiBold"
+                                           Foreground="{ThemeResource StudioTextPrimaryBrush}" />
+                            </StackPanel>
+                            <ItemsControl x:Name="QcWarningsList">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <TextBlock Text="{Binding}" FontSize="12" TextWrapping="Wrap" Margin="0,2"
+                                                   Foreground="{ThemeResource StudioTextPrimaryBrush}" />
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                        </StackPanel>
+                    </Border>
+
+                    <Border Style="{StaticResource StudioInspectorCardStyle}" Padding="14">
+                        <StackPanel Spacing="10">
+                            <TextBlock x:Name="QcArtifactsHeading" Style="{StaticResource StudioSectionHeadingStyle}" />
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <Button x:Name="QcFolderButton" Tag="folder" Click="ArtifactButton_Click"
+                                        Style="{StaticResource StudioTransportPrimaryButtonStyle}" />
+                                <Button x:Name="QcVideoButton" Tag="video" Click="ArtifactButton_Click"
+                                        Style="{StaticResource StudioTransportPrimaryButtonStyle}" />
+                                <Button x:Name="QcLogButton" Tag="log" Click="ArtifactButton_Click"
+                                        Style="{StaticResource StudioTransportPrimaryButtonStyle}" />
+                                <Button x:Name="QcHashButton" Tag="hash" Click="ArtifactButton_Click"
+                                        Style="{StaticResource StudioTransportPrimaryButtonStyle}" />
+                                <Button x:Name="QcReportButton" Tag="report" Click="ArtifactButton_Click"
+                                        Style="{StaticResource StudioTransportPrimaryButtonStyle}" />
+                            </StackPanel>
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <Button x:Name="QcToggleInlineLogButton" Style="{StaticResource SubtleButtonStyle}"
+                                        CornerRadius="3" Click="ToggleInlineLog_Click" Visibility="Collapsed">
+                                    <StackPanel Orientation="Horizontal" Spacing="6">
+                                        <FontIcon Glyph="&#xE8A5;" FontSize="12" />
+                                        <TextBlock x:Name="QcToggleInlineLogLabel" FontSize="12" />
+                                    </StackPanel>
+                                </Button>
+                            </StackPanel>
+                            <TextBox x:Name="QcInlineLogText" IsReadOnly="True" AcceptsReturn="True"
+                                     TextWrapping="Wrap" FontFamily="Cascadia Mono, Consolas" FontSize="11"
+                                     CornerRadius="3" MaxHeight="300" Visibility="Collapsed" />
+                            <InfoBar x:Name="QcOpenStatus" Severity="Warning" IsOpen="False" IsClosable="False" />
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
+
+                <!-- Transport Stream (TS / TS192 / M2T) Result Details -->
+                <StackPanel x:Name="TsResultSection" Spacing="12" Visibility="Collapsed">
+                    <Border Style="{StaticResource StudioInspectorCardStyle}" Padding="14">
+                        <StackPanel Spacing="10">
+                            <Grid>
+                                <TextBlock x:Name="TsFormatText" Style="{StaticResource StudioMonoTextStyle}"
+                                           FontWeight="SemiBold" Foreground="{ThemeResource StudioAccentBrush}" />
+                                <Button x:Name="SaveTsJsonButton" HorizontalAlignment="Right"
+                                        Style="{StaticResource StudioTransportPrimaryButtonStyle}"
+                                        Click="SaveTsJsonButton_Click" />
+                            </Grid>
+                            <ItemsControl x:Name="TsMetricsList">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate>
+                                        <Grid ColumnSpacing="12" Padding="0,5"
+                                              BorderBrush="{ThemeResource StudioSubtleBorderBrush}" BorderThickness="0,0,0,1">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="Auto" />
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Text="{Binding Label}" FontSize="12"
+                                                       Foreground="{ThemeResource StudioTextSecondaryBrush}" />
+                                            <TextBlock Grid.Column="1" Text="{Binding Value}"
+                                                       Style="{StaticResource StudioMonoTextStyle}" FontSize="12"
+                                                       FontWeight="SemiBold" Foreground="{ThemeResource StudioTextPrimaryBrush}" />
+                                        </Grid>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                            <Border x:Name="TsFirstErrorsCard" Visibility="Collapsed" CornerRadius="3" Padding="10,8"
+                                    Background="{ThemeResource StudioCautionSoftBrush}"
+                                    BorderBrush="{ThemeResource StudioCautionBrush}" BorderThickness="1">
+                                <TextBlock x:Name="TsFirstErrorsText" Style="{StaticResource StudioMonoTextStyle}"
+                                           FontSize="12" TextWrapping="Wrap" IsTextSelectionEnabled="True"
+                                           Foreground="{ThemeResource StudioTextPrimaryBrush}" />
+                            </Border>
+                            <TextBlock x:Name="TsDecodeNoteText" FontSize="12" TextWrapping="Wrap"
+                                       Foreground="{ThemeResource StudioTextMutedBrush}" />
+                            <InfoBar x:Name="TsSaveStatus" IsOpen="False" IsClosable="False" />
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
+            </StackPanel>
+
+            <!-- Session QC History Sidebar -->
+            <Border x:Name="QcHistoryPanel" Grid.Column="1" Visibility="Collapsed"
+                    Style="{StaticResource StudioInstrumentCardStyle}" Padding="10" VerticalAlignment="Top">
+                <StackPanel Spacing="8">
+                    <TextBlock x:Name="QcHistoryHeading" Style="{StaticResource StudioSectionHeadingStyle}" />
+                    <ListView x:Name="QcHistoryList" SelectionMode="Single" MaxHeight="520"
+                              SelectionChanged="QcHistoryList_SelectionChanged">
+                        <ListView.ItemContainerStyle>
+                            <Style TargetType="ListViewItem">
+                                <Setter Property="Padding" Value="6,6" />
+                                <Setter Property="MinHeight" Value="42" />
+                                <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                            </Style>
+                        </ListView.ItemContainerStyle>
+                        <ListView.ItemTemplate>
+                            <DataTemplate>
+                                <Grid ColumnSpacing="8">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <Rectangle Width="6" Height="6" RadiusX="1" RadiusY="1"
+                                               Fill="{Binding StatusBrush}" VerticalAlignment="Top" Margin="0,5,0,0" />
+                                    <StackPanel Grid.Column="1" Spacing="2">
+                                        <TextBlock Text="{Binding FileName}" FontSize="12" FontWeight="SemiBold"
+                                                   TextTrimming="CharacterEllipsis"
+                                                   Foreground="{ThemeResource StudioTextPrimaryBrush}" />
+                                        <TextBlock Text="{Binding Subtitle}" FontSize="11"
+                                                   TextTrimming="CharacterEllipsis"
+                                                   Foreground="{ThemeResource StudioTextSecondaryBrush}" />
+                                    </StackPanel>
+                                    <Border Grid.Column="2" CornerRadius="2" Padding="5,1" VerticalAlignment="Top"
+                                            Background="{ThemeResource StudioPanelSecondaryBrush}"
+                                            BorderBrush="{ThemeResource StudioHairlineBrush}" BorderThickness="1">
+                                        <TextBlock Text="{Binding KindTag}" Style="{StaticResource StudioMonoTextStyle}"
+                                                   FontSize="10" Foreground="{ThemeResource StudioTextSecondaryBrush}" />
+                                    </Border>
+                                </Grid>
+                            </DataTemplate>
+                        </ListView.ItemTemplate>
+                    </ListView>
+                </StackPanel>
+            </Border>
+        </Grid>
+    </ScrollView>
+</UserControl>

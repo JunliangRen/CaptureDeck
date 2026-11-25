@@ -888,4 +888,199 @@
   <data name="QcWarnUnreadableNoInput" xml:space="preserve">
     <value>{0:N0} 件の入力なしフレームに、書き込み可能な映像データがありませんでした。</value>
   </data>
+  <data name="BackendDeckLinkName" xml:space="preserve">
+    <value>Blackmagic DeckLink</value>
+  </data>
+  <data name="BackendDeckLinkDesc" xml:space="preserve">
+    <value>無圧縮 SDI / HDMI / アナログ映像と 48 kHz PCM 音声のキャプチャ。</value>
+  </data>
+  <data name="BackendDirectShowName" xml:space="preserve">
+    <value>DirectShow キャプチャ</value>
+  </data>
+  <data name="BackendDirectShowDesc" xml:space="preserve">
+    <value>Crossbar 入力ルーティング対応の汎用 Windows DirectShow デバイス。</value>
+  </data>
+  <data name="BackendFireWireName" xml:space="preserve">
+    <value>FireWire / i.LINK (MSTape)</value>
+  </data>
+  <data name="BackendFireWireDesc" xml:space="preserve">
+    <value>バイト保存型の IEEE 1394 MPEG-TS、D-VHS、HDV、DV テープキャプチャ。</value>
+  </data>
+  <data name="BackendRfName" xml:space="preserve">
+    <value>RF / ベースバンド信号キャプチャ</value>
+  </data>
+  <data name="BackendRfDesc" xml:space="preserve">
+    <value>Domesday Duplicator・MISRC・RTL-SDR による RF / CVBS サンプリング収録。</value>
+  </data>
+  <data name="BackendAudioName" xml:space="preserve">
+    <value>スタンドアロン音声 (WASAPI / ASIO)</value>
+  </data>
+  <data name="BackendAudioDesc" xml:space="preserve">
+    <value>Hi-Fi・リニア音声や独立録音向けのマルチチャンネル PCM オーディオ入力。</value>
+  </data>
+  <data name="SourceRackHeading" xml:space="preserve">
+    <value>キャプチャソースラック</value>
+  </data>
+  <data name="SourceRackConfigure" xml:space="preserve">
+    <value>キャプチャ設定を開く</value>
+  </data>
+  <data name="SourceStatusActive" xml:space="preserve">
+    <value>稼働中</value>
+  </data>
+  <data name="SourceStatusPlanned" xml:space="preserve">
+    <value>予定</value>
+  </data>
+  <data name="RgbParadeHeading" xml:space="preserve">
+    <value>RGB パレード</value>
+  </data>
+  <data name="ScopeScaleCode" xml:space="preserve">
+    <value>コード</value>
+  </data>
+  <data name="SplitResizeTooltip" xml:space="preserve">
+    <value>上下ドラッグで映像とスコープ比率を変更 · ダブルクリックでリセット</value>
+  </data>
+  <data name="ClipResetHint" xml:space="preserve">
+    <value>クリックでモニター CLIP ラッチを解除（収録統計には影響しません）</value>
+  </data>
+  <data name="RecordingLabelHeading" xml:space="preserve">
+    <value>テープ / リール名（任意）</value>
+  </data>
+  <data name="RecordingLabelPlaceholder" xml:space="preserve">
+    <value>例: Tape04_SideA</value>
+  </data>
+  <data name="QcCenterSubtitleMulti" xml:space="preserve">
+    <value>MOV ストリーム（FrameMD5・フィールド順・QCTools）検証、または 188 / 192 バイト MPEG-TS のオフライン解析を行います。</value>
+  </data>
+  <data name="CheckMediaFile" xml:space="preserve">
+    <value>MOV / TS を検査</value>
+  </data>
+  <data name="QcDropPromptMulti" xml:space="preserve">
+    <value>MOV または TS ファイルをここにドロップ、またはファイルを選択</value>
+  </data>
+  <data name="QcHistoryHeading" xml:space="preserve">
+    <value>セッション検査履歴</value>
+  </data>
+  <data name="SaveTsJson" xml:space="preserve">
+    <value>JSON レポートを保存</value>
+  </data>
+  <data name="TsDecodeNote" xml:space="preserve">
+    <value>TS 解析は映像・音声をデコードせず、パケット構造・同期・TEI・連続性・PCR/PTS 時刻を検証します。</value>
+  </data>
+  <data name="TsPacketsUnit" xml:space="preserve">
+    <value>パケット</value>
+  </data>
+  <data name="TsMetricSync" xml:space="preserve">
+    <value>同期エラー</value>
+  </data>
+  <data name="TsMetricMalformed" xml:space="preserve">
+    <value>不正パケット</value>
+  </data>
+  <data name="TsMetricTei" xml:space="preserve">
+    <value>TEI フラグ</value>
+  </data>
+  <data name="TsMetricContinuity" xml:space="preserve">
+    <value>連続性エラー</value>
+  </data>
+  <data name="TsMetricTrailing" xml:space="preserve">
+    <value>末尾余剰バイト</value>
+  </data>
+  <data name="TsMetricPcr" xml:space="preserve">
+    <value>PCR 数</value>
+  </data>
+  <data name="TsMetricBackwardPcr" xml:space="preserve">
+    <value>PCR 逆行</value>
+  </data>
+  <data name="TsMetricPts" xml:space="preserve">
+    <value>PTS 数</value>
+  </data>
+  <data name="TsFirstAffectedHeading" xml:space="preserve">
+    <value>最初の異常パケット位置</value>
+  </data>
+  <data name="TsChecking" xml:space="preserve">
+    <value>TS ストリームを解析中…</value>
+  </data>
+  <data name="TsCheckingDetail" xml:space="preserve">
+    <value>188 / 192 バイトパケット同期・連続性カウンタ・PCR/PTS タイムスタンプを確認しています。</value>
+  </data>
+  <data name="TsCheckPassed" xml:space="preserve">
+    <value>TS 伝送チェック合格</value>
+  </data>
+  <data name="TsCheckPassedDetail" xml:space="preserve">
+    <value>同期エラー、不正パケット、TEI、連続性異常、末尾余剰バイト、PCR 逆行は検出されませんでした。</value>
+  </data>
+  <data name="TsCheckWarnings" xml:space="preserve">
+    <value>TS 伝送チェック警告</value>
+  </data>
+  <data name="TsCheckWarningsDetail" xml:space="preserve">
+    <value>TS 解析は完了しましたが、連続性・TEI または時刻に関する警告が見つかりました。</value>
+  </data>
+  <data name="TsCheckFailed" xml:space="preserve">
+    <value>TS チェック失敗</value>
+  </data>
+  <data name="TsCheckFailedDetail" xml:space="preserve">
+    <value>有効な 188 / 192 バイト MPEG-TS ストリームとして検証できませんでした。</value>
+  </data>
+  <data name="TsSaveDifferentFile" xml:space="preserve">
+    <value>元の TS ファイルを上書きしないよう、別の保存先を指定してください。</value>
+  </data>
+  <data name="TsJsonSaved" xml:space="preserve">
+    <value>TS JSON レポートを保存しました</value>
+  </data>
+  <data name="TsJsonSaveFailed" xml:space="preserve">
+    <value>TS JSON レポートを保存できませんでした</value>
+  </data>
+  <data name="SourceRackStatusLabel" xml:space="preserve">
+    <value>状態</value>
+  </data>
+  <data name="SourceRackLockedNotice" xml:space="preserve">
+    <value>バックエンドを切り替える前にプレビュー・収録・品質チェックを停止してください。</value>
+  </data>
+  <data name="SourceStatusReady" xml:space="preserve">
+    <value>利用可能</value>
+  </data>
+  <data name="SourceStatusSelectedPlanned" xml:space="preserve">
+    <value>選択中 · 予定</value>
+  </data>
+  <data name="BackendPlannedStatus" xml:space="preserve">
+    <value>予定のキャプチャバックエンド</value>
+  </data>
+  <data name="PlannedCapabilitiesHeading" xml:space="preserve">
+    <value>予定されているワークスペース機能</value>
+  </data>
+  <data name="PlannedCliHeading" xml:space="preserve">
+    <value>利用可能な CLI プローブコマンド</value>
+  </data>
+  <data name="PlannedBackendStageNotice" xml:space="preserve">
+    <value>このバックエンドは CaptureRack のプラグイン型 Source Rack アーキテクチャに登録済みで、UI モジュール実装後にこのステージとインスペクタスロットへマウントされます。</value>
+  </data>
+  <data name="PlannedInspectorHint" xml:space="preserve">
+    <value>下部の共通出力フォルダおよびテープラベル設定はすべてのバックエンドで共有されます。</value>
+  </data>
+  <data name="SwitchBackToDeckLink" xml:space="preserve">
+    <value>Blackmagic DeckLink に切替</value>
+  </data>
+  <data name="CapVideoPreview" xml:space="preserve">
+    <value>映像プレビュー</value>
+  </data>
+  <data name="CapTransportControl" xml:space="preserve">
+    <value>テープ制御</value>
+  </data>
+  <data name="CapAudioOverlay" xml:space="preserve">
+    <value>独立音声オーバーレイ</value>
+  </data>
+  <data name="TsMetricPackets" xml:space="preserve">
+    <value>TS パケット</value>
+  </data>
+  <data name="RfMetricSampleRate" xml:space="preserve">
+    <value>サンプルレート</value>
+  </data>
+  <data name="RfMetricOverruns" xml:space="preserve">
+    <value>オーバーラン</value>
+  </data>
+  <data name="RfMetricAdcClips" xml:space="preserve">
+    <value>クリップ</value>
+  </data>
+  <data name="AudioMetricChannels" xml:space="preserve">
+    <value>チャンネル</value>
+  </data>
 </root>

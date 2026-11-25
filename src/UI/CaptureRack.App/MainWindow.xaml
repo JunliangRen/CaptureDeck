@@ -2,7 +2,8 @@
     x:Class="CaptureRack.App.MainWindow"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-    xmlns:toolkit="using:CommunityToolkit.WinUI.Controls"
+    xmlns:controls="using:CaptureRack.App.Controls"
+    xmlns:views="using:CaptureRack.App.Views"
     Title="CaptureRack">
     <Grid x:Name="RootShell" Background="Transparent" SizeChanged="Viewport_SizeChanged">
         <Grid.RowDefinitions>
@@ -21,7 +22,7 @@
             <KeyboardAccelerator Key="I" Modifiers="Control" Invoked="ToggleInspector_Invoked" />
         </Grid.KeyboardAccelerators>
 
-        <!-- Custom Studio Title Bar (Sharp 0px edge chrome) -->
+        <!-- Custom Studio Title Bar -->
         <Grid x:Name="TitleBarGrid" Height="42" Padding="12,0,0,0"
               Background="{ThemeResource StudioPanelBrush}"
               BorderBrush="{ThemeResource StudioHairlineBrush}" BorderThickness="0,0,0,1">
@@ -32,7 +33,7 @@
                 <ColumnDefinition x:Name="TitleBarRightInset" Width="138" />
             </Grid.ColumnDefinitions>
 
-            <!-- Brand + Workspace Mode Switcher + Quick Source Selector -->
+            <!-- Brand + Workspace Mode Switcher + Multi-Backend Source Rack Switcher -->
             <StackPanel Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
                 <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center" Margin="0,0,4,0">
                     <Border Width="20" Height="20" CornerRadius="3"
@@ -74,12 +75,11 @@
                     </StackPanel>
                 </Border>
 
-                <!-- Quick Source Bar Button (Crisp 4px radius) -->
+                <!-- Source Rack Switcher (Multi-Backend Aware) -->
                 <Button x:Name="QuickSourceButton" Style="{StaticResource SubtleButtonStyle}"
                         Height="28" Padding="9,0" CornerRadius="4"
                         Background="{ThemeResource StudioCardBrush}"
-                        BorderBrush="{ThemeResource StudioHairlineBrush}" BorderThickness="1"
-                        Click="QuickSourceButton_Click">
+                        BorderBrush="{ThemeResource StudioHairlineBrush}" BorderThickness="1">
                     <StackPanel Orientation="Horizontal" Spacing="7">
                         <Rectangle x:Name="QuickSourceDot" Width="7" Height="7" RadiusX="1" RadiusY="1"
                                    Fill="{ThemeResource StudioTextMutedBrush}" VerticalAlignment="Center" />
@@ -88,6 +88,79 @@
                                    TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
                         <FontIcon Glyph="&#xE70D;" FontSize="9" Foreground="{ThemeResource StudioTextSecondaryBrush}" />
                     </StackPanel>
+                    <Button.Flyout>
+                        <Flyout x:Name="SourceRackFlyout" Placement="BottomEdgeAlignedLeft">
+                            <StackPanel Width="336" Spacing="10">
+                                <TextBlock x:Name="SourceRackHeading" Style="{StaticResource StudioSectionHeadingStyle}" />
+                                <TextBlock x:Name="SourceRackLockNotice" FontSize="11" TextWrapping="Wrap"
+                                           Visibility="Collapsed" Foreground="{ThemeResource StudioCautionBrush}" />
+                                <ItemsControl x:Name="SourceRackList">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <Button Tag="{Binding BackendId}" IsEnabled="{Binding IsSelectable}"
+                                                    Click="SourceRackItem_Click" HorizontalAlignment="Stretch"
+                                                    HorizontalContentAlignment="Stretch" Padding="0" Margin="0,0,0,6">
+                                                <Button.Template>
+                                                    <ControlTemplate TargetType="Button">
+                                                        <ContentPresenter x:Name="RootContent">
+                                                            <VisualStateManager.VisualStateGroups>
+                                                                <VisualStateGroup x:Name="CommonStates">
+                                                                    <VisualState x:Name="Normal" />
+                                                                    <VisualState x:Name="PointerOver">
+                                                                        <VisualState.Setters>
+                                                                            <Setter Target="RootContent.Opacity" Value="0.88" />
+                                                                        </VisualState.Setters>
+                                                                    </VisualState>
+                                                                    <VisualState x:Name="Pressed">
+                                                                        <VisualState.Setters>
+                                                                            <Setter Target="RootContent.Opacity" Value="0.74" />
+                                                                        </VisualState.Setters>
+                                                                    </VisualState>
+                                                                    <VisualState x:Name="Disabled">
+                                                                        <VisualState.Setters>
+                                                                            <Setter Target="RootContent.Opacity" Value="0.55" />
+                                                                        </VisualState.Setters>
+                                                                    </VisualState>
+                                                                </VisualStateGroup>
+                                                            </VisualStateManager.VisualStateGroups>
+                                                        </ContentPresenter>
+                                                    </ControlTemplate>
+                                                </Button.Template>
+                                                <Border Background="{Binding CardBackground}"
+                                                        BorderBrush="{Binding CardBorder}"
+                                                        BorderThickness="1" CornerRadius="3" Padding="10,8">
+                                                    <Grid ColumnSpacing="9">
+                                                        <Grid.ColumnDefinitions>
+                                                            <ColumnDefinition Width="Auto" />
+                                                            <ColumnDefinition Width="*" />
+                                                            <ColumnDefinition Width="Auto" />
+                                                        </Grid.ColumnDefinitions>
+                                                        <FontIcon Glyph="{Binding IconGlyph}" FontSize="14"
+                                                                  VerticalAlignment="Top" Margin="0,2,0,0"
+                                                                  Foreground="{Binding IconForeground}" />
+                                                        <StackPanel Grid.Column="1" Spacing="2">
+                                                            <TextBlock Text="{Binding Name}" FontSize="13" FontWeight="SemiBold"
+                                                                       Foreground="{ThemeResource StudioTextPrimaryBrush}" />
+                                                            <TextBlock Text="{Binding Subtitle}" FontSize="11" TextWrapping="Wrap"
+                                                                       Foreground="{ThemeResource StudioTextSecondaryBrush}" />
+                                                        </StackPanel>
+                                                        <Border Grid.Column="2" VerticalAlignment="Top" CornerRadius="2" Padding="6,2"
+                                                                Background="{Binding BadgeBackground}">
+                                                            <TextBlock Text="{Binding BadgeText}" FontSize="10" FontWeight="SemiBold"
+                                                                       Foreground="{Binding BadgeForeground}" />
+                                                        </Border>
+                                                    </Grid>
+                                                </Border>
+                                            </Button>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                                <Button x:Name="SourceRackConfigureButton" HorizontalAlignment="Stretch"
+                                        Style="{StaticResource StudioTransportPrimaryButtonStyle}"
+                                        Click="SourceRackConfigure_Click" />
+                            </StackPanel>
+                        </Flyout>
+                    </Button.Flyout>
                 </Button>
             </StackPanel>
 
@@ -125,7 +198,7 @@
                         <RowDefinition Height="*" />
                     </Grid.RowDefinitions>
 
-                    <!-- Stage Toolbar -->
+                    <!-- De-cluttered Capability-Aware Stage Toolbar -->
                     <Grid x:Name="StageToolbar" ColumnSpacing="8">
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*" />
@@ -133,7 +206,7 @@
                         </Grid.ColumnDefinitions>
                         <ScrollViewer HorizontalScrollMode="Auto" HorizontalScrollBarVisibility="Hidden"
                                       VerticalScrollMode="Disabled" VerticalScrollBarVisibility="Disabled">
-                            <Border Background="{ThemeResource StudioSegmentTrackBrush}"
+                            <Border x:Name="LayoutSegmentTrack" Background="{ThemeResource StudioSegmentTrackBrush}"
                                     BorderBrush="{ThemeResource StudioHairlineBrush}" BorderThickness="1"
                                     CornerRadius="4" Padding="2" HorizontalAlignment="Left">
                                 <StackPanel Orientation="Horizontal" Spacing="2">
@@ -177,108 +250,9 @@
                         </ScrollViewer>
 
                         <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
-                            <!-- Preview-Only Monitor Options Popover -->
-                            <Button x:Name="MonitorOptionsButton" Style="{StaticResource SubtleButtonStyle}"
-                                    Height="30" Padding="9,0" CornerRadius="3"
-                                    Background="{ThemeResource StudioCardBrush}"
-                                    BorderBrush="{ThemeResource StudioHairlineBrush}" BorderThickness="1">
-                                <StackPanel Orientation="Horizontal" Spacing="6">
-                                    <FontIcon Glyph="&#xE7F4;" FontSize="13" />
-                                    <TextBlock x:Name="MonitorOptionsLabel" Text="Preview" FontSize="12" VerticalAlignment="Center" />
-                                    <FontIcon Glyph="&#xE70D;" FontSize="9" Foreground="{ThemeResource StudioTextSecondaryBrush}" />
-                                </StackPanel>
-                                <Button.Flyout>
-                                    <Flyout Placement="BottomEdgeAlignedRight">
-                                        <StackPanel Width="290" Spacing="10">
-                                            <Border Background="{ThemeResource StudioInfoSoftBrush}"
-                                                    BorderBrush="{ThemeResource StudioInfoBrush}" BorderThickness="1"
-                                                    CornerRadius="3" Padding="8,6">
-                                                <StackPanel Orientation="Horizontal" Spacing="7">
-                                                    <FontIcon Glyph="&#xE946;" FontSize="12"
-                                                              Foreground="{ThemeResource StudioInfoBrush}"
-                                                              VerticalAlignment="Top" Margin="0,2,0,0" />
-                                                    <TextBlock x:Name="PreviewOnlyNoticeText" FontSize="12" TextWrapping="Wrap"
-                                                               Foreground="{ThemeResource StudioTextPrimaryBrush}" />
-                                                </StackPanel>
-                                            </Border>
+                            <!-- Pluggable Slot: Monitor Bar Options (Video Preview / Audio Monitor / Future RF FFT) -->
+                            <ContentPresenter x:Name="MonitorBarSlot" VerticalAlignment="Center" />
 
-                                            <StackPanel>
-                                                <TextBlock x:Name="PreviewDeinterlaceLabel" Style="{StaticResource StudioFieldLabelStyle}" />
-                                                <ComboBox x:Name="PreviewDeinterlacePicker" CornerRadius="3" HorizontalAlignment="Stretch"
-                                                          SelectionChanged="PreviewDeinterlacePicker_SelectionChanged">
-                                                    <ComboBoxItem x:Name="DeinterlaceBobWeaveItem" Tag="BobWeave" Content="Bob-Weave (Adaptive)" />
-                                                    <ComboBoxItem x:Name="DeinterlaceFieldItem" Tag="Field" Content="Single-Field Bob" />
-                                                    <ComboBoxItem x:Name="DeinterlaceOffItem" Tag="Off" Content="Off (Interlaced)" />
-                                                </ComboBox>
-                                            </StackPanel>
-
-                                            <StackPanel>
-                                                <TextBlock x:Name="PreviewAspectLabel" Style="{StaticResource StudioFieldLabelStyle}" />
-                                                <ComboBox x:Name="PreviewAspectPicker" CornerRadius="3" HorizontalAlignment="Stretch"
-                                                          SelectionChanged="PreviewAspectPicker_SelectionChanged">
-                                                    <ComboBoxItem x:Name="AspectAutoItem" Tag="Auto" Content="Auto" />
-                                                    <ComboBoxItem x:Name="Aspect4x3Item" Tag="Ratio4x3" Content="4:3" />
-                                                    <ComboBoxItem x:Name="Aspect16x9Item" Tag="Ratio16x9" Content="16:9 (Anamorphic)" />
-                                                    <ComboBoxItem x:Name="Aspect1x1Item" Tag="Square1x1" Content="1:1 (Square pixels)" />
-                                                </ComboBox>
-                                            </StackPanel>
-
-                                            <StackPanel>
-                                                <TextBlock x:Name="PreviewMatrixLabel" Style="{StaticResource StudioFieldLabelStyle}" />
-                                                <ComboBox x:Name="PreviewMatrixPicker" CornerRadius="3" HorizontalAlignment="Stretch"
-                                                          SelectionChanged="PreviewMatrixPicker_SelectionChanged">
-                                                    <ComboBoxItem x:Name="MatrixAutoItem" Tag="Auto" Content="Auto (SD 601 / HD 709)" />
-                                                    <ComboBoxItem x:Name="Matrix601Item" Tag="Bt601" Content="BT.601" />
-                                                    <ComboBoxItem x:Name="Matrix709Item" Tag="Bt709" Content="BT.709" />
-                                                </ComboBox>
-                                            </StackPanel>
-
-                                            <Border Height="1" Background="{ThemeResource StudioHairlineBrush}" Margin="0,2" />
-
-                                            <CheckBox x:Name="SafeAreaCheckBox" Click="SafeAreaCheckBox_Click" />
-                                            <CheckBox x:Name="Ntsc480GuideCheckBox" Click="Ntsc480GuideCheckBox_Click" />
-                                        </StackPanel>
-                                    </Flyout>
-                                </Button.Flyout>
-                            </Button>
-
-                            <!-- Preview-Only Local Audio Monitor Toggle + Volume -->
-                            <Border Background="{ThemeResource StudioCardBrush}"
-                                    BorderBrush="{ThemeResource StudioHairlineBrush}" BorderThickness="1"
-                                    CornerRadius="3">
-                                <StackPanel Orientation="Horizontal">
-                                    <Button x:Name="AudioMonitorMuteButton" Style="{StaticResource StudioIconButtonStyle}"
-                                            Width="30" Height="28" CornerRadius="2" Click="AudioMonitorMute_Click">
-                                        <FontIcon x:Name="AudioMonitorIcon" Glyph="&#xE74F;" FontSize="13" />
-                                    </Button>
-                                    <Button x:Name="AudioMonitorVolumeButton" Style="{StaticResource StudioIconButtonStyle}"
-                                            Width="20" Height="28" CornerRadius="2">
-                                        <FontIcon Glyph="&#xE70D;" FontSize="8" Foreground="{ThemeResource StudioTextSecondaryBrush}" />
-                                        <Button.Flyout>
-                                            <Flyout Placement="BottomEdgeAlignedRight">
-                                                <StackPanel Width="230" Spacing="8">
-                                                    <Grid>
-                                                        <TextBlock x:Name="AudioMonitorTitleText" FontSize="13" FontWeight="SemiBold"
-                                                                   Foreground="{ThemeResource StudioTextPrimaryBrush}" />
-                                                        <TextBlock x:Name="AudioMonitorVolumeText" HorizontalAlignment="Right"
-                                                                   Style="{StaticResource StudioMonoTextStyle}" FontSize="12"
-                                                                   Foreground="{ThemeResource StudioTextSecondaryBrush}" />
-                                                    </Grid>
-                                                    <Slider x:Name="AudioMonitorVolumeSlider" Minimum="0" Maximum="100" Value="80"
-                                                            StepFrequency="1" ValueChanged="AudioMonitorVolumeSlider_ValueChanged" />
-                                                    <TextBlock x:Name="AudioMonitorNoticeText" FontSize="11" TextWrapping="Wrap"
-                                                               Foreground="{ThemeResource StudioTextSecondaryBrush}" />
-                                                </StackPanel>
-                                            </Flyout>
-                                        </Button.Flyout>
-                                    </Button>
-                                </StackPanel>
-                            </Border>
-
-                            <Button x:Name="SafeAreaToggleButton" Style="{StaticResource StudioIconButtonStyle}"
-                                    Click="SafeAreaToggleButton_Click" AutomationProperties.Name="Safe area guides">
-                                <FontIcon Glyph="&#xF0E2;" FontSize="14" />
-                            </Button>
                             <Border x:Name="StageSignalBadge" CornerRadius="3" Padding="9,4"
                                     Background="{ThemeResource StudioCardBrush}"
                                     BorderBrush="{ThemeResource StudioHairlineBrush}" BorderThickness="1">
@@ -293,14 +267,15 @@
                         </StackPanel>
                     </Grid>
 
-                    <!-- Stage Body: Video Monitor + Modular Instruments Deck -->
-                    <Grid x:Name="MonitorViewport" Grid.Row="1" RowSpacing="8" SizeChanged="MonitorViewport_SizeChanged">
+                    <!-- Stage Body: Video Monitor + Draggable Split Divider + Modular Instruments Deck -->
+                    <Grid x:Name="MonitorViewport" Grid.Row="1" SizeChanged="MonitorViewport_SizeChanged">
                         <Grid.RowDefinitions>
-                            <RowDefinition x:Name="PreviewStageRow" Height="64*" />
-                            <RowDefinition x:Name="InstrumentsStageRow" Height="36*" />
+                            <RowDefinition x:Name="PreviewStageRow" Height="63*" />
+                            <RowDefinition x:Name="SplitDividerRow" Height="Auto" />
+                            <RowDefinition x:Name="InstrumentsStageRow" Height="37*" />
                         </Grid.RowDefinitions>
 
-                        <!-- Video Monitor Housing (Crisp 4px outer bezel, 0px inner optical video) -->
+                        <!-- Video Monitor Housing -->
                         <Border x:Name="PreviewMonitorHousing" Grid.Row="0" CornerRadius="4"
                                 Background="{ThemeResource StudioStageCanvasBrush}"
                                 BorderBrush="{ThemeResource StudioMonitorBezelBrush}" BorderThickness="1.5"
@@ -309,12 +284,10 @@
                                 PointerExited="PreviewSurface_PointerExited"
                                 PointerMoved="PreviewSurface_PointerMoved">
                             <Grid>
-                                <!-- Animated Recording Frame Tally Overlay -->
                                 <Border x:Name="PreviewRecFrameGlow" Visibility="Collapsed" IsHitTestVisible="False"
                                         CornerRadius="3" BorderThickness="2"
                                         BorderBrush="{ThemeResource StudioRecBrush}" />
 
-                                <!-- Centered Aspect-Locked Preview Surface (Sharp Broadcast 0px corners) -->
                                 <Border x:Name="PreviewSurface" Width="480" Height="360"
                                         HorizontalAlignment="Center" VerticalAlignment="Center"
                                         Background="#080A0E" CornerRadius="0"
@@ -324,7 +297,6 @@
                                         <Image x:Name="PreviewImage" Stretch="Fill"
                                                AutomationProperties.Name="DeckLink video preview" />
 
-                                        <!-- Optional Broadcast Safe-Area & Crosshair Overlay -->
                                         <Grid x:Name="SafeAreaOverlay" Visibility="Collapsed" IsHitTestVisible="False">
                                             <Border Margin="18" BorderBrush="{ThemeResource StudioSafeGuideBrush}"
                                                     BorderThickness="1" Opacity="0.55" />
@@ -336,7 +308,6 @@
                                                        HorizontalAlignment="Center" VerticalAlignment="Center" Opacity="0.65" />
                                         </Grid>
 
-                                        <!-- Optional NTSC 480 Active-Area Crop Guide (Preview-Only) -->
                                         <Grid x:Name="Ntsc480GuideOverlay" Visibility="Collapsed" IsHitTestVisible="False">
                                             <Border x:Name="Ntsc480TopShade" VerticalAlignment="Top" Height="4"
                                                     Background="#66F59E0B" BorderBrush="#CCF59E0B" BorderThickness="0,0,0,1" />
@@ -344,7 +315,6 @@
                                                     Background="#66F59E0B" BorderBrush="#CCF59E0B" BorderThickness="0,1,0,0" />
                                         </Grid>
 
-                                        <!-- Studio Idle Placeholder (Crisp square emblem) -->
                                         <StackPanel x:Name="PreviewPlaceholder" HorizontalAlignment="Center"
                                                     VerticalAlignment="Center" Spacing="12" Margin="20">
                                             <Border Width="44" Height="44" CornerRadius="4" HorizontalAlignment="Center"
@@ -371,7 +341,6 @@
                                     </Grid>
                                 </Border>
 
-                                <!-- Top-Left Signal / Frame HUD Readout (Sharp 3px tag) -->
                                 <Border x:Name="PreviewHudPill" HorizontalAlignment="Left" VerticalAlignment="Top"
                                         Margin="8" Padding="8,4" CornerRadius="3" Visibility="Collapsed"
                                         Background="{ThemeResource StudioHudBackdropBrush}"
@@ -385,7 +354,6 @@
                                     </StackPanel>
                                 </Border>
 
-                                <!-- Top-Right Live REC Tally Tag with Animated 3-Bar Write Activity -->
                                 <Border x:Name="PreviewRecTally" HorizontalAlignment="Right" VerticalAlignment="Top"
                                         Margin="8" Padding="8,4" CornerRadius="3" Visibility="Collapsed"
                                         Background="#E6B91C1C" BorderBrush="#88FCA5A5" BorderThickness="1"
@@ -396,7 +364,6 @@
                                         <TextBlock Text="REC" Style="{StaticResource StudioMonoTextStyle}"
                                                    FontSize="11" FontWeight="Bold" Foreground="#FFFFFF"
                                                    VerticalAlignment="Center" />
-                                        <!-- Live 3-bar stream activity indicator -->
                                         <StackPanel Orientation="Horizontal" Spacing="2" Height="10" VerticalAlignment="Center">
                                             <Border x:Name="RecBar1" Width="2" Height="10" Background="#FFFFFF"
                                                     RenderTransformOrigin="0.5,1" />
@@ -408,7 +375,6 @@
                                     </StackPanel>
                                 </Border>
 
-                                <!-- Bottom-Right Fullscreen Button (Crisp 4px square) -->
                                 <Button x:Name="PreviewFullscreenButton" HorizontalAlignment="Right" VerticalAlignment="Bottom"
                                         Width="36" Height="36" Padding="0" Margin="8" Opacity="0" IsHitTestVisible="False"
                                         RequestedTheme="Dark" CornerRadius="4"
@@ -419,7 +385,6 @@
                                     <FontIcon x:Name="PreviewFullscreenIcon" Glyph="&#xE740;" FontSize="15" Foreground="#F8FAFC" />
                                 </Button>
 
-                                <!-- Fullscreen Floating Mini Control Bar (Crisp 4px bar) -->
                                 <Border x:Name="FullscreenMiniBar" HorizontalAlignment="Center" VerticalAlignment="Bottom"
                                         Margin="0,0,0,20" Padding="10,6" CornerRadius="4" Visibility="Collapsed"
                                         Opacity="0" IsHitTestVisible="False" RequestedTheme="Dark"
@@ -454,14 +419,27 @@
                             </Grid>
                         </Border>
 
-                        <!-- Unified Modular Instruments Host (Luma / Vector / Spectrum / Events) -->
-                        <Grid x:Name="InstrumentsHost" Grid.Row="1" ColumnSpacing="8">
+                        <!-- Draggable Studio Split Divider (Native SizeNorthSouth Resize Cursor) -->
+                        <controls:SplitResizeHandle x:Name="SplitResizeHandle" Grid.Row="1" Height="10" Background="Transparent"
+                                                    ManipulationMode="TranslateY"
+                                                    ManipulationDelta="SplitResizeHandle_ManipulationDelta"
+                                                    ManipulationCompleted="SplitResizeHandle_ManipulationCompleted"
+                                                    PointerEntered="SplitResizeHandle_PointerEntered"
+                                                    PointerExited="SplitResizeHandle_PointerExited"
+                                                    DoubleTapped="SplitResizeHandle_DoubleTapped">
+                            <Border x:Name="SplitResizeGrip" Width="44" Height="3" CornerRadius="1"
+                                    HorizontalAlignment="Center" VerticalAlignment="Center"
+                                    Background="{ThemeResource StudioHairlineBrush}" />
+                        </controls:SplitResizeHandle>
+
+                        <!-- Unified Modular Instruments Host (Luma/Parade + Vector/Spectrum/Events) -->
+                        <Grid x:Name="InstrumentsHost" Grid.Row="2" ColumnSpacing="8">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition x:Name="InstrumentCol0" Width="56*" />
                                 <ColumnDefinition x:Name="InstrumentCol1" Width="44*" />
                             </Grid.ColumnDefinitions>
 
-                            <!-- Luma Waveform Card -->
+                            <!-- Luma Waveform / RGB Parade Card -->
                             <Border x:Name="LumaCard" Grid.Column="0" Style="{StaticResource StudioInstrumentCardStyle}"
                                     Padding="10,8">
                                 <Grid RowSpacing="6">
@@ -481,9 +459,35 @@
                                                        Foreground="{ThemeResource StudioTextSecondaryBrush}"
                                                        VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
                                         </StackPanel>
-                                        <TextBlock x:Name="ScopeStatus" Grid.Column="1" FontSize="12"
-                                                   Foreground="{ThemeResource StudioTextMutedBrush}"
-                                                   VerticalAlignment="Center" />
+                                        <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                                            <TextBlock x:Name="ScopeStatus" FontSize="11"
+                                                       Foreground="{ThemeResource StudioTextMutedBrush}"
+                                                       VerticalAlignment="Center" />
+                                            <Border Background="{ThemeResource StudioSegmentTrackBrush}"
+                                                    BorderBrush="{ThemeResource StudioHairlineBrush}" BorderThickness="1"
+                                                    CornerRadius="3" Padding="1">
+                                                <StackPanel Orientation="Horizontal" Spacing="1">
+                                                    <Button x:Name="ScopeLumaBtn" Height="22" Padding="6,0" FontSize="11"
+                                                            CornerRadius="2" Style="{StaticResource StudioSegmentButtonStyle}"
+                                                            Tag="Luma" Click="ScopeWaveformMode_Click" Content="Y′" />
+                                                    <Button x:Name="ScopeParadeBtn" Height="22" Padding="6,0" FontSize="11"
+                                                            CornerRadius="2" Style="{StaticResource StudioSegmentButtonStyle}"
+                                                            Tag="RgbParade" Click="ScopeWaveformMode_Click" Content="RGB" />
+                                                </StackPanel>
+                                            </Border>
+                                            <Border Background="{ThemeResource StudioSegmentTrackBrush}"
+                                                    BorderBrush="{ThemeResource StudioHairlineBrush}" BorderThickness="1"
+                                                    CornerRadius="3" Padding="1">
+                                                <StackPanel Orientation="Horizontal" Spacing="1">
+                                                    <Button x:Name="ScopeScaleCodeBtn" Height="22" Padding="6,0" FontSize="11"
+                                                            CornerRadius="2" Style="{StaticResource StudioSegmentButtonStyle}"
+                                                            Tag="Code" Click="ScopeLumaScale_Click" />
+                                                    <Button x:Name="ScopeScaleIreBtn" Height="22" Padding="6,0" FontSize="11"
+                                                            CornerRadius="2" Style="{StaticResource StudioSegmentButtonStyle}"
+                                                            Tag="Ire" Click="ScopeLumaScale_Click" Content="IRE" />
+                                                </StackPanel>
+                                            </Border>
+                                        </StackPanel>
                                     </Grid>
                                     <Border Grid.Row="1" Background="{ThemeResource StudioStageCanvasBrush}"
                                             BorderBrush="{ThemeResource StudioMonitorBezelBrush}" BorderThickness="1"
@@ -508,7 +512,7 @@
                                                            FontSize="10" Foreground="#9BA5B8" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,-6,0,0" />
                                                 <TextBlock x:Name="LumaScaleLow" Grid.Row="3" Text="—" Style="{StaticResource StudioMonoTextStyle}"
                                                            FontSize="10" Foreground="#9BA5B8" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,-6,0,0" />
-                                                <TextBlock Grid.Row="3" Text="0" Style="{StaticResource StudioMonoTextStyle}"
+                                                <TextBlock x:Name="LumaScaleZero" Grid.Row="3" Text="0" Style="{StaticResource StudioMonoTextStyle}"
                                                            FontSize="10" Foreground="#9BA5B8" HorizontalAlignment="Right" VerticalAlignment="Bottom" />
                                             </Grid>
                                             <Image x:Name="WaveformPlot" Grid.Column="1" Stretch="Fill"
@@ -541,37 +545,35 @@
                                                        VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
                                         </StackPanel>
 
-                                        <!-- Mini Switcher for Split Mode Right Deck -->
                                         <Border x:Name="SplitRightSwitcher" Grid.Column="1"
                                                 Background="{ThemeResource StudioSegmentTrackBrush}"
                                                 BorderBrush="{ThemeResource StudioHairlineBrush}" BorderThickness="1"
                                                 CornerRadius="3" Padding="2">
                                             <StackPanel Orientation="Horizontal" Spacing="2">
                                                 <Button x:Name="SplitVectorBtn" Height="24" Padding="8,0" FontSize="12"
-                                                        CornerRadius="2" Style="{StaticResource SubtleButtonStyle}"
+                                                        CornerRadius="2" Style="{StaticResource StudioSegmentButtonStyle}"
                                                         Tag="Vector" Click="SplitSecondary_Click" />
                                                 <Button x:Name="SplitSpectrumBtn" Height="24" Padding="8,0" FontSize="12"
-                                                        CornerRadius="2" Style="{StaticResource SubtleButtonStyle}"
+                                                        CornerRadius="2" Style="{StaticResource StudioSegmentButtonStyle}"
                                                         Tag="Spectrum" Click="SplitSecondary_Click" />
                                                 <Button x:Name="SplitEventsBtn" Height="24" Padding="8,0" FontSize="12"
-                                                        CornerRadius="2" Style="{StaticResource SubtleButtonStyle}"
+                                                        CornerRadius="2" Style="{StaticResource StudioSegmentButtonStyle}"
                                                         Tag="Events" Click="SplitSecondary_Click" />
                                             </StackPanel>
                                         </Border>
 
-                                        <!-- Events Filter Bar -->
                                         <StackPanel x:Name="EventsToolbar" Grid.Column="1" Orientation="Horizontal"
                                                     Spacing="4" Visibility="Collapsed" VerticalAlignment="Center">
-                                            <Button x:Name="EventsFilterAllBtn" Height="22" Padding="7,0" FontSize="11"
-                                                    CornerRadius="3" Style="{StaticResource SubtleButtonStyle}"
+                                            <Button x:Name="EventsFilterAllBtn" Height="24" Padding="7,0" FontSize="11"
+                                                    CornerRadius="3" Style="{StaticResource StudioSegmentButtonStyle}"
                                                     Tag="All" Click="EventsFilter_Click" />
-                                            <Button x:Name="EventsFilterDropsBtn" Height="22" Padding="7,0" FontSize="11"
-                                                    CornerRadius="3" Style="{StaticResource SubtleButtonStyle}"
+                                            <Button x:Name="EventsFilterDropsBtn" Height="24" Padding="7,0" FontSize="11"
+                                                    CornerRadius="3" Style="{StaticResource StudioSegmentButtonStyle}"
                                                     Tag="Drops" Click="EventsFilter_Click" />
-                                            <Button x:Name="EventsFilterSignalBtn" Height="22" Padding="7,0" FontSize="11"
-                                                    CornerRadius="3" Style="{StaticResource SubtleButtonStyle}"
+                                            <Button x:Name="EventsFilterSignalBtn" Height="24" Padding="7,0" FontSize="11"
+                                                    CornerRadius="3" Style="{StaticResource StudioSegmentButtonStyle}"
                                                     Tag="Signal" Click="EventsFilter_Click" />
-                                            <Button x:Name="CopyEventsButton" Width="24" Height="22" Padding="0"
+                                            <Button x:Name="CopyEventsButton" Width="24" Height="24" Padding="0"
                                                     CornerRadius="3" Style="{StaticResource SubtleButtonStyle}"
                                                     Click="CopyEvents_Click">
                                                 <FontIcon Glyph="&#xE8C8;" FontSize="11" />
@@ -579,7 +581,6 @@
                                         </StackPanel>
                                     </Grid>
 
-                                    <!-- Vectorscope View -->
                                     <Border x:Name="VectorBody" Grid.Row="1"
                                             Background="{ThemeResource StudioStageCanvasBrush}"
                                             BorderBrush="{ThemeResource StudioMonitorBezelBrush}" BorderThickness="1"
@@ -593,7 +594,6 @@
                                         </Grid>
                                     </Border>
 
-                                    <!-- Audio Spectrum View -->
                                     <Grid x:Name="SpectrumBody" Grid.Row="1" Visibility="Collapsed" RowSpacing="4">
                                         <Grid.ColumnDefinitions>
                                             <ColumnDefinition x:Name="SpectrumLevelColumn" Width="36" />
@@ -632,7 +632,6 @@
                                         </Grid>
                                     </Grid>
 
-                                    <!-- Events Timeline View (Theme-adaptive surface for clean Light & Dark readability!) -->
                                     <Grid x:Name="EventsBody" Grid.Row="1" Visibility="Collapsed">
                                         <Border Background="{ThemeResource StudioEventsSurfaceBrush}"
                                                 BorderBrush="{ThemeResource StudioHairlineBrush}" BorderThickness="1"
@@ -685,161 +684,21 @@
                             </Border>
                         </Grid>
                     </Grid>
+
+                    <!-- Pluggable Slot: Non-DeckLink / Planned Backend Stage -->
+                    <ContentPresenter x:Name="StageSlot" Grid.Row="1" Visibility="Collapsed" />
                 </Grid>
 
-                <!-- Persistent Broadcast Stereo Audio Meter Strip -->
-                <Border x:Name="StereoMeter" Grid.Column="1" Width="86"
-                        Style="{StaticResource StudioInstrumentCardStyle}" Padding="8,10">
-                    <Grid x:Name="StereoMeterGrid" RowSpacing="6" AutomationProperties.Name="Stereo audio peak meters">
-                        <Grid.RowDefinitions>
-                            <RowDefinition Height="Auto" />
-                            <RowDefinition Height="Auto" />
-                            <RowDefinition Height="*" />
-                            <RowDefinition Height="Auto" />
-                            <RowDefinition Height="Auto" />
-                        </Grid.RowDefinitions>
-
-                        <Grid>
-                            <TextBlock x:Name="StereoHeading" Text="AUDIO" Style="{StaticResource StudioSectionHeadingStyle}"
-                                       HorizontalAlignment="Left" />
-                            <TextBlock Text="dBFS" FontSize="10" Foreground="{ThemeResource StudioTextMutedBrush}"
-                                       HorizontalAlignment="Right" />
-                        </Grid>
-
-                        <!-- CLIP Indicators + Channel Labels -->
-                        <Grid Grid.Row="1" ColumnSpacing="4">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*" />
-                                <ColumnDefinition Width="*" />
-                                <ColumnDefinition Width="24" />
-                            </Grid.ColumnDefinitions>
-                            <Border x:Name="LeftClipBadge" Height="16" CornerRadius="2"
-                                    Background="{ThemeResource StudioMeterTrackBrush}"
-                                    BorderBrush="{ThemeResource StudioHairlineBrush}" BorderThickness="1">
-                                <TextBlock x:Name="LeftChannel" Text="L" FontSize="10" FontWeight="SemiBold"
-                                           HorizontalAlignment="Center" VerticalAlignment="Center"
-                                           Foreground="{ThemeResource StudioTextSecondaryBrush}" />
-                            </Border>
-                            <Border x:Name="RightClipBadge" Grid.Column="1" Height="16" CornerRadius="2"
-                                    Background="{ThemeResource StudioMeterTrackBrush}"
-                                    BorderBrush="{ThemeResource StudioHairlineBrush}" BorderThickness="1">
-                                <TextBlock x:Name="RightChannel" Text="R" FontSize="10" FontWeight="SemiBold"
-                                           HorizontalAlignment="Center" VerticalAlignment="Center"
-                                           Foreground="{ThemeResource StudioTextSecondaryBrush}" />
-                            </Border>
-                        </Grid>
-
-                        <!-- Vertical Ballistic Gradient Bars + Peak Hold + dB Scale -->
-                        <Grid Grid.Row="2" ColumnSpacing="4">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*" />
-                                <ColumnDefinition Width="*" />
-                                <ColumnDefinition Width="24" />
-                            </Grid.ColumnDefinitions>
-
-                            <Grid x:Name="LeftMeterRail" Width="12" HorizontalAlignment="Center"
-                                  SizeChanged="MeterRail_SizeChanged">
-                                <Border CornerRadius="1" Background="{ThemeResource StudioMeterTrackBrush}"
-                                        BorderBrush="{ThemeResource StudioHairlineBrush}" BorderThickness="1" />
-                                <Border CornerRadius="1" Background="{StaticResource StudioMeterFillBrush}"
-                                        Margin="1" RenderTransformOrigin="0.5,1">
-                                    <Border.RenderTransform>
-                                        <ScaleTransform x:Name="LeftMeterFill" ScaleY="0" />
-                                    </Border.RenderTransform>
-                                </Border>
-                                <Border x:Name="LeftPeakHoldBar" Height="2" VerticalAlignment="Bottom"
-                                        Margin="1,0" CornerRadius="0" Opacity="0"
-                                        Background="{ThemeResource StudioMeterPeakBrush}">
-                                    <Border.RenderTransform>
-                                        <TranslateTransform x:Name="LeftPeakHoldOffset" Y="0" />
-                                    </Border.RenderTransform>
-                                </Border>
-                            </Grid>
-
-                            <Grid x:Name="RightMeterRail" Grid.Column="1" Width="12" HorizontalAlignment="Center">
-                                <Border CornerRadius="1" Background="{ThemeResource StudioMeterTrackBrush}"
-                                        BorderBrush="{ThemeResource StudioHairlineBrush}" BorderThickness="1" />
-                                <Border CornerRadius="1" Background="{StaticResource StudioMeterFillBrush}"
-                                        Margin="1" RenderTransformOrigin="0.5,1">
-                                    <Border.RenderTransform>
-                                        <ScaleTransform x:Name="RightMeterFill" ScaleY="0" />
-                                    </Border.RenderTransform>
-                                </Border>
-                                <Border x:Name="RightPeakHoldBar" Height="2" VerticalAlignment="Bottom"
-                                        Margin="1,0" CornerRadius="0" Opacity="0"
-                                        Background="{ThemeResource StudioMeterPeakBrush}">
-                                    <Border.RenderTransform>
-                                        <TranslateTransform x:Name="RightPeakHoldOffset" Y="0" />
-                                    </Border.RenderTransform>
-                                </Border>
-                            </Grid>
-
-                            <Grid Grid.Column="2" AutomationProperties.AccessibilityView="Raw">
-                                <Grid.RowDefinitions>
-                                    <RowDefinition Height="*" />
-                                    <RowDefinition Height="*" />
-                                    <RowDefinition Height="*" />
-                                    <RowDefinition Height="*" />
-                                    <RowDefinition Height="*" />
-                                </Grid.RowDefinitions>
-                                <TextBlock Text="0" Style="{StaticResource StudioMonoTextStyle}" FontSize="9"
-                                           Foreground="{ThemeResource StudioTextMutedBrush}" HorizontalAlignment="Right" VerticalAlignment="Top" />
-                                <TextBlock Grid.Row="1" Text="-12" Style="{StaticResource StudioMonoTextStyle}" FontSize="9"
-                                           Foreground="{ThemeResource StudioTextMutedBrush}" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,-5,0,0" />
-                                <TextBlock Grid.Row="2" Text="-24" Style="{StaticResource StudioMonoTextStyle}" FontSize="9"
-                                           Foreground="{ThemeResource StudioTextMutedBrush}" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,-5,0,0" />
-                                <TextBlock Grid.Row="3" Text="-36" Style="{StaticResource StudioMonoTextStyle}" FontSize="9"
-                                           Foreground="{ThemeResource StudioTextMutedBrush}" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,-5,0,0" />
-                                <TextBlock Grid.Row="4" Text="-48" Style="{StaticResource StudioMonoTextStyle}" FontSize="9"
-                                           Foreground="{ThemeResource StudioTextMutedBrush}" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,-5,0,0" />
-                                <TextBlock Grid.Row="4" Text="-60" Style="{StaticResource StudioMonoTextStyle}" FontSize="9"
-                                           Foreground="{ThemeResource StudioTextMutedBrush}" HorizontalAlignment="Right" VerticalAlignment="Bottom" />
-                            </Grid>
-                        </Grid>
-
-                        <Grid Grid.Row="3" ColumnSpacing="4">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*" />
-                                <ColumnDefinition Width="*" />
-                            </Grid.ColumnDefinitions>
-                            <TextBlock x:Name="LeftLevel" Text="—" HorizontalAlignment="Center"
-                                       Style="{StaticResource StudioMonoTextStyle}" FontSize="10"
-                                       Foreground="{ThemeResource StudioTextPrimaryBrush}" />
-                            <TextBlock x:Name="RightLevel" Grid.Column="1" Text="—" HorizontalAlignment="Center"
-                                       Style="{StaticResource StudioMonoTextStyle}" FontSize="10"
-                                       Foreground="{ThemeResource StudioTextPrimaryBrush}" />
-                        </Grid>
-
-                        <!-- Visual Stereo Phase Correlation Bar -->
-                        <StackPanel Grid.Row="4" Spacing="3">
-                            <Grid>
-                                <TextBlock Text="-1" FontSize="9" Foreground="{ThemeResource StudioTextMutedBrush}" />
-                                <TextBlock x:Name="PhaseLevel" Text="—" HorizontalAlignment="Center"
-                                           Style="{StaticResource StudioMonoTextStyle}" FontSize="10"
-                                           Foreground="{ThemeResource StudioTextSecondaryBrush}" />
-                                <TextBlock Text="+1" FontSize="9" Foreground="{ThemeResource StudioTextMutedBrush}"
-                                           HorizontalAlignment="Right" />
-                            </Grid>
-                            <Grid x:Name="PhaseBarRail" Height="6" SizeChanged="PhaseBarRail_SizeChanged">
-                                <Border CornerRadius="1" Background="{ThemeResource StudioMeterTrackBrush}"
-                                        BorderBrush="{ThemeResource StudioHairlineBrush}" BorderThickness="1" />
-                                <Rectangle Width="1" Fill="{ThemeResource StudioTextMutedBrush}"
-                                           HorizontalAlignment="Center" Opacity="0.6" />
-                                <Border x:Name="PhaseIndicatorFill" Height="4" CornerRadius="1"
-                                        HorizontalAlignment="Left" VerticalAlignment="Center"
-                                        Background="{ThemeResource StudioSignalLockBrush}" Width="0" />
-                            </Grid>
-                        </StackPanel>
-                    </Grid>
-                </Border>
+                <!-- Extracted Persistent Broadcast Stereo Audio Meter Control -->
+                <controls:BroadcastMeterControl x:Name="StereoMeter" Grid.Column="1" />
 
                 <!-- Overlay Scrim when Inspector is floating on narrow windows -->
                 <Border x:Name="InspectorScrim" Grid.ColumnSpan="3" Margin="-10,-8"
                         Background="{ThemeResource StudioOverlayScrimBrush}" Visibility="Collapsed"
                         Tapped="InspectorScrim_Tapped" />
 
-                <!-- Right Collapsible / Pinnable Capture Configuration Inspector Drawer -->
-                <Border x:Name="InspectorPanel" Grid.Column="2" Width="310"
+                <!-- Right Collapsible / Pinnable Modular Inspector Drawer -->
+                <Border x:Name="InspectorPanel" Grid.Column="2" Width="314"
                         Style="{StaticResource StudioInstrumentCardStyle}" Padding="0">
                     <Grid>
                         <Grid.RowDefinitions>
@@ -847,7 +706,6 @@
                             <RowDefinition Height="*" />
                         </Grid.RowDefinitions>
 
-                        <!-- Inspector Header -->
                         <Grid Padding="12,9,8,9" BorderBrush="{ThemeResource StudioHairlineBrush}" BorderThickness="0,0,0,1">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*" />
@@ -870,13 +728,11 @@
                             </StackPanel>
                         </Grid>
 
-                        <!-- Inspector Body (ScrollView wired into reliable mouse wheel routing!) -->
                         <ScrollView x:Name="InspectorScroller" Grid.Row="1" Background="Transparent"
                                     ContentOrientation="Vertical" VerticalScrollMode="Enabled" VerticalScrollBarVisibility="Auto"
                                     HorizontalScrollMode="Disabled" HorizontalScrollBarVisibility="Hidden"
                                     HorizontalContentAlignment="Stretch">
                             <StackPanel Padding="10" Spacing="8">
-                                <!-- Compact Inline Lock / Warning Notice -->
                                 <Border x:Name="InspectorNotice" Visibility="Collapsed" CornerRadius="3"
                                         Padding="10,8" BorderThickness="1"
                                         Background="{ThemeResource StudioInfoSoftBrush}"
@@ -889,197 +745,10 @@
                                     </StackPanel>
                                 </Border>
 
-                                <!-- Input Routing Card -->
-                                <Border Style="{StaticResource StudioInspectorCardStyle}">
-                                    <StackPanel Spacing="9">
-                                        <Grid>
-                                            <TextBlock x:Name="RoutingSectionHeading" Text="SIGNAL ROUTING"
-                                                       Style="{StaticResource StudioSectionHeadingStyle}" VerticalAlignment="Center" />
-                                            <Button x:Name="RefreshButton" HorizontalAlignment="Right"
-                                                    Style="{StaticResource SubtleButtonStyle}" Height="24" Padding="7,0"
-                                                    CornerRadius="3" Click="RefreshButton_Click">
-                                                <StackPanel Orientation="Horizontal" Spacing="5">
-                                                    <FontIcon Glyph="&#xE72C;" FontSize="11" />
-                                                    <TextBlock x:Name="RefreshLabel" FontSize="11" />
-                                                </StackPanel>
-                                            </Button>
-                                        </Grid>
+                                <!-- Pluggable Slot: Active Backend Configuration Cards (DeckLink / Planned Backends) -->
+                                <ContentPresenter x:Name="InspectorSlot" />
 
-                                        <StackPanel>
-                                            <TextBlock x:Name="DeviceLabel" Text="Device" Style="{StaticResource StudioFieldLabelStyle}" />
-                                            <ComboBox x:Name="DevicePicker" DisplayMemberPath="Name" IsEnabled="False"
-                                                      CornerRadius="3" HorizontalAlignment="Stretch"
-                                                      SelectionChanged="DevicePicker_SelectionChanged" />
-                                        </StackPanel>
-
-                                        <StackPanel>
-                                            <TextBlock x:Name="VideoSourceLabel" Text="Video source" Style="{StaticResource StudioFieldLabelStyle}" />
-                                            <ComboBox x:Name="VideoInputPicker" DisplayMemberPath="Name"
-                                                      CornerRadius="3" HorizontalAlignment="Stretch"
-                                                      SelectionChanged="VideoInputPicker_SelectionChanged" />
-                                        </StackPanel>
-
-                                        <StackPanel>
-                                            <TextBlock x:Name="AudioSourceLabel" Text="Audio source" Style="{StaticResource StudioFieldLabelStyle}" />
-                                            <ComboBox x:Name="AudioInputPicker" DisplayMemberPath="Name"
-                                                      CornerRadius="3" HorizontalAlignment="Stretch"
-                                                      SelectionChanged="InputPicker_SelectionChanged" />
-                                        </StackPanel>
-
-                                        <StackPanel>
-                                            <TextBlock x:Name="ModeLabel" Text="Input mode" Style="{StaticResource StudioFieldLabelStyle}" />
-                                            <ComboBox x:Name="ModePicker" DisplayMemberPath="Label"
-                                                      CornerRadius="3" HorizontalAlignment="Stretch"
-                                                      SelectionChanged="InputPicker_SelectionChanged" />
-                                            <TextBlock x:Name="RecordingModeHint" Margin="0,5,0,0" FontSize="11"
-                                                       TextWrapping="Wrap" Visibility="Collapsed"
-                                                       Foreground="{ThemeResource StudioTextSecondaryBrush}" />
-                                        </StackPanel>
-                                    </StackPanel>
-                                </Border>
-
-                                <!-- Analog Hardware Signal & Audio Levels Card (DeckLink Tier 1) -->
-                                <Border x:Name="AnalogInputCard" Style="{StaticResource StudioInspectorCardStyle}"
-                                        Visibility="Collapsed">
-                                    <StackPanel Spacing="9">
-                                        <TextBlock x:Name="AnalogSectionHeading" Text="ANALOG INPUT LEVELS"
-                                                   Style="{StaticResource StudioSectionHeadingStyle}" />
-
-                                        <StackPanel x:Name="AnalogIreGroup" Visibility="Collapsed">
-                                            <TextBlock x:Name="AnalogIreLabel" Style="{StaticResource StudioFieldLabelStyle}" />
-                                            <ComboBox x:Name="AnalogIrePicker" CornerRadius="3" HorizontalAlignment="Stretch"
-                                                      SelectionChanged="AnalogSetting_SelectionChanged">
-                                                <ComboBoxItem x:Name="AnalogIreDriverItem" Tag="Driver" Content="Driver default" />
-                                                <ComboBoxItem x:Name="AnalogIre0Item" Tag="Ire0" Content="0.0 IRE (NTSC-J)" />
-                                                <ComboBoxItem x:Name="AnalogIre75Item" Tag="Ire75" Content="7.5 IRE (NTSC-M)" />
-                                            </ComboBox>
-                                        </StackPanel>
-
-                                        <StackPanel x:Name="AnalogComponentGroup" Visibility="Collapsed">
-                                            <TextBlock x:Name="AnalogComponentLabel" Style="{StaticResource StudioFieldLabelStyle}" />
-                                            <ComboBox x:Name="AnalogComponentPicker" CornerRadius="3" HorizontalAlignment="Stretch"
-                                                      SelectionChanged="AnalogSetting_SelectionChanged">
-                                                <ComboBoxItem x:Name="AnalogComponentDriverItem" Tag="Driver" Content="Driver default" />
-                                                <ComboBoxItem x:Name="AnalogComponentSmpteItem" Tag="Smpte" Content="SMPTE / Betacam SP" />
-                                                <ComboBoxItem x:Name="AnalogComponentBetacamItem" Tag="Betacam" Content="Betacam (Sony)" />
-                                            </ComboBox>
-                                        </StackPanel>
-
-                                        <StackPanel x:Name="AnalogAudioLevelGroup" Visibility="Collapsed">
-                                            <TextBlock x:Name="AnalogAudioLevelLabel" Style="{StaticResource StudioFieldLabelStyle}" />
-                                            <ComboBox x:Name="AnalogAudioLevelPicker" CornerRadius="3" HorizontalAlignment="Stretch"
-                                                      SelectionChanged="AnalogAudioLevelPicker_SelectionChanged">
-                                                <ComboBoxItem x:Name="AnalogAudioDriverItem" Tag="Driver" Content="Driver default" />
-                                                <ComboBoxItem x:Name="AnalogAudioProItem" Tag="Pro" Content="Pro (+4 dBu)" />
-                                                <ComboBoxItem x:Name="AnalogAudioConsumerItem" Tag="Consumer" Content="Consumer (-10 dBV)" />
-                                            </ComboBox>
-                                        </StackPanel>
-
-                                        <StackPanel x:Name="AnalogAudioGainGroup" Spacing="6" Visibility="Collapsed">
-                                            <Grid>
-                                                <CheckBox x:Name="AnalogGainOverrideCheckBox" MinWidth="0"
-                                                          Click="AnalogGainOverride_Click" />
-                                                <StackPanel Orientation="Horizontal" Spacing="4" HorizontalAlignment="Right" VerticalAlignment="Center">
-                                                    <Button x:Name="AnalogGainLinkButton" Style="{StaticResource StudioIconButtonStyle}"
-                                                            Width="24" Height="24" Click="AnalogGainLink_Click">
-                                                        <FontIcon x:Name="AnalogGainLinkIcon" Glyph="&#xE71B;" FontSize="11" />
-                                                    </Button>
-                                                    <Button x:Name="AnalogGainResetButton" Style="{StaticResource SubtleButtonStyle}"
-                                                            Height="24" Padding="6,0" CornerRadius="3" FontSize="11"
-                                                            Content="0 dB" Click="AnalogGainReset_Click" />
-                                                </StackPanel>
-                                            </Grid>
-                                            <StackPanel x:Name="AnalogGainSlidersPanel" Spacing="4" Visibility="Collapsed">
-                                                <Grid ColumnSpacing="8">
-                                                    <Grid.ColumnDefinitions>
-                                                        <ColumnDefinition Width="16" />
-                                                        <ColumnDefinition Width="*" />
-                                                        <ColumnDefinition Width="54" />
-                                                    </Grid.ColumnDefinitions>
-                                                    <TextBlock Text="L" Style="{StaticResource StudioMonoTextStyle}" FontSize="11"
-                                                               Foreground="{ThemeResource StudioTextSecondaryBrush}" VerticalAlignment="Center" />
-                                                    <Slider x:Name="AnalogGainLeftSlider" Grid.Column="1" Minimum="-12" Maximum="12"
-                                                            StepFrequency="0.5" Value="0" ValueChanged="AnalogGainLeft_ValueChanged" />
-                                                    <TextBlock x:Name="AnalogGainLeftText" Grid.Column="2" Text="+0.0 dB"
-                                                               Style="{StaticResource StudioMonoTextStyle}" FontSize="11"
-                                                               HorizontalAlignment="Right" VerticalAlignment="Center" />
-                                                </Grid>
-                                                <Grid ColumnSpacing="8">
-                                                    <Grid.ColumnDefinitions>
-                                                        <ColumnDefinition Width="16" />
-                                                        <ColumnDefinition Width="*" />
-                                                        <ColumnDefinition Width="54" />
-                                                    </Grid.ColumnDefinitions>
-                                                    <TextBlock Text="R" Style="{StaticResource StudioMonoTextStyle}" FontSize="11"
-                                                               Foreground="{ThemeResource StudioTextSecondaryBrush}" VerticalAlignment="Center" />
-                                                    <Slider x:Name="AnalogGainRightSlider" Grid.Column="1" Minimum="-12" Maximum="12"
-                                                            StepFrequency="0.5" Value="0" ValueChanged="AnalogGainRight_ValueChanged" />
-                                                    <TextBlock x:Name="AnalogGainRightText" Grid.Column="2" Text="+0.0 dB"
-                                                               Style="{StaticResource StudioMonoTextStyle}" FontSize="11"
-                                                               HorizontalAlignment="Right" VerticalAlignment="Center" />
-                                                </Grid>
-                                            </StackPanel>
-                                            <TextBlock x:Name="AnalogGainConsumerNote" FontSize="11" TextWrapping="Wrap"
-                                                       Visibility="Collapsed"
-                                                       Foreground="{ThemeResource StudioTextMutedBrush}" />
-                                        </StackPanel>
-                                    </StackPanel>
-                                </Border>
-
-                                <!-- Recording Formats Card -->
-                                <Border Style="{StaticResource StudioInspectorCardStyle}">
-                                    <StackPanel Spacing="9">
-                                        <Grid>
-                                            <TextBlock x:Name="FormatSectionHeading" Text="RECORDING FORMATS"
-                                                       Style="{StaticResource StudioSectionHeadingStyle}" VerticalAlignment="Center" />
-                                            <Border x:Name="BitrateBadge" HorizontalAlignment="Right" CornerRadius="2"
-                                                    Padding="6,2" Background="{ThemeResource StudioPanelSecondaryBrush}"
-                                                    BorderBrush="{ThemeResource StudioHairlineBrush}" BorderThickness="1"
-                                                    Visibility="Collapsed">
-                                                <TextBlock x:Name="BitrateBadgeText" Style="{StaticResource StudioMonoTextStyle}"
-                                                           FontSize="11" Foreground="{ThemeResource StudioAccentBrush}" />
-                                            </Border>
-                                        </Grid>
-
-                                        <StackPanel>
-                                            <TextBlock x:Name="VideoFormatLabel" Text="Video format" Style="{StaticResource StudioFieldLabelStyle}" />
-                                            <Border Background="{ThemeResource StudioSegmentTrackBrush}"
-                                                    BorderBrush="{ThemeResource StudioHairlineBrush}" BorderThickness="1"
-                                                    CornerRadius="4" Padding="2">
-                                                <Grid ColumnSpacing="2">
-                                                    <Grid.ColumnDefinitions>
-                                                        <ColumnDefinition Width="*" />
-                                                        <ColumnDefinition Width="*" />
-                                                    </Grid.ColumnDefinitions>
-                                                    <Button x:Name="VideoFormat10Button" Style="{StaticResource StudioFormatSegmentButtonStyle}"
-                                                            Tag="V210" Click="VideoFormatSegment_Click" />
-                                                    <Button x:Name="VideoFormat8Button" Grid.Column="1" Style="{StaticResource StudioFormatSegmentButtonStyle}"
-                                                            Tag="Uyvy" Click="VideoFormatSegment_Click" />
-                                                </Grid>
-                                            </Border>
-                                        </StackPanel>
-
-                                        <StackPanel>
-                                            <TextBlock x:Name="AudioFormatLabel" Text="Audio format" Style="{StaticResource StudioFieldLabelStyle}" />
-                                            <Border Background="{ThemeResource StudioSegmentTrackBrush}"
-                                                    BorderBrush="{ThemeResource StudioHairlineBrush}" BorderThickness="1"
-                                                    CornerRadius="4" Padding="2">
-                                                <Grid ColumnSpacing="2">
-                                                    <Grid.ColumnDefinitions>
-                                                        <ColumnDefinition Width="*" />
-                                                        <ColumnDefinition Width="*" />
-                                                    </Grid.ColumnDefinitions>
-                                                    <Button x:Name="AudioFormat16Button" Style="{StaticResource StudioFormatSegmentButtonStyle}"
-                                                            Tag="Pcm16" Click="AudioFormatSegment_Click" />
-                                                    <Button x:Name="AudioFormat32Button" Grid.Column="1" Style="{StaticResource StudioFormatSegmentButtonStyle}"
-                                                            Tag="Pcm32" Click="AudioFormatSegment_Click" />
-                                                </Grid>
-                                            </Border>
-                                        </StackPanel>
-                                    </StackPanel>
-                                </Border>
-
-                                <!-- Output & Storage Capacity Card -->
+                                <!-- Shared Output, Tape Label & Storage Capacity Card -->
                                 <Border Style="{StaticResource StudioInspectorCardStyle}">
                                     <StackPanel Spacing="9">
                                         <Grid>
@@ -1098,6 +767,17 @@
                                         <TextBox x:Name="OutputPath" IsSpellCheckEnabled="False" IsTextPredictionEnabled="False"
                                                  CornerRadius="3" FontSize="13" TextChanged="OutputPath_TextChanged" />
 
+                                        <StackPanel>
+                                            <TextBlock x:Name="RecordingLabelHeading" Style="{StaticResource StudioFieldLabelStyle}" />
+                                            <TextBox x:Name="RecordingLabelBox" IsSpellCheckEnabled="False"
+                                                     IsTextPredictionEnabled="False" MaxLength="48"
+                                                     CornerRadius="3" FontSize="13" TextChanged="RecordingLabelBox_TextChanged" />
+                                            <TextBlock x:Name="RecordingFilenamePreview" Margin="0,4,0,0"
+                                                       Style="{StaticResource StudioMonoTextStyle}" FontSize="10"
+                                                       Foreground="{ThemeResource StudioTextMutedBrush}"
+                                                       TextTrimming="CharacterEllipsis" />
+                                        </StackPanel>
+
                                         <StackPanel Spacing="5">
                                             <ProgressBar x:Name="InspectorStorageBar" Minimum="0" Maximum="100" Value="0"
                                                          Height="4" CornerRadius="1" Visibility="Collapsed" />
@@ -1108,419 +788,25 @@
                                         </StackPanel>
                                     </StackPanel>
                                 </Border>
+
+                                <!-- Slot 5: Extensible Host Slot for Future Transport Control (ITransportController) -->
+                                <ContentPresenter x:Name="TransportControlSlot" Visibility="Collapsed" />
                             </StackPanel>
                         </ScrollView>
                     </Grid>
                 </Border>
             </Grid>
 
-            <!-- 2. Dedicated QC Center Page -->
-            <Grid x:Name="QcCenterPage" Visibility="Collapsed" AllowDrop="True"
-                  DragOver="QcDropZone_DragOver" Drop="QcDropZone_Drop">
-                <ScrollView x:Name="QcCenterScroller" Background="Transparent"
-                            ContentOrientation="Vertical" VerticalScrollMode="Enabled" VerticalScrollBarVisibility="Auto"
-                            HorizontalScrollMode="Disabled" HorizontalScrollBarVisibility="Hidden"
-                            HorizontalContentAlignment="Stretch">
-                    <StackPanel MaxWidth="920" Padding="24,18,24,28" Spacing="14">
-                        <Grid ColumnSpacing="12">
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*" />
-                                <ColumnDefinition Width="Auto" />
-                            </Grid.ColumnDefinitions>
-                            <StackPanel Spacing="2">
-                                <TextBlock x:Name="QcHeading" Text="Quality Control" FontSize="20" FontWeight="SemiBold"
-                                           Foreground="{ThemeResource StudioTextPrimaryBrush}" />
-                                <TextBlock x:Name="QcCenterSubtitle" FontSize="12"
-                                           Foreground="{ThemeResource StudioTextSecondaryBrush}" />
-                            </StackPanel>
-                            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
-                                <Button x:Name="CheckMovButton" Style="{StaticResource StudioTransportPrimaryButtonStyle}"
-                                        Click="CheckMovButton_Click" IsEnabled="False">
-                                    <StackPanel Orientation="Horizontal" Spacing="8">
-                                        <FontIcon Glyph="&#xE8E5;" FontSize="13" />
-                                        <TextBlock x:Name="CheckMovLabel" />
-                                    </StackPanel>
-                                </Button>
-                                <Button x:Name="QcCenterCancelButton" Style="{StaticResource StudioRecordIdleButtonStyle}"
-                                        Visibility="Collapsed" Click="CancelQcButton_Click" />
-                            </StackPanel>
-                        </Grid>
+            <!-- 2. Extracted Multi-Format QC Center View (MOV + TS/TS192/M2T + Session History) -->
+            <views:QcCenterView x:Name="QcCenterPage" Visibility="Collapsed" />
 
-                        <Border x:Name="QcFileCard" Style="{StaticResource StudioInspectorCardStyle}" Padding="16">
-                            <Grid ColumnSpacing="14">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="Auto" />
-                                    <ColumnDefinition Width="*" />
-                                    <ColumnDefinition Width="Auto" />
-                                </Grid.ColumnDefinitions>
-                                <Border Width="40" Height="40" CornerRadius="4"
-                                        Background="{ThemeResource StudioPanelSecondaryBrush}"
-                                        BorderBrush="{ThemeResource StudioHairlineBrush}" BorderThickness="1">
-                                    <FontIcon x:Name="QcFileIcon" Glyph="&#xE8B2;" FontSize="18"
-                                              Foreground="{ThemeResource StudioAccentBrush}" />
-                                </Border>
-                                <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="3">
-                                    <TextBlock x:Name="QcFileName" FontSize="14" FontWeight="SemiBold"
-                                               Foreground="{ThemeResource StudioTextPrimaryBrush}" TextWrapping="Wrap" />
-                                    <TextBlock x:Name="QcFilePathText" FontSize="12" IsTextSelectionEnabled="True"
-                                               Foreground="{ThemeResource StudioTextSecondaryBrush}" TextWrapping="Wrap" />
-                                </StackPanel>
-                                <Border x:Name="QcStatusPill" Grid.Column="2" CornerRadius="3" Padding="9,4"
-                                        VerticalAlignment="Center" Visibility="Collapsed"
-                                        Background="{ThemeResource StudioPanelSecondaryBrush}">
-                                    <TextBlock x:Name="QcStatusPillText" FontSize="12" FontWeight="SemiBold" />
-                                </Border>
-                            </Grid>
-                        </Border>
-
-                        <!-- 3-Stage QC Pipeline Progress -->
-                        <Border x:Name="QcPipelineCard" Style="{StaticResource StudioInspectorCardStyle}"
-                                Padding="14" Visibility="Collapsed">
-                            <StackPanel Spacing="10">
-                                <Grid ColumnSpacing="10">
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="*" />
-                                        <ColumnDefinition Width="*" />
-                                        <ColumnDefinition Width="*" />
-                                    </Grid.ColumnDefinitions>
-                                    <Border x:Name="QcStep1Card" CornerRadius="3" Padding="10,8"
-                                            Background="{ThemeResource StudioPanelSecondaryBrush}"
-                                            BorderBrush="{ThemeResource StudioHairlineBrush}" BorderThickness="1">
-                                        <StackPanel Orientation="Horizontal" Spacing="8">
-                                            <FontIcon x:Name="QcStep1Icon" Glyph="&#xE91F;" FontSize="13" />
-                                            <TextBlock x:Name="QcStep1Label" FontSize="12" FontWeight="SemiBold"
-                                                       VerticalAlignment="Center" TextWrapping="Wrap" />
-                                        </StackPanel>
-                                    </Border>
-                                    <Border x:Name="QcStep2Card" Grid.Column="1" CornerRadius="3" Padding="10,8"
-                                            Background="{ThemeResource StudioPanelSecondaryBrush}"
-                                            BorderBrush="{ThemeResource StudioHairlineBrush}" BorderThickness="1">
-                                        <StackPanel Orientation="Horizontal" Spacing="8">
-                                            <FontIcon x:Name="QcStep2Icon" Glyph="&#xE91F;" FontSize="13" />
-                                            <TextBlock x:Name="QcStep2Label" FontSize="12" FontWeight="SemiBold"
-                                                       VerticalAlignment="Center" TextWrapping="Wrap" />
-                                        </StackPanel>
-                                    </Border>
-                                    <Border x:Name="QcStep3Card" Grid.Column="2" CornerRadius="3" Padding="10,8"
-                                            Background="{ThemeResource StudioPanelSecondaryBrush}"
-                                            BorderBrush="{ThemeResource StudioHairlineBrush}" BorderThickness="1">
-                                        <StackPanel Orientation="Horizontal" Spacing="8">
-                                            <FontIcon x:Name="QcStep3Icon" Glyph="&#xE91F;" FontSize="13" />
-                                            <TextBlock x:Name="QcStep3Label" FontSize="12" FontWeight="SemiBold"
-                                                       VerticalAlignment="Center" TextWrapping="Wrap" />
-                                        </StackPanel>
-                                    </Border>
-                                </Grid>
-                                <ProgressBar x:Name="QcProgressBar" IsIndeterminate="True" Visibility="Collapsed" />
-                            </StackPanel>
-                        </Border>
-
-                        <!-- QC Result Details -->
-                        <StackPanel x:Name="QcResultSection" Spacing="12" Visibility="Collapsed">
-                            <Border x:Name="QcOutcomeBanner" CornerRadius="4" Padding="14" BorderThickness="1"
-                                    Background="{ThemeResource StudioCardBrush}"
-                                    BorderBrush="{ThemeResource StudioHairlineBrush}">
-                                <Grid ColumnSpacing="12">
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="Auto" />
-                                        <ColumnDefinition Width="*" />
-                                    </Grid.ColumnDefinitions>
-                                    <FontIcon x:Name="QcOutcomeIcon" Glyph="&#xE73E;" FontSize="20" VerticalAlignment="Top" Margin="0,2,0,0" />
-                                    <StackPanel Grid.Column="1" Spacing="4">
-                                        <TextBlock x:Name="QcOutcome" FontSize="14" FontWeight="SemiBold"
-                                                   Foreground="{ThemeResource StudioTextPrimaryBrush}" TextWrapping="Wrap" />
-                                        <TextBlock x:Name="QcSummary" FontSize="12"
-                                                   Foreground="{ThemeResource StudioTextSecondaryBrush}" TextWrapping="Wrap" />
-                                    </StackPanel>
-                                </Grid>
-                            </Border>
-
-                            <Grid ColumnSpacing="8">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="*" />
-                                    <ColumnDefinition Width="*" />
-                                    <ColumnDefinition Width="*" />
-                                </Grid.ColumnDefinitions>
-                                <Border Style="{StaticResource StudioInspectorCardStyle}">
-                                    <StackPanel Spacing="4">
-                                        <TextBlock x:Name="QcMetricVideoLabel" Style="{StaticResource StudioSectionHeadingStyle}" />
-                                        <TextBlock x:Name="QcMetricVideoValue" Text="—" Style="{StaticResource StudioTimecodeTextStyle}"
-                                                   FontSize="19" Foreground="{ThemeResource StudioTextPrimaryBrush}" />
-                                    </StackPanel>
-                                </Border>
-                                <Border Grid.Column="1" Style="{StaticResource StudioInspectorCardStyle}">
-                                    <StackPanel Spacing="4">
-                                        <TextBlock x:Name="QcMetricAudioLabel" Style="{StaticResource StudioSectionHeadingStyle}" />
-                                        <TextBlock x:Name="QcMetricAudioValue" Text="—" Style="{StaticResource StudioTimecodeTextStyle}"
-                                                   FontSize="19" Foreground="{ThemeResource StudioTextPrimaryBrush}" />
-                                    </StackPanel>
-                                </Border>
-                                <Border Grid.Column="2" Style="{StaticResource StudioInspectorCardStyle}">
-                                    <StackPanel Spacing="4">
-                                        <TextBlock x:Name="QcMetricWarningsLabel" Style="{StaticResource StudioSectionHeadingStyle}" />
-                                        <TextBlock x:Name="QcMetricWarningsValue" Text="0" Style="{StaticResource StudioTimecodeTextStyle}"
-                                                   FontSize="19" Foreground="{ThemeResource StudioTextPrimaryBrush}" />
-                                    </StackPanel>
-                                </Border>
-                            </Grid>
-
-                            <Border x:Name="QcWarningsPanel" Visibility="Collapsed" CornerRadius="4" Padding="14"
-                                    Background="{ThemeResource StudioCautionSoftBrush}"
-                                    BorderBrush="{ThemeResource StudioCautionBrush}" BorderThickness="1">
-                                <StackPanel Spacing="8">
-                                    <StackPanel Orientation="Horizontal" Spacing="8">
-                                        <FontIcon Glyph="&#xE7BA;" FontSize="14" Foreground="{ThemeResource StudioCautionBrush}" />
-                                        <TextBlock x:Name="QcWarningsHeading" Text="Warnings" FontSize="13" FontWeight="SemiBold"
-                                                   Foreground="{ThemeResource StudioTextPrimaryBrush}" />
-                                    </StackPanel>
-                                    <ItemsControl x:Name="QcWarningsList">
-                                        <ItemsControl.ItemTemplate>
-                                            <DataTemplate>
-                                                <TextBlock Text="{Binding}" FontSize="12" TextWrapping="Wrap" Margin="0,2"
-                                                           Foreground="{ThemeResource StudioTextPrimaryBrush}" />
-                                            </DataTemplate>
-                                        </ItemsControl.ItemTemplate>
-                                    </ItemsControl>
-                                </StackPanel>
-                            </Border>
-
-                            <Border Style="{StaticResource StudioInspectorCardStyle}" Padding="14">
-                                <StackPanel Spacing="10">
-                                    <TextBlock x:Name="QcArtifactsHeading" Style="{StaticResource StudioSectionHeadingStyle}" />
-                                    <StackPanel Orientation="Horizontal" Spacing="8">
-                                        <Button x:Name="QcFolderButton" Tag="folder" Click="OpenQcArtifact_Click"
-                                                Style="{StaticResource StudioTransportPrimaryButtonStyle}" />
-                                        <Button x:Name="QcVideoButton" Tag="video" Click="OpenQcArtifact_Click"
-                                                Style="{StaticResource StudioTransportPrimaryButtonStyle}" />
-                                        <Button x:Name="QcLogButton" Tag="log" Click="OpenQcArtifact_Click"
-                                                Style="{StaticResource StudioTransportPrimaryButtonStyle}" />
-                                        <Button x:Name="QcHashButton" Tag="hash" Click="OpenQcArtifact_Click"
-                                                Style="{StaticResource StudioTransportPrimaryButtonStyle}" />
-                                        <Button x:Name="QcReportButton" Tag="report" Click="OpenQcArtifact_Click"
-                                                Style="{StaticResource StudioTransportPrimaryButtonStyle}" />
-                                    </StackPanel>
-                                    <StackPanel Orientation="Horizontal" Spacing="8">
-                                        <Button x:Name="QcToggleInlineLogButton" Style="{StaticResource SubtleButtonStyle}"
-                                                CornerRadius="3" Click="QcToggleInlineLog_Click" Visibility="Collapsed">
-                                            <StackPanel Orientation="Horizontal" Spacing="6">
-                                                <FontIcon Glyph="&#xE8A5;" FontSize="12" />
-                                                <TextBlock x:Name="QcToggleInlineLogLabel" FontSize="12" />
-                                            </StackPanel>
-                                        </Button>
-                                    </StackPanel>
-                                    <TextBox x:Name="QcInlineLogText" IsReadOnly="True" AcceptsReturn="True"
-                                             TextWrapping="Wrap" FontFamily="Cascadia Mono, Consolas" FontSize="11"
-                                             CornerRadius="3" MaxHeight="300" Visibility="Collapsed" />
-                                    <InfoBar x:Name="QcOpenStatus" Severity="Warning" IsOpen="False" IsClosable="False" />
-                                </StackPanel>
-                            </Border>
-                        </StackPanel>
-                    </StackPanel>
-                </ScrollView>
-            </Grid>
-
-            <!-- 3. Refined App Settings Page -->
-            <Grid x:Name="SettingsPage" Visibility="Collapsed" Background="Transparent" RowSpacing="6">
-                <Grid.RowDefinitions>
-                    <RowDefinition Height="Auto" />
-                    <RowDefinition Height="*" />
-                </Grid.RowDefinitions>
-                <Grid.KeyboardAccelerators>
-                    <KeyboardAccelerator Key="Left" Modifiers="Menu" Invoked="SettingsBack_Invoked" />
-                </Grid.KeyboardAccelerators>
-
-                <Grid Padding="24,14,24,6" MaxWidth="828" HorizontalAlignment="Stretch">
-                    <StackPanel Orientation="Horizontal" Spacing="12">
-                        <Button x:Name="BackButton" Style="{StaticResource StudioIconButtonStyle}"
-                                Click="BackToWorkspace_Click" AutomationProperties.Name="Back">
-                            <FontIcon Glyph="&#xE72B;" FontSize="14" />
-                        </Button>
-                        <TextBlock x:Name="SettingsHeading" FontSize="20" FontWeight="SemiBold"
-                                   Foreground="{ThemeResource StudioTextPrimaryBrush}" VerticalAlignment="Center" />
-                    </StackPanel>
-                </Grid>
-
-                <ScrollView x:Name="SettingsScroller" Grid.Row="1" Background="Transparent"
-                            ContentOrientation="Vertical" VerticalScrollMode="Enabled" VerticalScrollBarVisibility="Auto"
-                            HorizontalScrollMode="Disabled" HorizontalScrollBarVisibility="Hidden"
-                            HorizontalContentAlignment="Stretch">
-                    <StackPanel MaxWidth="780" Padding="24,6,24,28" Spacing="16">
-                        <InfoBar x:Name="SettingsNotice" IsOpen="False" IsClosable="False" />
-
-                        <StackPanel Spacing="6">
-                            <TextBlock x:Name="AppearanceHeading" Style="{StaticResource StudioSectionHeadingStyle}" Margin="2,0,0,4" />
-                            <toolkit:SettingsCard x:Name="ThemeCard" CornerRadius="4">
-                                <toolkit:SettingsCard.HeaderIcon>
-                                    <FontIcon Glyph="&#xE790;" />
-                                </toolkit:SettingsCard.HeaderIcon>
-                                <ComboBox x:Name="ThemePicker" MinWidth="170" CornerRadius="3"
-                                          SelectionChanged="ThemePicker_SelectionChanged">
-                                    <ComboBoxItem x:Name="ThemeDarkItem" Tag="Dark" Content="Dark Studio" />
-                                    <ComboBoxItem x:Name="ThemeSystemItem" Tag="System" Content="Use system setting" />
-                                    <ComboBoxItem x:Name="ThemeLightItem" Tag="Light" Content="Light Studio" />
-                                </ComboBox>
-                            </toolkit:SettingsCard>
-                            <toolkit:SettingsCard x:Name="LanguageCard" CornerRadius="4">
-                                <toolkit:SettingsCard.HeaderIcon>
-                                    <FontIcon Glyph="&#xE774;" />
-                                </toolkit:SettingsCard.HeaderIcon>
-                                <ComboBox x:Name="LanguagePicker" MinWidth="170" CornerRadius="3"
-                                          SelectionChanged="LanguagePicker_SelectionChanged">
-                                    <ComboBoxItem Tag="en" Content="English" />
-                                    <ComboBoxItem Tag="zh-Hans" Content="简体中文" />
-                                    <ComboBoxItem Tag="zh-Hant" Content="繁體中文" />
-                                    <ComboBoxItem Tag="ja" Content="日本語" />
-                                </ComboBox>
-                            </toolkit:SettingsCard>
-                            <toolkit:SettingsCard x:Name="DefaultLayoutCard" CornerRadius="4">
-                                <toolkit:SettingsCard.HeaderIcon>
-                                    <FontIcon Glyph="&#xE744;" />
-                                </toolkit:SettingsCard.HeaderIcon>
-                                <ComboBox x:Name="DefaultLayoutPicker" MinWidth="170" CornerRadius="3"
-                                          SelectionChanged="DefaultLayoutPicker_SelectionChanged">
-                                    <ComboBoxItem x:Name="DefaultLayoutSplitItem" Tag="Split" Content="Studio Split" />
-                                    <ComboBoxItem x:Name="DefaultLayoutFocusItem" Tag="Focus" Content="Focus" />
-                                </ComboBox>
-                            </toolkit:SettingsCard>
-                        </StackPanel>
-
-                        <StackPanel Spacing="6">
-                            <TextBlock x:Name="PreviewDefaultsHeading" Style="{StaticResource StudioSectionHeadingStyle}" Margin="2,0,0,0" />
-                            <TextBlock x:Name="PreviewDefaultsSubtitle" FontSize="12" Margin="2,0,0,4"
-                                       Foreground="{ThemeResource StudioTextSecondaryBrush}" TextWrapping="Wrap" />
-                            <toolkit:SettingsCard x:Name="SettingsDeinterlaceCard" CornerRadius="4">
-                                <toolkit:SettingsCard.HeaderIcon>
-                                    <FontIcon Glyph="&#xE7F4;" />
-                                </toolkit:SettingsCard.HeaderIcon>
-                                <ComboBox x:Name="SettingsDeinterlacePicker" MinWidth="190" CornerRadius="3"
-                                          SelectionChanged="SettingsDeinterlacePicker_SelectionChanged">
-                                    <ComboBoxItem x:Name="SettingsDeinterlaceBobWeaveItem" Tag="BobWeave" Content="Bob-Weave (Adaptive)" />
-                                    <ComboBoxItem x:Name="SettingsDeinterlaceFieldItem" Tag="Field" Content="Single-Field Bob" />
-                                    <ComboBoxItem x:Name="SettingsDeinterlaceOffItem" Tag="Off" Content="Off (Interlaced)" />
-                                </ComboBox>
-                            </toolkit:SettingsCard>
-                            <toolkit:SettingsCard x:Name="SettingsAspectCard" CornerRadius="4">
-                                <toolkit:SettingsCard.HeaderIcon>
-                                    <FontIcon Glyph="&#xE799;" />
-                                </toolkit:SettingsCard.HeaderIcon>
-                                <ComboBox x:Name="SettingsAspectPicker" MinWidth="190" CornerRadius="3"
-                                          SelectionChanged="SettingsAspectPicker_SelectionChanged">
-                                    <ComboBoxItem x:Name="SettingsAspectAutoItem" Tag="Auto" Content="Auto" />
-                                    <ComboBoxItem x:Name="SettingsAspect4x3Item" Tag="Ratio4x3" Content="4:3" />
-                                    <ComboBoxItem x:Name="SettingsAspect16x9Item" Tag="Ratio16x9" Content="16:9 (Anamorphic)" />
-                                    <ComboBoxItem x:Name="SettingsAspect1x1Item" Tag="Square1x1" Content="1:1 (Square pixels)" />
-                                </ComboBox>
-                            </toolkit:SettingsCard>
-                            <toolkit:SettingsCard x:Name="SettingsMatrixCard" CornerRadius="4">
-                                <toolkit:SettingsCard.HeaderIcon>
-                                    <FontIcon Glyph="&#xE790;" />
-                                </toolkit:SettingsCard.HeaderIcon>
-                                <ComboBox x:Name="SettingsMatrixPicker" MinWidth="190" CornerRadius="3"
-                                          SelectionChanged="SettingsMatrixPicker_SelectionChanged">
-                                    <ComboBoxItem x:Name="SettingsMatrixAutoItem" Tag="Auto" Content="Auto (SD 601 / HD 709)" />
-                                    <ComboBoxItem x:Name="SettingsMatrix601Item" Tag="Bt601" Content="BT.601" />
-                                    <ComboBoxItem x:Name="SettingsMatrix709Item" Tag="Bt709" Content="BT.709" />
-                                </ComboBox>
-                            </toolkit:SettingsCard>
-                        </StackPanel>
-
-                        <StackPanel Spacing="6">
-                            <TextBlock x:Name="ToolchainHeading" Style="{StaticResource StudioSectionHeadingStyle}" Margin="2,0,0,4" />
-                            <toolkit:SettingsCard x:Name="ToolchainCard" CornerRadius="4">
-                                <toolkit:SettingsCard.HeaderIcon>
-                                    <FontIcon Glyph="&#xE9D5;" />
-                                </toolkit:SettingsCard.HeaderIcon>
-                                <StackPanel Orientation="Horizontal" Spacing="8">
-                                    <Border x:Name="ToolchainStatusPill" CornerRadius="3" Padding="8,4"
-                                            Background="{ThemeResource StudioPanelSecondaryBrush}" VerticalAlignment="Center">
-                                        <TextBlock x:Name="ToolchainStatusText" FontSize="12" FontWeight="SemiBold" />
-                                    </Border>
-                                    <Button x:Name="RefreshToolsButton" Style="{StaticResource StudioIconButtonStyle}"
-                                            Click="RefreshTools_Click">
-                                        <FontIcon Glyph="&#xE72C;" FontSize="13" />
-                                    </Button>
-                                </StackPanel>
-                            </toolkit:SettingsCard>
-                        </StackPanel>
-
-                        <StackPanel Spacing="6">
-                            <TextBlock x:Name="ShortcutsHeading" Style="{StaticResource StudioSectionHeadingStyle}" Margin="2,0,0,4" />
-                            <Border Style="{StaticResource StudioInspectorCardStyle}" Padding="16,12">
-                                <Grid ColumnSpacing="24" RowSpacing="8">
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="*" />
-                                        <ColumnDefinition Width="*" />
-                                    </Grid.ColumnDefinitions>
-                                    <Grid.RowDefinitions>
-                                        <RowDefinition Height="Auto" />
-                                        <RowDefinition Height="Auto" />
-                                        <RowDefinition Height="Auto" />
-                                    </Grid.RowDefinitions>
-                                    <Grid>
-                                        <TextBlock x:Name="ShortcutPreviewLabel" FontSize="12" Foreground="{ThemeResource StudioTextSecondaryBrush}" VerticalAlignment="Center" />
-                                        <Border HorizontalAlignment="Right" Background="{ThemeResource StudioPanelSecondaryBrush}"
-                                                BorderBrush="{ThemeResource StudioHairlineBrush}" BorderThickness="1" CornerRadius="2" Padding="6,2">
-                                            <TextBlock Text="F5" Style="{StaticResource StudioMonoTextStyle}" FontSize="11" />
-                                        </Border>
-                                    </Grid>
-                                    <Grid Grid.Column="1">
-                                        <TextBlock x:Name="ShortcutRecordLabel" FontSize="12" Foreground="{ThemeResource StudioTextSecondaryBrush}" VerticalAlignment="Center" />
-                                        <Border HorizontalAlignment="Right" Background="{ThemeResource StudioPanelSecondaryBrush}"
-                                                BorderBrush="{ThemeResource StudioHairlineBrush}" BorderThickness="1" CornerRadius="2" Padding="6,2">
-                                            <TextBlock Text="F9" Style="{StaticResource StudioMonoTextStyle}" FontSize="11" />
-                                        </Border>
-                                    </Grid>
-                                    <Grid Grid.Row="1">
-                                        <TextBlock x:Name="ShortcutFullscreenLabel" FontSize="12" Foreground="{ThemeResource StudioTextSecondaryBrush}" VerticalAlignment="Center" />
-                                        <Border HorizontalAlignment="Right" Background="{ThemeResource StudioPanelSecondaryBrush}"
-                                                BorderBrush="{ThemeResource StudioHairlineBrush}" BorderThickness="1" CornerRadius="2" Padding="6,2">
-                                            <TextBlock Text="F11 / Esc" Style="{StaticResource StudioMonoTextStyle}" FontSize="11" />
-                                        </Border>
-                                    </Grid>
-                                    <Grid Grid.Row="1" Grid.Column="1">
-                                        <TextBlock x:Name="ShortcutInspectorLabel" FontSize="12" Foreground="{ThemeResource StudioTextSecondaryBrush}" VerticalAlignment="Center" />
-                                        <Border HorizontalAlignment="Right" Background="{ThemeResource StudioPanelSecondaryBrush}"
-                                                BorderBrush="{ThemeResource StudioHairlineBrush}" BorderThickness="1" CornerRadius="2" Padding="6,2">
-                                            <TextBlock Text="Ctrl + I" Style="{StaticResource StudioMonoTextStyle}" FontSize="11" />
-                                        </Border>
-                                    </Grid>
-                                    <Grid Grid.Row="2">
-                                        <TextBlock x:Name="ShortcutLayoutsLabel" FontSize="12" Foreground="{ThemeResource StudioTextSecondaryBrush}" VerticalAlignment="Center" />
-                                        <Border HorizontalAlignment="Right" Background="{ThemeResource StudioPanelSecondaryBrush}"
-                                                BorderBrush="{ThemeResource StudioHairlineBrush}" BorderThickness="1" CornerRadius="2" Padding="6,2">
-                                            <TextBlock Text="Ctrl + 1 / 2 / 3" Style="{StaticResource StudioMonoTextStyle}" FontSize="11" />
-                                        </Border>
-                                    </Grid>
-                                    <Grid Grid.Row="2" Grid.Column="1">
-                                        <TextBlock x:Name="ShortcutBackLabel" FontSize="12" Foreground="{ThemeResource StudioTextSecondaryBrush}" VerticalAlignment="Center" />
-                                        <Border HorizontalAlignment="Right" Background="{ThemeResource StudioPanelSecondaryBrush}"
-                                                BorderBrush="{ThemeResource StudioHairlineBrush}" BorderThickness="1" CornerRadius="2" Padding="6,2">
-                                            <TextBlock Text="Alt + ←" Style="{StaticResource StudioMonoTextStyle}" FontSize="11" />
-                                        </Border>
-                                    </Grid>
-                                </Grid>
-                            </Border>
-                        </StackPanel>
-
-                        <StackPanel Spacing="6">
-                            <TextBlock x:Name="AboutHeading" Style="{StaticResource StudioSectionHeadingStyle}" Margin="2,0,0,4" />
-                            <toolkit:SettingsCard x:Name="AboutCard" Header="CaptureRack" CornerRadius="4">
-                                <toolkit:SettingsCard.HeaderIcon>
-                                    <FontIcon Glyph="&#xE946;" />
-                                </toolkit:SettingsCard.HeaderIcon>
-                                <Button x:Name="OpenSettingsFolderButton" Style="{StaticResource SubtleButtonStyle}"
-                                        CornerRadius="3" Click="OpenSettingsFolder_Click" />
-                            </toolkit:SettingsCard>
-                        </StackPanel>
-                    </StackPanel>
-                </ScrollView>
-            </Grid>
+            <!-- 3. Extracted Refined App Settings View -->
+            <views:SettingsView x:Name="SettingsPage" Visibility="Collapsed" />
         </Grid>
 
-        <!-- Refined Single-Row Broadcast Transport & Telemetry Footer with Active REC Stream Sweep -->
+        <!-- Refined Single-Row Broadcast Transport & Dynamic Telemetry Footer -->
         <Grid x:Name="CaptureFooter" Grid.Row="2" Background="{ThemeResource StudioPanelBrush}"
               BorderBrush="{ThemeResource StudioHairlineBrush}" BorderThickness="0,1,0,0">
-            <!-- Razor-thin 2px Animated Crimson Data-Stream Sweep Bar (visible during active recording) -->
             <Grid x:Name="RecordingSweepTrack" Height="2" VerticalAlignment="Top" Visibility="Collapsed"
                   Background="{ThemeResource StudioRecSoftBrush}" IsHitTestVisible="False"
                   SizeChanged="RecordingSweepTrack_SizeChanged">
@@ -1559,7 +845,6 @@
                         </StackPanel>
                     </Button>
 
-                    <!-- Elapsed Timecode + Rotating Precision Tape Reel -->
                     <Border x:Name="RecordingClock" Visibility="Collapsed" CornerRadius="4" Padding="10,5"
                             Background="{ThemeResource StudioRecSoftBrush}"
                             BorderBrush="{ThemeResource StudioRecBorderBrush}" BorderThickness="1"
@@ -1567,7 +852,6 @@
                         <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
                             <Ellipse x:Name="RecordingIndicator" Width="7" Height="7" VerticalAlignment="Center"
                                      Fill="{ThemeResource StudioRecBrush}" />
-                            <!-- Precision Rotating Tape Reel Graphic -->
                             <Grid x:Name="RecordingReelRotor" Width="15" Height="15" VerticalAlignment="Center">
                                 <Ellipse Stroke="{ThemeResource StudioRecBrush}" StrokeThickness="1.5" />
                                 <Rectangle Width="2" Height="13" Fill="{ThemeResource StudioRecBrush}"
@@ -1584,38 +868,29 @@
                     </Border>
                 </StackPanel>
 
-                <!-- Center Cluster: Structured Telemetry Chips -->
-                <StackPanel x:Name="TelemetryStrip" Grid.Column="1" Orientation="Horizontal" Spacing="6"
-                            HorizontalAlignment="Center" VerticalAlignment="Center">
-                    <Border x:Name="ValidFramesChip" Style="{StaticResource StudioTelemetryChipStyle}">
-                        <StackPanel Orientation="Horizontal" Spacing="6">
-                            <TextBlock x:Name="ValidFramesLabel" FontSize="12" Foreground="{ThemeResource StudioTextSecondaryBrush}" VerticalAlignment="Center" />
-                            <TextBlock x:Name="ValidFramesValue" Text="0" Style="{StaticResource StudioMonoTextStyle}"
-                                       FontSize="12" FontWeight="SemiBold" Foreground="{ThemeResource StudioTextPrimaryBrush}" VerticalAlignment="Center" />
-                        </StackPanel>
-                    </Border>
-                    <Border x:Name="NoInputFramesChip" Style="{StaticResource StudioTelemetryChipStyle}">
-                        <StackPanel Orientation="Horizontal" Spacing="6">
-                            <TextBlock x:Name="NoInputFramesLabel" FontSize="12" Foreground="{ThemeResource StudioTextSecondaryBrush}" VerticalAlignment="Center" />
-                            <TextBlock x:Name="NoInputFramesValue" Text="0" Style="{StaticResource StudioMonoTextStyle}"
-                                       FontSize="12" FontWeight="SemiBold" Foreground="{ThemeResource StudioTextPrimaryBrush}" VerticalAlignment="Center" />
-                        </StackPanel>
-                    </Border>
-                    <Border x:Name="MissingFramesChip" Style="{StaticResource StudioTelemetryChipStyle}">
-                        <StackPanel Orientation="Horizontal" Spacing="6">
-                            <TextBlock x:Name="MissingFramesLabel" FontSize="12" Foreground="{ThemeResource StudioTextSecondaryBrush}" VerticalAlignment="Center" />
-                            <TextBlock x:Name="MissingFramesValue" Text="0" Style="{StaticResource StudioMonoTextStyle}"
-                                       FontSize="12" FontWeight="SemiBold" Foreground="{ThemeResource StudioTextPrimaryBrush}" VerticalAlignment="Center" />
-                        </StackPanel>
-                    </Border>
-                    <Border x:Name="SkippedFramesChip" Style="{StaticResource StudioTelemetryChipStyle}">
-                        <StackPanel Orientation="Horizontal" Spacing="6">
-                            <TextBlock x:Name="SkippedFramesLabel" FontSize="12" Foreground="{ThemeResource StudioTextSecondaryBrush}" VerticalAlignment="Center" />
-                            <TextBlock x:Name="SkippedFramesValue" Text="0" Style="{StaticResource StudioMonoTextStyle}"
-                                       FontSize="12" FontWeight="SemiBold" Foreground="{ThemeResource StudioTextPrimaryBrush}" VerticalAlignment="Center" />
-                        </StackPanel>
-                    </Border>
-                </StackPanel>
+                <!-- Center Cluster: Dynamic Backend-Driven Telemetry Strip -->
+                <ItemsControl x:Name="TelemetryStrip" Grid.Column="1" HorizontalAlignment="Center" VerticalAlignment="Center">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <StackPanel Orientation="Horizontal" Spacing="6" />
+                        </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <Border Background="{Binding ChipBackground}" BorderBrush="{Binding ChipBorder}"
+                                    BorderThickness="1" CornerRadius="3" Padding="8,4"
+                                    ToolTipService.ToolTip="{Binding Tooltip}">
+                                <StackPanel Orientation="Horizontal" Spacing="6">
+                                    <TextBlock Text="{Binding Label}" FontSize="12"
+                                               Foreground="{ThemeResource StudioTextSecondaryBrush}" VerticalAlignment="Center" />
+                                    <TextBlock Text="{Binding Value}" Style="{StaticResource StudioMonoTextStyle}"
+                                               FontSize="12" FontWeight="SemiBold"
+                                               Foreground="{Binding ValueForeground}" VerticalAlignment="Center" />
+                                </StackPanel>
+                            </Border>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
 
                 <!-- Right Cluster: Storage + Live QC Activity/Result + Status Flyout -->
                 <StackPanel x:Name="FooterRightCluster" Grid.Column="2" Orientation="Horizontal" Spacing="6"
@@ -1624,7 +899,7 @@
                             Height="30" Padding="8,0" CornerRadius="3"
                             Background="{ThemeResource StudioCardBrush}"
                             BorderBrush="{ThemeResource StudioHairlineBrush}" BorderThickness="1"
-                            Click="QuickSourceButton_Click">
+                            Click="OpenInspectorFromFooter_Click">
                         <StackPanel Orientation="Horizontal" Spacing="7">
                             <FontIcon Glyph="&#xEDA2;" FontSize="12" Foreground="{ThemeResource StudioTextSecondaryBrush}" />
                             <TextBlock x:Name="StorageStatus" FontSize="12" MaxWidth="175"
@@ -1635,7 +910,6 @@
                         </StackPanel>
                     </Button>
 
-                    <!-- Inline Active QC Bar + Cancel -->
                     <Border x:Name="FooterQcActivePill" Visibility="Collapsed" CornerRadius="3" Padding="8,0" Height="30"
                             Background="{ThemeResource StudioInfoSoftBrush}"
                             BorderBrush="{ThemeResource StudioInfoBrush}" BorderThickness="1">
@@ -1653,7 +927,6 @@
                         </StackPanel>
                     </Border>
 
-                    <!-- QC Results Button -->
                     <Button x:Name="QcResultsButton" Visibility="Collapsed" Height="30" Padding="9,0" CornerRadius="3"
                             Style="{StaticResource SubtleButtonStyle}"
                             BorderBrush="{ThemeResource StudioHairlineBrush}" BorderThickness="1"
@@ -1665,7 +938,6 @@
                         </StackPanel>
                     </Button>
 
-                    <!-- Compact Status Button -->
                     <Button x:Name="StatusDetailsButton" Height="30" Padding="9,0" CornerRadius="3"
                             Style="{StaticResource SubtleButtonStyle}"
                             Background="{ThemeResource StudioCardBrush}"

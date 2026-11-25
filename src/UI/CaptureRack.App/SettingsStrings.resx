@@ -888,4 +888,199 @@
   <data name="QcWarnUnreadableNoInput" xml:space="preserve">
     <value>{0:N0} no-input frames had no writable video payload.</value>
   </data>
+  <data name="BackendDeckLinkName" xml:space="preserve">
+    <value>Blackmagic DeckLink</value>
+  </data>
+  <data name="BackendDeckLinkDesc" xml:space="preserve">
+    <value>Lossless SDI / HDMI / Analog uncompressed video and 48 kHz PCM capture.</value>
+  </data>
+  <data name="BackendDirectShowName" xml:space="preserve">
+    <value>DirectShow Capture</value>
+  </data>
+  <data name="BackendDirectShowDesc" xml:space="preserve">
+    <value>General Windows DirectShow capture cards and USB devices with crossbar routing.</value>
+  </data>
+  <data name="BackendFireWireName" xml:space="preserve">
+    <value>FireWire / i.LINK (MSTape)</value>
+  </data>
+  <data name="BackendFireWireDesc" xml:space="preserve">
+    <value>Byte-preserving IEEE 1394 MPEG-TS, D-VHS, HDV, and DV tape capture.</value>
+  </data>
+  <data name="BackendRfName" xml:space="preserve">
+    <value>RF / Baseband SignalCapture</value>
+  </data>
+  <data name="BackendRfDesc" xml:space="preserve">
+    <value>Domesday Duplicator, MISRC, and RTL-SDR sampled RF / CVBS capture.</value>
+  </data>
+  <data name="BackendAudioName" xml:space="preserve">
+    <value>Standalone Audio (WASAPI / ASIO)</value>
+  </data>
+  <data name="BackendAudioDesc" xml:space="preserve">
+    <value>Dedicated multi-channel PCM audio interfaces for Hi-Fi, linear, or standalone capture.</value>
+  </data>
+  <data name="SourceRackHeading" xml:space="preserve">
+    <value>CAPTURE SOURCE RACK</value>
+  </data>
+  <data name="SourceRackConfigure" xml:space="preserve">
+    <value>Open capture inspector</value>
+  </data>
+  <data name="SourceStatusActive" xml:space="preserve">
+    <value>Active</value>
+  </data>
+  <data name="SourceStatusPlanned" xml:space="preserve">
+    <value>Planned</value>
+  </data>
+  <data name="RgbParadeHeading" xml:space="preserve">
+    <value>RGB PARADE</value>
+  </data>
+  <data name="ScopeScaleCode" xml:space="preserve">
+    <value>Code</value>
+  </data>
+  <data name="SplitResizeTooltip" xml:space="preserve">
+    <value>Drag to resize preview &amp; scopes · Double-click to reset</value>
+  </data>
+  <data name="ClipResetHint" xml:space="preserve">
+    <value>Click to clear monitoring CLIP latch (does not alter recorded statistics)</value>
+  </data>
+  <data name="RecordingLabelHeading" xml:space="preserve">
+    <value>Tape / reel label (optional)</value>
+  </data>
+  <data name="RecordingLabelPlaceholder" xml:space="preserve">
+    <value>e.g. Tape04_SideA</value>
+  </data>
+  <data name="QcCenterSubtitleMulti" xml:space="preserve">
+    <value>Verify MOV streams (FrameMD5, field order, QCTools) or analyze 188 / 192-byte MPEG-TS files offline.</value>
+  </data>
+  <data name="CheckMediaFile" xml:space="preserve">
+    <value>Check MOV / TS file</value>
+  </data>
+  <data name="QcDropPromptMulti" xml:space="preserve">
+    <value>Drop a MOV or TS file here, or select one to verify</value>
+  </data>
+  <data name="QcHistoryHeading" xml:space="preserve">
+    <value>SESSION QC HISTORY</value>
+  </data>
+  <data name="SaveTsJson" xml:space="preserve">
+    <value>Save JSON report</value>
+  </data>
+  <data name="TsDecodeNote" xml:space="preserve">
+    <value>Transport-stream analysis verifies packet structure, sync, TEI, continuity, and PCR/PTS timing without decoding audio or video.</value>
+  </data>
+  <data name="TsPacketsUnit" xml:space="preserve">
+    <value>packets</value>
+  </data>
+  <data name="TsMetricSync" xml:space="preserve">
+    <value>Sync errors</value>
+  </data>
+  <data name="TsMetricMalformed" xml:space="preserve">
+    <value>Malformed packets</value>
+  </data>
+  <data name="TsMetricTei" xml:space="preserve">
+    <value>TEI flags</value>
+  </data>
+  <data name="TsMetricContinuity" xml:space="preserve">
+    <value>Continuity errors</value>
+  </data>
+  <data name="TsMetricTrailing" xml:space="preserve">
+    <value>Trailing bytes</value>
+  </data>
+  <data name="TsMetricPcr" xml:space="preserve">
+    <value>PCR count</value>
+  </data>
+  <data name="TsMetricBackwardPcr" xml:space="preserve">
+    <value>Backward PCR</value>
+  </data>
+  <data name="TsMetricPts" xml:space="preserve">
+    <value>PTS count</value>
+  </data>
+  <data name="TsFirstAffectedHeading" xml:space="preserve">
+    <value>FIRST AFFECTED PACKETS</value>
+  </data>
+  <data name="TsChecking" xml:space="preserve">
+    <value>Analyzing transport stream…</value>
+  </data>
+  <data name="TsCheckingDetail" xml:space="preserve">
+    <value>Checking 188 / 192-byte packet sync, continuity counters, and PCR/PTS timestamps.</value>
+  </data>
+  <data name="TsCheckPassed" xml:space="preserve">
+    <value>TS transport passed</value>
+  </data>
+  <data name="TsCheckPassedDetail" xml:space="preserve">
+    <value>No packet sync, malformed, TEI, continuity, trailing-byte, or backward PCR issues detected.</value>
+  </data>
+  <data name="TsCheckWarnings" xml:space="preserve">
+    <value>TS transport warnings</value>
+  </data>
+  <data name="TsCheckWarningsDetail" xml:space="preserve">
+    <value>Transport stream parsed, but packet continuity, TEI, or timing warnings were found.</value>
+  </data>
+  <data name="TsCheckFailed" xml:space="preserve">
+    <value>TS check failed</value>
+  </data>
+  <data name="TsCheckFailedDetail" xml:space="preserve">
+    <value>The file could not be verified as a valid 188- or 192-byte MPEG transport stream.</value>
+  </data>
+  <data name="TsSaveDifferentFile" xml:space="preserve">
+    <value>Choose a different destination path so the source TS file is not overwritten.</value>
+  </data>
+  <data name="TsJsonSaved" xml:space="preserve">
+    <value>TS JSON report saved</value>
+  </data>
+  <data name="TsJsonSaveFailed" xml:space="preserve">
+    <value>Could not save TS JSON report</value>
+  </data>
+  <data name="SourceRackStatusLabel" xml:space="preserve">
+    <value>Status</value>
+  </data>
+  <data name="SourceRackLockedNotice" xml:space="preserve">
+    <value>Stop preview, recording, or QC before switching the active capture backend.</value>
+  </data>
+  <data name="SourceStatusReady" xml:space="preserve">
+    <value>Ready</value>
+  </data>
+  <data name="SourceStatusSelectedPlanned" xml:space="preserve">
+    <value>Selected · Planned</value>
+  </data>
+  <data name="BackendPlannedStatus" xml:space="preserve">
+    <value>Planned capture backend</value>
+  </data>
+  <data name="PlannedCapabilitiesHeading" xml:space="preserve">
+    <value>PLANNED WORKSPACE CAPABILITIES</value>
+  </data>
+  <data name="PlannedCliHeading" xml:space="preserve">
+    <value>AVAILABLE CLI PROBE COMMAND</value>
+  </data>
+  <data name="PlannedBackendStageNotice" xml:space="preserve">
+    <value>This backend is registered in CaptureRack's pluggable Source Rack architecture and will mount into this stage and inspector slot once its live UI module is connected.</value>
+  </data>
+  <data name="PlannedInspectorHint" xml:space="preserve">
+    <value>Shared output folder and tape label settings below persist across all capture backends.</value>
+  </data>
+  <data name="SwitchBackToDeckLink" xml:space="preserve">
+    <value>Switch to Blackmagic DeckLink</value>
+  </data>
+  <data name="CapVideoPreview" xml:space="preserve">
+    <value>Video preview</value>
+  </data>
+  <data name="CapTransportControl" xml:space="preserve">
+    <value>Tape transport</value>
+  </data>
+  <data name="CapAudioOverlay" xml:space="preserve">
+    <value>Standalone audio overlay</value>
+  </data>
+  <data name="TsMetricPackets" xml:space="preserve">
+    <value>TS Packets</value>
+  </data>
+  <data name="RfMetricSampleRate" xml:space="preserve">
+    <value>Sample Rate</value>
+  </data>
+  <data name="RfMetricOverruns" xml:space="preserve">
+    <value>Overruns</value>
+  </data>
+  <data name="RfMetricAdcClips" xml:space="preserve">
+    <value>Clips</value>
+  </data>
+  <data name="AudioMetricChannels" xml:space="preserve">
+    <value>Channels</value>
+  </data>
 </root>

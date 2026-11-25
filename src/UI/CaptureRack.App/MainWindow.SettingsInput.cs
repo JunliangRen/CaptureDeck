@@ -104,13 +104,9 @@ public sealed partial class MainWindow
     }
 
     private bool AnyDropdownOpen() =>
-        DevicePicker.IsDropDownOpen || VideoInputPicker.IsDropDownOpen || AudioInputPicker.IsDropDownOpen ||
-        ModePicker.IsDropDownOpen || AnalogIrePicker.IsDropDownOpen || AnalogComponentPicker.IsDropDownOpen ||
-        AnalogAudioLevelPicker.IsDropDownOpen || PreviewDeinterlacePicker.IsDropDownOpen ||
-        PreviewAspectPicker.IsDropDownOpen || PreviewMatrixPicker.IsDropDownOpen ||
-        SettingsDeinterlacePicker.IsDropDownOpen || SettingsAspectPicker.IsDropDownOpen ||
-        SettingsMatrixPicker.IsDropDownOpen || ThemePicker.IsDropDownOpen ||
-        DefaultLayoutPicker.IsDropDownOpen || LanguagePicker.IsDropDownOpen;
+        deckLinkInspector.HasOpenDropdown ||
+        monitorOptionsBar.HasOpenDropdown ||
+        SettingsPage.HasOpenDropdown;
 
     private ScrollView? ResolveScrollTargetAt(WindowPoint point)
     {
@@ -123,11 +119,11 @@ public sealed partial class MainWindow
         var scale = root.RasterizationScale;
         var dipPoint = new Point(point.X / scale, point.Y / scale);
 
-        if (SettingsPage.Visibility == Visibility.Visible && IsPointInside(SettingsScroller, dipPoint))
-            return SettingsScroller;
+        if (SettingsPage.Visibility == Visibility.Visible && IsPointInside(SettingsPage.Scroller, dipPoint))
+            return SettingsPage.Scroller;
 
-        if (QcCenterPage.Visibility == Visibility.Visible && IsPointInside(QcCenterScroller, dipPoint))
-            return QcCenterScroller;
+        if (QcCenterPage.Visibility == Visibility.Visible && IsPointInside(QcCenterPage.Scroller, dipPoint))
+            return QcCenterPage.Scroller;
 
         if (WorkspacePage.Visibility == Visibility.Visible && InspectorPanel.Visibility == Visibility.Visible &&
             IsPointInside(InspectorScroller, dipPoint))

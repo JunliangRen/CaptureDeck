@@ -350,7 +350,7 @@ public sealed partial class MainWindow
             var text = IsTestSignalActive
                 ? $"{backendName} · {L(TestSignalScenarioKey)} · {TestSignal.Mode.Description} · " +
                     $"{LocalFormat("ShortVideoFormat", "v210", 10)} / {LocalFormat("ShortPcmFormat", (uint)TestSignal.AudioFormat)}"
-                : $"{backendName} · {L("SourceStatusPlanned")}";
+                : $"{backendName} · {L(IsDirectShowActive ? "DsDiagnostics" : "SourceStatusPlanned")}";
             ConfigurationSummary.Text = text;
             AutomationProperties.SetName(QuickSourceButton, $"{L("Capture")} · {text}");
             ToolTipService.SetToolTip(QuickSourceButton, text);

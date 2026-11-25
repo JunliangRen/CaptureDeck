@@ -82,7 +82,7 @@
     <value>読み取り可能なプレビューフレームを待っています。自動検出でも現在の方式で無信号フレームを収録できます。</value>
   </data>
   <data name="OutputHelp" xml:space="preserve">
-    <value>MOV ファイル名には録画開始時刻（現地時間）と録画形式が入ります。</value>
+    <value>録画ファイル名には録画開始時刻（現地時間）と録画形式が入ります。</value>
   </data>
   <data name="Configure" xml:space="preserve">
     <value>デバイスと入力を選択</value>
@@ -1118,5 +1118,143 @@
   </data>
   <data name="ScopeLumaOutOfRange" xml:space="preserve">
     <value>輝度範囲外 {0:P2}</value>
+  </data>
+  <data name="DsCapabilities" xml:space="preserve">
+    <value>DirectShow デバイス機能</value>
+  </data>
+  <data name="DsCapabilitiesHelp" xml:space="preserve">
+    <value>デバイスを選択してストリームを確認します。サンプルテストは 2 秒間実行し、メディアは保存しません。</value>
+  </data>
+  <data name="DsSelectDevice" xml:space="preserve">
+    <value>デバイスを選択</value>
+  </data>
+  <data name="DsVideoStream" xml:space="preserve">
+    <value>映像ストリーム</value>
+  </data>
+  <data name="DsVideoFormat" xml:space="preserve">
+    <value>映像形式</value>
+  </data>
+  <data name="DsAudioFormat" xml:space="preserve">
+    <value>音声ピンと形式</value>
+  </data>
+  <data name="DsRefresh" xml:space="preserve">
+    <value>更新</value>
+  </data>
+  <data name="DsNegotiate" xml:space="preserve">
+    <value>形式を確認</value>
+  </data>
+  <data name="DsSample" xml:space="preserve">
+    <value>サンプルを取得</value>
+  </data>
+  <data name="DsDriverReported" xml:space="preserve">
+    <value>ドライバーが報告した形式</value>
+  </data>
+  <data name="DsNegotiated" xml:space="preserve">
+    <value>確定した形式</value>
+  </data>
+  <data name="DsSampleResult" xml:space="preserve">
+    <value>受信サンプル</value>
+  </data>
+  <data name="DsNotTested" xml:space="preserve">
+    <value>未テスト</value>
+  </data>
+  <data name="DsVideo" xml:space="preserve">
+    <value>映像</value>
+  </data>
+  <data name="DsAudio" xml:space="preserve">
+    <value>音声</value>
+  </data>
+  <data name="DsInfrared" xml:space="preserve">
+    <value>赤外線</value>
+  </data>
+  <data name="DsWithoutAudio" xml:space="preserve">
+    <value>映像のみ</value>
+  </data>
+  <data name="DsPin" xml:space="preserve">
+    <value>{0}（ピン {1}）</value>
+  </data>
+  <data name="DsAudioDescription" xml:space="preserve">
+    <value>{0} · {1} Hz · {2} ch · {3} ビット</value>
+  </data>
+  <data name="DsProgressive" xml:space="preserve">
+    <value>プログレッシブ</value>
+  </data>
+  <data name="DsTopFirst" xml:space="preserve">
+    <value>トップフィールド先行</value>
+  </data>
+  <data name="DsBottomFirst" xml:space="preserve">
+    <value>ボトムフィールド先行</value>
+  </data>
+  <data name="DsFieldUnknown" xml:space="preserve">
+    <value>フィールド順序不明</value>
+  </data>
+  <data name="DsSamples" xml:space="preserve">
+    <value>{0} · {1:N0} サンプル</value>
+  </data>
+  <data name="DsDriverDrops" xml:space="preserve">
+    <value>ドライバー報告のドロップ · {0:N0}</value>
+  </data>
+  <data name="DsNoDevices" xml:space="preserve">
+    <value>DirectShow 映像デバイスが見つかりません。</value>
+  </data>
+  <data name="DsNoVideo" xml:space="preserve">
+    <value>このデバイスから映像形式が報告されませんでした。</value>
+  </data>
+  <data name="DsProbeMissing" xml:space="preserve">
+    <value>CaptureRack.Probe.exe が見つかりません。App と Probe フォルダーを同じ場所に配置してください。</value>
+  </data>
+  <data name="DsTimedOut" xml:space="preserve">
+    <value>デバイスが時間内に応答しませんでした。更新してから再試行してください。</value>
+  </data>
+  <data name="DsFailed" xml:space="preserve">
+    <value>DirectShow テストに失敗しました</value>
+  </data>
+  <data name="DsDiagnostics" xml:space="preserve">
+    <value>デバイス診断</value>
+  </data>
+  <data name="DsPreviewFrames" xml:space="preserve">
+    <value>受信 {0:N0} · デコード {1:N0} · 読み取り不可 {2:N0}</value>
+  </data>
+  <data name="DsWaitingForFrames" xml:space="preserve">
+    <value>映像フレームを待機中</value>
+  </data>
+  <data name="DsPreviewUnreadable" xml:space="preserve">
+    <value>デバイスから届いたフレームをデコードできません。</value>
+  </data>
+  <data name="DsPreviewUnsupported" xml:space="preserve">
+    <value>この形式はライブプレビューに未対応です。サンプル取得はテストできます。</value>
+  </data>
+  <data name="DsListen" xml:space="preserve">
+    <value>スピーカーでモニター</value>
+  </data>
+  <data name="DsRecordChooseFolder" xml:space="preserve">
+    <value>設定で出力フォルダーを指定してください。</value>
+  </data>
+  <data name="DsRecordUnsupported" xml:space="preserve">
+    <value>選択した映像または音声形式はそのまま録画できません。対応する形式を選ぶか、音声を無効にしてください。</value>
+  </data>
+  <data name="DsRecordActive" xml:space="preserve">
+    <value>入力データをそのまま録画中 · {0}（{1}）</value>
+  </data>
+  <data name="DsRecordFinalizing" xml:space="preserve">
+    <value>録画ファイルを確定しています…</value>
+  </data>
+  <data name="DsRecordSaved" xml:space="preserve">
+    <value>録画を保存しました · {0}</value>
+  </data>
+  <data name="DsRecordPartial" xml:space="preserve">
+    <value>録画を完了できませんでした。途中のファイルを保持しました · {0} · {1}</value>
+  </data>
+  <data name="DsRecordError" xml:space="preserve">
+    <value>録画に失敗しました · {0}</value>
+  </data>
+  <data name="DsStartInput" xml:space="preserve">
+    <value>入力を開始</value>
+  </data>
+  <data name="DsStopInput" xml:space="preserve">
+    <value>入力を停止</value>
+  </data>
+  <data name="DsMpeg2RecordOnly" xml:space="preserve">
+    <value>MPEG-2 映像は録画できます。ライブプレビューには対応していません。</value>
   </data>
 </root>

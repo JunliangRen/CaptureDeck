@@ -3,7 +3,7 @@ using System.Runtime.InteropServices;
 
 namespace CaptureRack.DeckLink;
 
-// Non-blocking local speaker monitor for 48 kHz stereo PCM preview.
+// Non-blocking local speaker monitor for stereo PCM preview.
 // Drops excess packets instead of stalling the DeckLink audio callback, and never alters recorded audio.
 public sealed class LocalAudioMonitor : IDisposable
 {
@@ -13,6 +13,7 @@ public sealed class LocalAudioMonitor : IDisposable
     private readonly AutoResetEvent wake = new(false);
     private readonly CancellationTokenSource stop = new();
     private readonly Thread worker;
+    private readonly uint sampleRate;
     private volatile bool enabled;
     private double volume = 0.8;
     private bool disposed;
@@ -38,8 +39,9 @@ public sealed class LocalAudioMonitor : IDisposable
         set => Volatile.Write(ref volume, Math.Clamp(value, 0.0, 1.0));
     }
 
-    public LocalAudioMonitor()
+    public LocalAudioMonitor(uint sampleRate = CaptureAudio.SampleRate)
     {
+        this.sampleRate = sampleRate;
         worker = new Thread(RunPlaybackLoop)
         {
             IsBackground = true,
@@ -48,7 +50,7 @@ public sealed class LocalAudioMonitor : IDisposable
         worker.Start();
     }
 
-    internal void SubmitPcm16(ReadOnlySpan<short> samples)
+    public void SubmitPcm16(ReadOnlySpan<short> samples)
     {
         if (!enabled || disposed || samples.IsEmpty)
             return;
@@ -132,10 +134,10 @@ public sealed class LocalAudioMonitor : IDisposable
                     {
                         FormatTag = 1, // WAVE_FORMAT_PCM
                         Channels = (ushort)CaptureAudio.Channels,
-                        SamplesPerSec = CaptureAudio.SampleRate,
+                        SamplesPerSec = sampleRate,
                         BitsPerSample = 16,
                         BlockAlign = (ushort)(CaptureAudio.Channels * 2),
-                        AvgBytesPerSec = CaptureAudio.SampleRate * CaptureAudio.Channels * 2,
+                        AvgBytesPerSec = sampleRate * CaptureAudio.Channels * 2,
                         Size = 0
                     };
                     if (waveOutOpen(out device, unchecked((uint)-1), ref format, 0, 0, 0) != 0)

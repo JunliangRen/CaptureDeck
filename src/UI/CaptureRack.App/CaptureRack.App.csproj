@@ -1,6 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <Version>0.1.2</Version>
+    <Version>0.1.3</Version>
     <OutputType>WinExe</OutputType>
     <TargetFramework>net11.0-windows10.0.26100.0</TargetFramework>
     <SupportedOSPlatformVersion>10.0.19041.0</SupportedOSPlatformVersion>
@@ -16,6 +16,7 @@
     <PackageReference Include="CommunityToolkit.WinUI.Controls.SettingsControls" Version="8.2.251219" />
     <PackageReference Include="Microsoft.WindowsAppSDK" Version="2.7.0" />
     <ProjectReference Include="../../Capture/CaptureCards/CaptureRack.DeckLink/CaptureRack.DeckLink.csproj" />
+    <ProjectReference Include="../../Capture/CaptureRack.DirectShow/CaptureRack.DirectShow.csproj" />
     <ProjectReference Include="../../Processing/CaptureRack.QualityControl/CaptureRack.QualityControl.csproj" />
     <ProjectReference Include="../../CaptureRack.DeviceControl/CaptureRack.DeviceControl.csproj" />
   </ItemGroup>

@@ -144,7 +144,8 @@ public sealed class WorkspaceModuleRegistry
                 new("windows.directshow", CaptureBackendCategory.Video,
                     "BackendDirectShowName", "BackendDirectShowDesc", IsImplementedInUi: false,
                     new(true, true, true, true, true, true, true, false, true),
-                    IconGlyph: "\uE722"),
+                    IconGlyph: "\uE722",
+                    CliCommandHint: "CaptureRack.Probe.exe directshow list"),
                 loc =>
                 [
                     new("ds-state", loc("SourceRackStatusLabel"), loc("SourceStatusPlanned"), TelemetrySeverity.Info),

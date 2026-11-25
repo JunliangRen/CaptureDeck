@@ -17,7 +17,7 @@ This is the repository handoff for coding agents. Start with the current Git sta
 | CaptureRack.Probe | `src/CaptureRack.Probe` | Windows command-line entry for DeckLink, FireWire, signal diagnostics, and QC |
 | CaptureRack.Core | `src/Capture/CaptureRack.Core` | Portable capture contracts and backend registry |
 | CaptureRack.DeckLink | `src/Capture/CaptureCards/CaptureRack.DeckLink` | Blackmagic COM interop, capture, monitoring, and current MOV writer |
-| CaptureRack.DirectShow | `src/Capture/CaptureRack.DirectShow` | Windows DirectShow interop and FireWire / MSTape source |
+| CaptureRack.DirectShow | `src/Capture/CaptureRack.DirectShow` | Windows generic DirectShow diagnostics and FireWire / MSTape source |
 | CaptureRack.SignalCapture | `src/Capture/CaptureRack.SignalCapture` | Sampled signal sources and diagnostics for Domesday Duplicator and RTL-SDR |
 | CaptureRack.Audio | `src/Capture/CaptureRack.Audio` | Project reserved for standalone audio providers such as WASAPI and ASIO |
 | CaptureRack.Recording | `src/Processing/CaptureRack.Recording` | Windows TS writer and file finalization |
@@ -51,7 +51,7 @@ This is the repository handoff for coding agents. Start with the current Git sta
 - MSTape discovery enumerates the DirectShow video-input category, checks the `DeviceClassGUID`, and uses the device's unique ID when available. The negotiated media type decides downstream handling. TS output alone does not identify a FireWire device.
 - `firewire list`, `probe`, `capture`, and `analyze` are available. Live capture currently accepts the native prefixed 192-byte MPEG-TS layout exposed to this probe. Preserve every received byte including the four-byte prefix. Offline analysis supports both 188-byte and 192-byte layouts. Do not generalize the live restriction to every MSTape driver or every other TS source.
 - The shared TS writer leaves `.partial` on recording failure and protects existing outputs. The FireWire CLI writes a `.report.json` sidecar with byte counts, packet and timing diagnostics. TS transport analysis verifies packet structure and continuity, while decoded audio and video require separate checks.
-- General DirectShow video/audio enumeration, capability reporting, and sample retrieval are next. Inspect advertised and negotiated media types separately. Optional capabilities include `IAMCrossbar` input routing. Uncompressed frames, compressed elementary streams, TS, DV, and waveform samples require different processing. Keep future MiniDV/MSDV and HDV behavior tied to verified device formats.
+- The DirectShow probe lists devices and pin formats, negotiates the requested formats, and counts incoming samples. Inspect advertised and negotiated media types separately. Optional capabilities include `IAMCrossbar` input routing. Uncompressed frames, compressed elementary streams, TS, DV, and waveform samples require different processing. Keep future MiniDV/MSDV and HDV behavior tied to verified device formats. Generic DirectShow preview and recording share a capture graph. Recording stages original samples to Matroska through a separate bounded queue. At stop, stream-copy compressed video to TS or try MOV and MP4, then keep MKV. Publish only candidates with matching stream formats and payload hashes. Failed capture retains .mkv.partial.
 
 ## RF and SDR diagnostics
 
@@ -63,7 +63,7 @@ This is the repository handoff for coding agents. Start with the current Git sta
 
 - MOV QC decodes to the end and checks video frame and audio sample counts, field order, and PCM depth. It produces `.capture.json`, `.framemd5`, and `.mov.qctools.xml.gz`. Offline MOV checks are exposed in WinUI, Uno, and Probe. Use matching-architecture FFmpeg and FFprobe, with `cropdetect` for QCTools. Preserve recordings and prior reports across QC failures or retries.
 - Uno runs TS analysis and exports JSON without FFmpeg or hardware. MOV QC in Uno uses the same QC engine and FFmpeg tools as the other entry points.
-- MediaConch integration is deferred until an FFV1/MKV workflow exists. DV preview, general DirectShow capture, macOS live capture, and audio provider implementations are still planned.
+- MediaConch integration is deferred until an FFV1/MKV workflow exists. DV preview, macOS live capture, and standalone audio provider implementations are still planned.
 - For future CVBS/RF preview, keep the reusable streaming decoder in the separate `vhs-decode-dotnet` repository. Start by replaying known CVBS samples at source rate. Share stateful sync and frame generation between its file preview and CaptureRack, then add VHS RF and live hardware. Verify release licensing before distributing a linked shared library. This integration is currently a design only.
 
 ## Build and verification

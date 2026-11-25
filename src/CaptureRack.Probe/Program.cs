@@ -16,6 +16,9 @@ internal static class Program
         if (args.Length > 0 && args[0] == "rf")
             return RfCommand.Run(args[1..]);
 
+        if (args.Length > 0 && args[0] == "directshow")
+            return DirectShowCommand.Run(args[1..]);
+
         if (args.Length > 0 && args[0] == "firewire")
             return FireWireCommand.Run(args[1..]);
 
@@ -86,6 +89,7 @@ internal static class Program
         Console.WriteLine("CaptureRack.Probe list");
         Console.WriteLine("CaptureRack.Probe capture <device-index> <seconds:1-3600> [mode-fourcc]");
         Console.WriteLine("CaptureRack.Probe qc <mov-path>");
+        Console.WriteLine("CaptureRack.Probe directshow --help");
         Console.WriteLine("CaptureRack.Probe firewire --help");
         Console.WriteLine("CaptureRack.Probe rf --help");
         Console.WriteLine("Capture uses the current Desktop Video input routing. Omit the mode for auto detection.");

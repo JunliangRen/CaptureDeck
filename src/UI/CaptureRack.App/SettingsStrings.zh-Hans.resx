@@ -82,7 +82,7 @@
     <value>正在等待可读的预览帧。Auto 可以按当前预览制式录制无信号帧。</value>
   </data>
   <data name="OutputHelp" xml:space="preserve">
-    <value>MOV 文件按本地录制开始时间和录制格式命名。</value>
+    <value>录制文件按本地录制开始时间和录制格式命名。</value>
   </data>
   <data name="Configure" xml:space="preserve">
     <value>选择设备和输入源</value>
@@ -1118,5 +1118,143 @@
   </data>
   <data name="ScopeLumaOutOfRange" xml:space="preserve">
     <value>亮度超范围 {0:P2}</value>
+  </data>
+  <data name="DsCapabilities" xml:space="preserve">
+    <value>DirectShow 设备能力</value>
+  </data>
+  <data name="DsCapabilitiesHelp" xml:space="preserve">
+    <value>选择设备以查看采集流。取样测试运行 2 秒，不保存媒体。</value>
+  </data>
+  <data name="DsSelectDevice" xml:space="preserve">
+    <value>选择设备</value>
+  </data>
+  <data name="DsVideoStream" xml:space="preserve">
+    <value>视频流</value>
+  </data>
+  <data name="DsVideoFormat" xml:space="preserve">
+    <value>视频格式</value>
+  </data>
+  <data name="DsAudioFormat" xml:space="preserve">
+    <value>音频引脚和格式</value>
+  </data>
+  <data name="DsRefresh" xml:space="preserve">
+    <value>刷新</value>
+  </data>
+  <data name="DsNegotiate" xml:space="preserve">
+    <value>检查格式</value>
+  </data>
+  <data name="DsSample" xml:space="preserve">
+    <value>测试取样</value>
+  </data>
+  <data name="DsDriverReported" xml:space="preserve">
+    <value>驱动报告</value>
+  </data>
+  <data name="DsNegotiated" xml:space="preserve">
+    <value>协商通过的格式</value>
+  </data>
+  <data name="DsSampleResult" xml:space="preserve">
+    <value>实收样本</value>
+  </data>
+  <data name="DsNotTested" xml:space="preserve">
+    <value>尚未测试</value>
+  </data>
+  <data name="DsVideo" xml:space="preserve">
+    <value>视频</value>
+  </data>
+  <data name="DsAudio" xml:space="preserve">
+    <value>音频</value>
+  </data>
+  <data name="DsInfrared" xml:space="preserve">
+    <value>红外</value>
+  </data>
+  <data name="DsWithoutAudio" xml:space="preserve">
+    <value>仅视频</value>
+  </data>
+  <data name="DsPin" xml:space="preserve">
+    <value>{0}（引脚 {1}）</value>
+  </data>
+  <data name="DsAudioDescription" xml:space="preserve">
+    <value>{0} · {1} Hz · {2} 声道 · {3} 位</value>
+  </data>
+  <data name="DsProgressive" xml:space="preserve">
+    <value>逐行</value>
+  </data>
+  <data name="DsTopFirst" xml:space="preserve">
+    <value>上场优先</value>
+  </data>
+  <data name="DsBottomFirst" xml:space="preserve">
+    <value>下场优先</value>
+  </data>
+  <data name="DsFieldUnknown" xml:space="preserve">
+    <value>场序未报告</value>
+  </data>
+  <data name="DsSamples" xml:space="preserve">
+    <value>{0} · {1:N0} 个样本</value>
+  </data>
+  <data name="DsDriverDrops" xml:space="preserve">
+    <value>驱动报告掉帧 · {0:N0}</value>
+  </data>
+  <data name="DsNoDevices" xml:space="preserve">
+    <value>未找到 DirectShow 视频设备。</value>
+  </data>
+  <data name="DsNoVideo" xml:space="preserve">
+    <value>此设备未报告视频格式。</value>
+  </data>
+  <data name="DsProbeMissing" xml:space="preserve">
+    <value>找不到 CaptureRack.Probe.exe。请将 App 和 Probe 文件夹放在同一个目录下。</value>
+  </data>
+  <data name="DsTimedOut" xml:space="preserve">
+    <value>设备响应超时。请刷新后重试。</value>
+  </data>
+  <data name="DsFailed" xml:space="preserve">
+    <value>DirectShow 测试失败</value>
+  </data>
+  <data name="DsDiagnostics" xml:space="preserve">
+    <value>设备诊断</value>
+  </data>
+  <data name="DsPreviewFrames" xml:space="preserve">
+    <value>实收 {0:N0} 帧 · 已解码 {1:N0} 帧 · 无法读取 {2:N0} 帧</value>
+  </data>
+  <data name="DsWaitingForFrames" xml:space="preserve">
+    <value>等待视频帧</value>
+  </data>
+  <data name="DsPreviewUnreadable" xml:space="preserve">
+    <value>设备送来的帧无法解码。</value>
+  </data>
+  <data name="DsPreviewUnsupported" xml:space="preserve">
+    <value>这个格式暂时无法实时预览，仍可测试取样。</value>
+  </data>
+  <data name="DsListen" xml:space="preserve">
+    <value>扬声器监听</value>
+  </data>
+  <data name="DsRecordChooseFolder" xml:space="preserve">
+    <value>请先在设置中指定输出目录。</value>
+  </data>
+  <data name="DsRecordUnsupported" xml:space="preserve">
+    <value>所选视频或音频格式无法原样录制。请选择支持的格式，或关闭音频。</value>
+  </data>
+  <data name="DsRecordActive" xml:space="preserve">
+    <value>正在原样录制 · {0}（{1}）</value>
+  </data>
+  <data name="DsRecordFinalizing" xml:space="preserve">
+    <value>正在写入并关闭录制文件…</value>
+  </data>
+  <data name="DsRecordSaved" xml:space="preserve">
+    <value>录制已保存 · {0}</value>
+  </data>
+  <data name="DsRecordPartial" xml:space="preserve">
+    <value>录制未完成，文件已保留 · {0} · {1}</value>
+  </data>
+  <data name="DsRecordError" xml:space="preserve">
+    <value>录制失败 · {0}</value>
+  </data>
+  <data name="DsStartInput" xml:space="preserve">
+    <value>启动输入</value>
+  </data>
+  <data name="DsStopInput" xml:space="preserve">
+    <value>停止输入</value>
+  </data>
+  <data name="DsMpeg2RecordOnly" xml:space="preserve">
+    <value>MPEG-2 视频可原样录制，当前无法实时预览画面。</value>
   </data>
 </root>

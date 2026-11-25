@@ -256,106 +256,24 @@ public static unsafe class FireWireCapture
 
 internal sealed unsafe class FireWireGraph : IDisposable
 {
-    private static readonly Guid FilterGraph = new("E436EBB3-524F-11CE-9F53-0020AF0BA770");
-    private static readonly Guid GraphBuilder = new("56A868A9-0AD4-11CE-B03A-0020AF0BA770");
-    private static readonly Guid MediaControl = new("56A868B1-0AD4-11CE-B03A-0020AF0BA770");
-    private static readonly Guid MediaEvent = new("56A868B6-0AD4-11CE-B03A-0020AF0BA770");
-    private readonly ComReference graph = Create(FilterGraph, GraphBuilder, "Create DirectShow filter graph");
-    private ComReference? control;
-    private ComReference? events;
-    private ComReference? sinkFilter;
-    private ComReference? sinkPin;
-    private nint sourcePin;
-    private nint sourceFilter;
-    private bool connected;
+    private readonly DirectShowGraph graph = new();
 
     internal void Connect(nint source, MsTapeOutput selected, DirectShowSink sink)
     {
-        AddFilter(source, "MSTape Source");
-        sourceFilter = source;
-        sinkFilter = new ComReference(Export(sink, BaseFilter));
-        AddFilter(sinkFilter.Value, "CaptureRack FireWire Sink");
-        sinkPin = new ComReference(Export(sink, Pin));
-        sourcePin = selected.Pin;
-        var hr = ((delegate* unmanaged[Stdcall]<nint, nint, nint, DirectShowMediaType*, int>)Method(graph.Value, 7))(
-            graph.Value, sourcePin, sinkPin.Value, selected.MediaType); // IFilterGraph::ConnectDirect
+        graph.AddSource(source, "MSTape Source");
+        var hr = graph.Connect(selected.Pin, selected.MediaType, sink, "CaptureRack FireWire Sink");
         if (hr is TypeNotAccepted or unchecked((int)0x80040207) or unchecked((int)0x80040217) or
             unchecked((int)0x80040200) or unchecked((int)0x80040248))
             throw new FireWireException(4, $"MSTape rejected the selected TS format (0x{hr:X8}).");
         Check(hr, "Connect MSTape directly to the sink");
-        connected = true;
-        control = Query(graph.Value, MediaControl, "Get IMediaControl");
-        events = Query(graph.Value, MediaEvent, "Get IMediaEvent");
-        Check(NoArgs(graph.Value, 10), "Set default DirectShow graph clock");
     }
 
-    private void AddFilter(nint filter, string name)
-    {
-        fixed (char* text = name)
-            Check(((delegate* unmanaged[Stdcall]<nint, nint, char*, int>)Method(graph.Value, 3))(
-                graph.Value, filter, text), "Add filter to DirectShow graph");
-    }
-
-    internal void Start() => Check(NoArgs(control!.Value, 7), "Run DirectShow graph"); // IMediaControl::Run
-
-    internal bool ReadEvents(Action<string> reportFailure)
-    {
-        var source = events!.Value;
-        var get = (delegate* unmanaged[Stdcall]<nint, int*, nint*, nint*, int, int>)Method(source, 8);
-        var free = (delegate* unmanaged[Stdcall]<nint, int, nint, nint, int>)Method(source, 12);
-        var complete = false;
-        int code;
-        nint first, second;
-        while (get(source, &code, &first, &second, 0) == Ok)
-        {
-            try
-            {
-                switch (code)
-                {
-                    case 1: // EC_COMPLETE
-                        complete = true;
-                        break;
-                    case 3: // EC_ERRORABORT
-                        reportFailure($"DirectShow error (0x{unchecked((uint)first):X8}).");
-                        break;
-                    case 0x1f when second == 0: // EC_DEVICE_LOST
-                        reportFailure("Capture device disconnected.");
-                        break;
-                }
-            }
-            finally { free(source, code, first, second); }
-        }
-        return complete;
-    }
-
+    internal void Start() => graph.Start();
+    internal bool ReadEvents(Action<string> reportFailure) => graph.ReadEvents(reportFailure);
     internal void Stop(DirectShowSink sink, Action<string> reportFailure)
     {
-        if (control is not null)
-        {
-            var hr = NoArgs(control.Value, 9); // IMediaControl::Stop
-            if (hr < 0)
-                reportFailure($"Stop DirectShow graph failed (0x{hr:X8}).");
-        }
-        sink.Stop(); // Serializes the state change with in-flight Receive calls.
+        graph.Stop(reportFailure);
+        sink.Stop();
     }
-
-    public void Dispose()
-    {
-        if (connected)
-        {
-            var disconnect = (delegate* unmanaged[Stdcall]<nint, nint, int>)Method(graph.Value, 9);
-            disconnect(graph.Value, sourcePin);
-            disconnect(graph.Value, sinkPin!.Value);
-        }
-        var remove = (delegate* unmanaged[Stdcall]<nint, nint, int>)Method(graph.Value, 4);
-        if (sinkFilter is not null)
-            remove(graph.Value, sinkFilter.Value);
-        if (sourceFilter != 0)
-            remove(graph.Value, sourceFilter);
-        events?.Dispose();
-        control?.Dispose();
-        graph.Dispose();
-        sinkPin?.Dispose();
-        sinkFilter?.Dispose();
-    }
+    public void Dispose() => graph.Dispose();
 }

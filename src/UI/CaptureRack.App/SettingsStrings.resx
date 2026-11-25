@@ -82,7 +82,7 @@
     <value>Waiting for a readable preview frame. Auto can record no-input frames in the current preview mode.</value>
   </data>
   <data name="OutputHelp" xml:space="preserve">
-    <value>MOV files are named from the local start time and recording formats.</value>
+    <value>Recordings are named from the local start time and recording formats.</value>
   </data>
   <data name="Configure" xml:space="preserve">
     <value>Choose a device and inputs</value>
@@ -1118,5 +1118,143 @@
   </data>
   <data name="ScopeLumaOutOfRange" xml:space="preserve">
     <value>Luma out of range {0:P2}</value>
+  </data>
+  <data name="DsCapabilities" xml:space="preserve">
+    <value>DirectShow device capabilities</value>
+  </data>
+  <data name="DsCapabilitiesHelp" xml:space="preserve">
+    <value>Select a device to inspect its streams. A sample test runs for 2 seconds and saves no media.</value>
+  </data>
+  <data name="DsSelectDevice" xml:space="preserve">
+    <value>Select a device</value>
+  </data>
+  <data name="DsVideoStream" xml:space="preserve">
+    <value>Video stream</value>
+  </data>
+  <data name="DsVideoFormat" xml:space="preserve">
+    <value>Video format</value>
+  </data>
+  <data name="DsAudioFormat" xml:space="preserve">
+    <value>Audio pin and format</value>
+  </data>
+  <data name="DsRefresh" xml:space="preserve">
+    <value>Refresh</value>
+  </data>
+  <data name="DsNegotiate" xml:space="preserve">
+    <value>Check format</value>
+  </data>
+  <data name="DsSample" xml:space="preserve">
+    <value>Test samples</value>
+  </data>
+  <data name="DsDriverReported" xml:space="preserve">
+    <value>Reported by driver</value>
+  </data>
+  <data name="DsNegotiated" xml:space="preserve">
+    <value>Negotiated format</value>
+  </data>
+  <data name="DsSampleResult" xml:space="preserve">
+    <value>Samples received</value>
+  </data>
+  <data name="DsNotTested" xml:space="preserve">
+    <value>Not tested</value>
+  </data>
+  <data name="DsVideo" xml:space="preserve">
+    <value>Video</value>
+  </data>
+  <data name="DsAudio" xml:space="preserve">
+    <value>Audio</value>
+  </data>
+  <data name="DsInfrared" xml:space="preserve">
+    <value>Infrared</value>
+  </data>
+  <data name="DsWithoutAudio" xml:space="preserve">
+    <value>Video only</value>
+  </data>
+  <data name="DsPin" xml:space="preserve">
+    <value>{0} (pin {1})</value>
+  </data>
+  <data name="DsAudioDescription" xml:space="preserve">
+    <value>{0} · {1} Hz · {2} ch · {3}-bit</value>
+  </data>
+  <data name="DsProgressive" xml:space="preserve">
+    <value>Progressive</value>
+  </data>
+  <data name="DsTopFirst" xml:space="preserve">
+    <value>Top field first</value>
+  </data>
+  <data name="DsBottomFirst" xml:space="preserve">
+    <value>Bottom field first</value>
+  </data>
+  <data name="DsFieldUnknown" xml:space="preserve">
+    <value>Field order unspecified</value>
+  </data>
+  <data name="DsSamples" xml:space="preserve">
+    <value>{0} · {1:N0} samples</value>
+  </data>
+  <data name="DsDriverDrops" xml:space="preserve">
+    <value>Driver-reported drops · {0:N0}</value>
+  </data>
+  <data name="DsNoDevices" xml:space="preserve">
+    <value>No DirectShow video devices found.</value>
+  </data>
+  <data name="DsNoVideo" xml:space="preserve">
+    <value>This device reported no video formats.</value>
+  </data>
+  <data name="DsProbeMissing" xml:space="preserve">
+    <value>CaptureRack.Probe.exe was not found. Keep the App and Probe folders together.</value>
+  </data>
+  <data name="DsTimedOut" xml:space="preserve">
+    <value>The device did not respond in time. Refresh and try again.</value>
+  </data>
+  <data name="DsFailed" xml:space="preserve">
+    <value>DirectShow test failed</value>
+  </data>
+  <data name="DsDiagnostics" xml:space="preserve">
+    <value>Diagnostics</value>
+  </data>
+  <data name="DsPreviewFrames" xml:space="preserve">
+    <value>Received {0:N0} · Decoded {1:N0} · Unreadable {2:N0}</value>
+  </data>
+  <data name="DsWaitingForFrames" xml:space="preserve">
+    <value>Waiting for video frames</value>
+  </data>
+  <data name="DsPreviewUnreadable" xml:space="preserve">
+    <value>The device is sending frames that could not be decoded.</value>
+  </data>
+  <data name="DsPreviewUnsupported" xml:space="preserve">
+    <value>Live preview is unavailable for this format. You can still test sample delivery.</value>
+  </data>
+  <data name="DsListen" xml:space="preserve">
+    <value>Monitor on speakers</value>
+  </data>
+  <data name="DsRecordChooseFolder" xml:space="preserve">
+    <value>Record to the output folder configured in Settings.</value>
+  </data>
+  <data name="DsRecordUnsupported" xml:space="preserve">
+    <value>This video or audio format cannot be recorded directly. Select a supported format or disable audio.</value>
+  </data>
+  <data name="DsRecordActive" xml:space="preserve">
+    <value>Recording native samples · {0} ({1})</value>
+  </data>
+  <data name="DsRecordFinalizing" xml:space="preserve">
+    <value>Finalizing recording…</value>
+  </data>
+  <data name="DsRecordSaved" xml:space="preserve">
+    <value>Recording saved · {0}</value>
+  </data>
+  <data name="DsRecordPartial" xml:space="preserve">
+    <value>Recording incomplete · {0} · {1}</value>
+  </data>
+  <data name="DsRecordError" xml:space="preserve">
+    <value>Recording failed · {0}</value>
+  </data>
+  <data name="DsStartInput" xml:space="preserve">
+    <value>Start input</value>
+  </data>
+  <data name="DsStopInput" xml:space="preserve">
+    <value>Stop input</value>
+  </data>
+  <data name="DsMpeg2RecordOnly" xml:space="preserve">
+    <value>MPEG-2 video is available for recording. Live picture preview is unavailable.</value>
   </data>
 </root>

@@ -43,7 +43,7 @@ CaptureRack/
 
 Capture backends that call a capture-card vendor SDK live under `src/Capture/CaptureCards/`. SignalCapture keeps device-specific rules in `Devices/Domesday/` and `Devices/Sdr/RtlSdr/` and Windows USB transport in `Windows/`. DeckLink groups SDK bindings, capture, monitoring, and recording into `Interop/`, `Capture/`, `Monitoring/`, and `Recording/`.
 
-FireWire / i.LINK and general DirectShow devices are separate capture sources. The Windows MSTape implementation lives under `CaptureRack.DirectShow/Windows/FireWire/MsTape/`. Reusable COM bindings and DirectShow media-type structures live in `CaptureRack.DirectShow/Windows/Interop/`. General DirectShow device capture can use those bindings when it is added.
+FireWire / i.LINK and general DirectShow devices are separate capture sources. The Windows MSTape implementation lives under `CaptureRack.DirectShow/Windows/FireWire/MsTape/`. Reusable COM bindings and DirectShow media-type structures live in `CaptureRack.DirectShow/Windows/Interop/`. The general DirectShow probe uses the same COM bindings and managed sink.
 
 Capture backends discover devices, negotiate formats, and receive samples. Downstream processing is organized by media format so multiple backends can use the same writer or analyzer. MSTape negotiates its supported packet layout and passes the original bytes to `Processing/CaptureRack.Recording/TransportStream/`. The writer handles buffering, byte-preserving output, and file finalization. It has no dependency on DirectShow or MSTape. `CaptureRack.QualityControl` provides the TS parser for both recording-time validation and offline file checks. Tape transport controls belong to `CaptureRack.DeviceControl`.
 
@@ -105,6 +105,27 @@ RTL-SDR uses a matching-architecture `rtlsdr.dll` or `librtlsdr.dll` beside the 
 ```
 
 `probe` shows the tuner and its supported manual gain values. `configure` applies the settings for a diagnostic session and closes the receiver without collecting I/Q. Defaults are 100 MHz, 2.4 MSPS, auto tuner gain, and digital AGC off. Set manual gain in tenths of a dB (for example, 197 means 19.7 dB). Frequency correction is optional (`--ppm`). Manual VGA indices 0–8 are enabled only for the R828D-based RTL-SDR Blog V4 with the patched librtlsdr exports used by [MISRC-GUI](https://github.com/harrypm/MISRC-GUI/blob/main/docs/RTL-SDR.md). The manual VGA default is 8 when supported.
+
+## DirectShow device capabilities
+
+In the Windows app, open the source selector and choose **DirectShow Capture**. Pick a device to inspect its video streams and their formats. Choose an audio pin and format when available. The page shows driver-reported formats, the negotiated formats, and sample counts after a two-second test. Start preview to view the selected stream live. Supported preview formats include YUY2, UYVY, NV12, I420, YV12, RGB24/32, MJPEG, v210, r210, and 8/16-bit infrared. PCM audio peaks are shown when an audio pin is selected. Speaker monitoring is optional and uses the first two channels. Infrared formats are listed as a separate video stream when advertised by the driver.
+
+With preview or MPEG-2 input running, select **Start recording** to preserve the negotiated DirectShow samples. Compressed MJPEG and MPEG-2 elementary video try TS, MOV, MP4, then MKV. Raw formats try MOV, MP4, then MKV. PCM audio remains in its negotiated format. Capture stages to a recoverable .mkv.partial file, then tries each container at stop using FFmpeg stream copy and verifies stream formats, SHA-256 payload hashes, and the first decoded video frame. The app keeps MKV when FFmpeg/FFprobe are unavailable or no earlier candidate passes verification. Preview continues while the output is finalized. Leave extra space for one additional copy during finalization.
+
+Keep the release package's `App` and `Probe` folders side by side. The app uses the probe as an isolated diagnostic process.
+
+## Windows DirectShow video-device probe
+
+Run these commands from the native probe package. Device names are prefixed with [DirectShow]. Use the device index from list or pass its quoted moniker ID. The media-type indexes come from probe for the selected device.
+
+    CaptureRack.Probe.exe directshow list
+    CaptureRack.Probe.exe directshow probe 0 --json
+    CaptureRack.Probe.exe directshow negotiate 0 <video-index> [audio-index] --json
+    CaptureRack.Probe.exe directshow capture 0 5 <video-index> [audio-index] --json --trace
+
+The probe enumerates video-input filters and their advertised output-pin formats, including audio pins on those filters. MSTape stays in the FireWire command group. The first reference device is Blackmagic WDM Capture on a DeckLink Studio 4K. These commands use DirectShow throughout. They leave hardware input routing as configured.
+
+Negotiate connects the selected pins directly to managed sinks, reads the negotiated media types, and leaves the graph stopped. Capture starts the graph for a bounded interval and reports sample sizes, timestamps, discontinuities, and a driver drop count when available. It diagnoses sample delivery without creating media files. Exit code 2 means at least one requested stream delivered no samples. Exit code 124 means a driver call exceeded the command deadline. Use a matching live input signal for capture. Unknown field order is kept as unknown when the media header does not supply it.
 
 ## Windows x64 FireWire / i.LINK probe
 

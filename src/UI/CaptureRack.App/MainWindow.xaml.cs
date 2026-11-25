@@ -36,6 +36,8 @@ public sealed partial class MainWindow : Window
     private readonly Views.DeckLinkInspectorView deckLinkInspector = new();
     private readonly Controls.PreviewMonitorOptionsBar monitorOptionsBar = new();
     private readonly Views.PlannedBackendStageView plannedStageView = new();
+    private readonly Views.DirectShowCapabilitiesView directShowCapabilitiesView = new();
+    private bool IsDirectShowActive => activeModule.Descriptor.BackendId == CaptureRack.DirectShow.Windows.Capture.DirectShowBackend.BackendId;
     private readonly Views.PlannedBackendInspectorView plannedInspectorView = new();
     private readonly QcSessionHistory qcHistory = new();
     private bool deckLinkScanned;
@@ -132,6 +134,11 @@ public sealed partial class MainWindow : Window
         detectedModeTimer.Tick += async (_, _) => await RefreshDetectedPreviewModeAsync();
 
         ResizeWindowForDpi(1320, 840);
+        directShowCapabilitiesView.RecordingChanged += (_, _) =>
+        {
+            UpdateNavigationStyles();
+            RenderSourceRackList();
+        };
         AppWindow.Closing += OnClosing;
         ((FrameworkElement)Content).Loaded += OnLoaded;
     }
@@ -301,20 +308,31 @@ public sealed partial class MainWindow : Window
         }
         else
         {
-            plannedInspectorView.Bind(activeModule.Descriptor, L);
-            plannedStageView.Bind(activeModule.Descriptor, L);
-            InspectorSlot.Content = plannedInspectorView;
+            if (IsDirectShowActive)
+            {
+                directShowCapabilitiesView.SetRecordingTarget(() => OutputPath.Text.Trim(), GetRecordingLabel);
+                directShowCapabilitiesView.Bind(L);
+                InspectorSlot.Content = null;
+                StageSlot.Content = directShowCapabilitiesView;
+            }
+            else
+            {
+                plannedInspectorView.Bind(activeModule.Descriptor, L);
+                plannedStageView.Bind(activeModule.Descriptor, L);
+                InspectorSlot.Content = plannedInspectorView;
+                StageSlot.Content = plannedStageView;
+            }
             MonitorBarSlot.Content = null;
             MonitorBarSlot.Visibility = Visibility.Collapsed;
             MonitorViewport.Visibility = Visibility.Collapsed;
-            StageSlot.Content = plannedStageView;
             StageSlot.Visibility = Visibility.Visible;
         }
     }
 
     private void SelectBackendModule(string backendId, bool persist)
     {
-        if (!WorkspaceModuleRegistry.CanSwitchBackend(captureTask is not null || restartPreviewRequested,
+        if (directShowCapabilitiesView.IsRecording ||
+            !WorkspaceModuleRegistry.CanSwitchBackend(captureTask is not null || restartPreviewRequested,
             recordingSession, recordingTransition, qcStop is not null))
             return;
 
@@ -377,7 +395,7 @@ public sealed partial class MainWindow : Window
 
     private void RenderSourceRackList()
     {
-        var canSwitch = WorkspaceModuleRegistry.CanSwitchBackend(
+        var canSwitch = !directShowCapabilitiesView.IsRecording && WorkspaceModuleRegistry.CanSwitchBackend(
             captureTask is not null || restartPreviewRequested, recordingSession, recordingTransition, qcStop is not null);
         SourceRackLockNotice.Text = L("SourceRackLockedNotice");
         SourceRackLockNotice.Visibility = canSwitch ? Visibility.Collapsed : Visibility.Visible;
@@ -386,7 +404,7 @@ public sealed partial class MainWindow : Window
         {
             var source = module.Descriptor;
             var selected = source.BackendId == activeModule.Descriptor.BackendId;
-            var badgeKey = selected
+            var badgeKey = source.BackendId == CaptureRack.DirectShow.Windows.Capture.DirectShowBackend.BackendId ? "DsDiagnostics" : selected
                 ? (source.IsImplementedInUi ? "SourceStatusActive" : "SourceStatusSelectedPlanned")
                 : (source.IsImplementedInUi ? "SourceStatusReady" : "SourceStatusPlanned");
             var badgeBg = selected && source.IsImplementedInUi
@@ -593,9 +611,11 @@ public sealed partial class MainWindow : Window
 
     private void NavigateToPage(ActiveAppPage target)
     {
-        if (activePage == target)
+        if (activePage == target || directShowCapabilitiesView.IsRecording)
             return;
 
+        if (target != ActiveAppPage.Capture)
+            directShowCapabilitiesView.StopPreview();
         if (activePage == ActiveAppPage.Settings)
             SavePendingSettings();
         if (target == ActiveAppPage.Settings)
@@ -629,6 +649,7 @@ public sealed partial class MainWindow : Window
 
     private void UpdateNavigationStyles()
     {
+        QcModeButton.IsEnabled = OpenSettingsButton.IsEnabled = !directShowCapabilitiesView.IsRecording;
         ApplySegmentState(CaptureModeButton, activePage == ActiveAppPage.Capture);
         ApplySegmentState(QcModeButton, activePage == ActiveAppPage.QcCenter);
         OpenSettingsButton.Background = activePage == ActiveAppPage.Settings
@@ -1372,6 +1393,14 @@ public sealed partial class MainWindow : Window
 
     private async void OnClosing(AppWindow sender, AppWindowClosingEventArgs e)
     {
+        if (directShowCapabilitiesView.IsRecording)
+        {
+            e.Cancel = true;
+            await directShowCapabilitiesView.FinishRecordingForCloseAsync();
+            DispatcherQueue.TryEnqueue(() => Close());
+            return;
+        }
+
         if (qcStop is { } qc)
         {
             e.Cancel = true;
@@ -1401,6 +1430,7 @@ public sealed partial class MainWindow : Window
         storageTimer.Stop();
         detectedModeTimer.Stop();
         closing = true;
+        directShowCapabilitiesView.StopPreview();
         previewTimer.Stop();
         if (captureTask is not { } task)
         {

@@ -334,6 +334,7 @@ public sealed class WorkspaceArchitectureTests
         Assert.Equal("windows.signalcapture", registry.Resolve("windows.signalcapture").Descriptor.BackendId);
         Assert.Equal("windows.audio", registry.Resolve("windows.audio").Descriptor.BackendId);
         Assert.Equal("windows.directshow", registry.Resolve("windows.directshow").Descriptor.BackendId);
+        Assert.Equal("CaptureRack.Probe.exe directshow list", registry.Resolve("windows.directshow").Descriptor.CliCommandHint);
         Assert.IsType<TestSignalWorkspaceModule>(registry.Resolve(TestSignal.BackendId));
 
         Assert.Equal(3, registry.ByCategory(CaptureBackendCategory.Video).Count);

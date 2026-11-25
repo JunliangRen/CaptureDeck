@@ -19,13 +19,14 @@ internal sealed class DirectShowPreviewSession
     private DirectShowRecording? recording;
     private bool ended;
 
-    internal DirectShowRecording StartRecording(string path)
+    internal DirectShowRecording StartRecording(string path, string? device = null,
+        Action<NativeContainerAttempt>? progress = null)
     {
         lock (recordingGate)
         {
             if (ended || videoFormat is null || recording is not null)
                 throw new InvalidOperationException("The DirectShow recording cannot start in the current preview state.");
-            recording = DirectShowRecording.Start(path, videoFormat, audioFormat, QcReports.FindTools());
+            recording = DirectShowRecording.Start(path, videoFormat, audioFormat, QcReports.FindTools(), device, progress);
             return recording;
         }
     }

@@ -11,7 +11,7 @@ namespace CaptureRack.App.Views;
 
 public sealed partial class QcCenterView : UserControl
 {
-    private static readonly string[] SupportedExtensions = [".mov", ".ts", ".ts192", ".m2t"];
+    private static readonly string[] SupportedExtensions = [".mov", ".mkv", ".ts", ".ts192", ".m2t"];
     private Func<string, string> localize = key => key;
     private CultureInfo culture = CultureInfo.InvariantCulture;
     private QcSessionHistoryEntry? displayedEntry;
@@ -213,7 +213,7 @@ public sealed partial class QcCenterView : UserControl
                 item.Id,
                 item.FileName,
                 $"{item.CheckedAt.ToLocalTime():HH:mm:ss} · {localize(item.TitleKey)}",
-                item.Kind == QcEntryKind.Mov ? "MOV" : "TS",
+                item.Kind == QcEntryKind.Mov ? Path.GetExtension(item.FilePath).TrimStart('.').ToUpperInvariant() : "TS",
                 StudioBrushes.Resolve(this, item.Severity switch
                 {
                     TelemetrySeverity.Normal => "StudioSignalLockBrush",

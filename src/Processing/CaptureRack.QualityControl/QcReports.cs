@@ -52,25 +52,33 @@ public static class QcReports
     public static (string? FfmpegPath, string? FfprobePath) FindTools() =>
         (FindTool("ffmpeg"), FindTool("ffprobe"));
 
+    public static bool SupportsFile(string path) =>
+        Path.GetExtension(path).Equals(".mov", StringComparison.OrdinalIgnoreCase) ||
+        Path.GetExtension(path).Equals(".mkv", StringComparison.OrdinalIgnoreCase);
+
     public static async Task<QcResult> RunAsync(string inputPath, QcCaptureLog? capture = null,
         Action<string>? progress = null, CancellationToken cancellation = default, Action<QcStage>? stageChanged = null)
     {
         var path = Path.GetFullPath(inputPath);
-        if (!Path.GetExtension(path).Equals(".mov", StringComparison.OrdinalIgnoreCase))
-            throw new ArgumentException("Select a MOV file.", nameof(inputPath));
+        if (!SupportsFile(path))
+            throw new ArgumentException("Select a MOV or MKV file.", nameof(inputPath));
         if (!File.Exists(path))
-            throw new FileNotFoundException("The MOV could not be found.", path);
+            throw new FileNotFoundException("The recording could not be found.", path);
+
+        var isMov = Path.GetExtension(path).Equals(".mov", StringComparison.OrdinalIgnoreCase);
+        var fileBytes = new FileInfo(path).Length;
 
         var output = ReportPaths.For(path);
         var began = DateTimeOffset.UtcNow;
         var problems = new List<string>();
         var warnings = CaptureWarnings(capture);
+        NativeCaptureReport? native = null;
         MediaFacts? media = null;
         DecodedCounts? counts = null;
         QcToolsCounts? scopeCounts = null;
         string? hashesPath = null;
         string? scopesPath = null;
-        var stage = "Inspecting MOV streams";
+        var stage = "Inspecting media streams";
         var status = QcStatus.Passed;
         var ffmpeg = FindTool("ffmpeg");
         var ffprobe = FindTool("ffprobe");
@@ -87,27 +95,51 @@ public static class QcReports
                 cancellation.ThrowIfCancellationRequested();
                 stageChanged?.Invoke(QcStage.Inspecting);
                 progress?.Invoke(stage);
-                var metadata = await InspectAsync(ffprobe, path, cancellation);
-                media = ReadMediaFacts(metadata);
-                CheckMedia(media, capture?.Expected, problems);
                 if (capture is null)
                 {
+                    try { native = await NativeCaptureReport.ReadAsync(path, cancellation); }
+                    catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException or InvalidDataException)
+                    {
+                        warnings.Add($"Could not read the DirectShow recording report: {ex.Message}");
+                    }
+                }
+
+                if (native is not null)
+                {
+                    Compare("Recorded file bytes", fileBytes, native.FileBytes, problems);
+                    if (native.Error is { } error)
+                        problems.Add(error);
+                    AddNativeWarnings(native.VideoCounts, "Video", native.Video.Encoding == "MPEG2", warnings);
+                    if (native.AudioCounts is { } pcm)
+                        AddNativeWarnings(pcm, "PCM", false, warnings);
+                }
+
+                var metadata = await InspectAsync(ffprobe, path, cancellation);
+                media = ReadMediaFacts(metadata, isMov, capture is not null);
+                CheckMedia(media, capture?.Expected, problems);
+                if (native is not null)
+                    CheckNativeMedia(media, native, problems);
+                if (capture is null && native is null)
+                {
                     if (!media.HasVideo)
-                        warnings.Add("The MOV has no video track.");
+                        warnings.Add("The file has no video track.");
                     if (!media.HasAudio)
-                        warnings.Add("The MOV has no audio track.");
+                        warnings.Add("The file has no audio track.");
+                    if ((media.HasVideo && media.VideoFrames is null) ||
+                        (media.HasAudio && media.AudioSampleFrames is null))
+                        warnings.Add("Some expected sample counts are unavailable. Full decoding cannot establish the original capture length.");
                 }
 
                 stage = "Decoding video and PCM and writing FrameMD5";
                 stageChanged?.Invoke(QcStage.Decoding);
                 progress?.Invoke(stage);
                 counts = await WriteAtomicallyAsync(output.FrameMd5, stream =>
-                    DecodeAndHashAsync(ffmpeg, path, media, stream, cancellation));
+                    DecodeAndHashAsync(ffmpeg, path, media, stream, cancellation, native is not null || !isMov));
                 hashesPath = output.FrameMd5;
 
-                Compare("Decoded video frames", counts.VideoFrames, capture?.Expected.VideoFrames ?? media.VideoFrames, problems);
+                Compare("Decoded video frames", counts.VideoFrames, capture?.Expected.VideoFrames ?? native?.ExpectedVideoFrames ?? media.VideoFrames, problems);
                 Compare("Decoded PCM sample frames", counts.AudioSampleFrames,
-                    capture?.Expected.AudioSampleFrames ?? media.AudioSampleFrames, problems);
+                    capture?.Expected.AudioSampleFrames ?? native?.PcmSampleFrames ?? media.AudioSampleFrames, problems);
 
                 stage = "Analyzing video and audio for QCTools";
                 stageChanged?.Invoke(QcStage.Analyzing);
@@ -120,7 +152,7 @@ public static class QcReports
                 if (media.HasAudio && scopeCounts.AudioFrames == 0)
                     problems.Add("The QCTools report contains no audio analysis frames.");
                 if (scopeCounts.FirstFieldMismatch is { } mismatch)
-                    problems.Add($"Decoded field flags disagree with the MOV at video frame {mismatch:N0}.");
+                    problems.Add($"Decoded field flags disagree with the file at video frame {mismatch:N0}.");
                 if (scopeCounts.VideoFramesWithoutFieldFlags > 0)
                     warnings.Add($"{scopeCounts.VideoFramesWithoutFieldFlags:N0} decoded frames did not expose field flags.");
 
@@ -149,9 +181,11 @@ public static class QcReports
             var log = new
             {
                 file = path,
-                fileBytes = new FileInfo(path).Length,
+                fileBytes,
                 capture,
-                verificationBasis = capture is null ? "MOV sample tables; original capture settings unavailable" : "CaptureRack recording settings and write counts",
+                nativeRecording = native,
+                verificationBasis = capture is not null ? "CaptureRack recording settings and write counts" :
+                    native is not null ? "DirectShow recording report and full decode" : "Media stream metadata and full decode; original capture settings unavailable",
                 qc = new
                 {
                     status,
@@ -231,34 +265,42 @@ public static class QcReports
                 return await XElement.LoadAsync(xml, LoadOptions.None, cancellation);
             }, cancellation);
 
-    private static MediaFacts ReadMediaFacts(XElement metadata)
+    private static MediaFacts ReadMediaFacts(XElement metadata, bool isMov, bool deckLink)
     {
         var format = metadata.Element("format");
         var streams = metadata.Element("streams")?.Elements("stream").ToArray() ?? [];
-        if (!Text(format, "format_name").Split(',').Contains("mov", StringComparer.Ordinal))
-            throw new InvalidOperationException("The input was not recognized as QuickTime MOV.");
+        var container = isMov ? "mov" : "matroska";
+        if (!Text(format, "format_name").Split(',').Contains(container, StringComparer.Ordinal))
+            throw new InvalidOperationException($"The input was not recognized as {container}.");
         var video = streams.Where(stream => Text(stream, "codec_type") == "video").ToArray();
         var audio = streams.Where(stream => Text(stream, "codec_type") == "audio").ToArray();
         if (video.Length > 1 || audio.Length > 1 || video.Length + audio.Length == 0)
-            throw new InvalidOperationException("QC expects at most one video track and one stereo PCM track.");
+            throw new InvalidOperationException("QC expects at most one video track and one PCM track.");
 
         var v = video.SingleOrDefault();
         var a = audio.SingleOrDefault();
         var audioCodec = a is null ? "" : Text(a, "codec_name");
         var audioBits = (int)(a is null ? 0 : Number(a, "bits_per_sample") ?? 0);
-        if (a is not null && ((audioCodec, audioBits) is not (("pcm_s16le", 16) or ("pcm_s32le", 32)) ||
-            Number(a, "sample_rate") != 48000 || Number(a, "channels") != 2))
-            throw new InvalidOperationException("The audio track must contain 48 kHz, 16- or 32-bit signed stereo PCM.");
+        var sampleRate = (int)(Number(a, "sample_rate") ?? 0);
+        var channels = (int)(Number(a, "channels") ?? 0);
+        if (a is not null && ((audioCodec, audioBits) is not
+            (("pcm_u8", 8) or ("pcm_s16le", 16) or ("pcm_s24le", 24) or ("pcm_s32le", 32))
+            || sampleRate <= 0 || channels <= 0))
+            throw new InvalidOperationException("The audio track must contain 8-, 16-, 24-, or 32-bit PCM.");
+        if (deckLink && a is not null && (audioBits is not (16 or 32) || sampleRate != 48000 || channels != 2))
+            throw new InvalidOperationException("DeckLink QC expects 48 kHz, 16- or 32-bit signed stereo PCM.");
 
         return new(v is not null, a is not null, v is null ? "" : Text(v, "codec_tag_string"),
             v is null ? "" : Text(v, "field_order"), v is null ? 0 : Number(v, "nb_frames"),
             a is null ? 0 : Number(a, "nb_frames"), (int)(v is null ? 0 : Number(v, "width") ?? 0),
-            (int)(v is null ? 0 : Number(v, "height") ?? 0), audioCodec, audioBits, a is null ? 0 : 48000,
-            a is null ? 0 : 2, v is null ? "" : Text(v, "r_frame_rate"));
+            (int)(v is null ? 0 : Number(v, "height") ?? 0), audioCodec, audioBits, sampleRate,
+            channels, v is null ? "" : Text(v, "r_frame_rate"), Text(v, "codec_name"), Text(v, "pix_fmt"));
     }
 
     private static void CheckMedia(MediaFacts media, QcExpectedMedia? expected, List<string> problems)
     {
+        if (expected is null)
+            return;
         if (media.HasVideo)
         {
             if (media.VideoTag is not ("v210" or "2vuy"))
@@ -270,9 +312,6 @@ public static class QcReports
         }
         if (media.HasAudio && media.AudioSampleFrames is null)
             problems.Add("The MOV audio sample count is unavailable.");
-
-        if (expected is null)
-            return;
 
         Compare("MOV index video frames", media.VideoFrames, expected.VideoFrames, problems);
         Compare("MOV index PCM sample frames", media.AudioSampleFrames, expected.AudioSampleFrames, problems);
@@ -289,6 +328,60 @@ public static class QcReports
         }
     }
 
+    private static void CheckNativeMedia(MediaFacts media, NativeCaptureReport recording, List<string> problems)
+    {
+        if (!media.HasVideo)
+            problems.Add("The recording is missing its video track.");
+        Compare("Video width", media.Width, recording.Video.Width, problems);
+        Compare("Video height", media.Height, recording.Video.Height, problems);
+        var expectedEncoding = recording.Video.Encoding switch
+        {
+            "MJPG" or "MJPG_IR" => ("mjpeg", ""),
+            "MPEG2" => ("mpeg2video", ""),
+            "v210" => ("v210", "yuv422p10le"),
+            "r210" => ("r210", "gbrp10le"),
+            "YUY2" => ("rawvideo", "yuyv422"),
+            "UYVY" or "HDYC" => ("rawvideo", "uyvy422"),
+            "YVYU" => ("rawvideo", "yvyu422"),
+            "NV12" => ("rawvideo", "nv12"),
+            "I420" or "IYUV" or "YV12" => ("rawvideo", "yuv420p"),
+            "RGB24" => ("rawvideo", "bgr24"),
+            "RGB32" => ("rawvideo", ""),
+            "L8_IR" or "Y800" or "GREY" => ("rawvideo", "gray"),
+            "L16_IR" => ("rawvideo", "gray16le"),
+            _ => ("", "")
+        };
+        if (expectedEncoding.Item1.Length > 0 && (media.VideoCodec != expectedEncoding.Item1 ||
+            expectedEncoding.Item2.Length > 0 && media.PixelFormat != expectedEncoding.Item2))
+            problems.Add($"Video encoding '{media.VideoCodec}/{media.PixelFormat}' differs from the negotiated '{recording.Video.Encoding}'.");
+        var order = media.FieldOrder switch
+        {
+            "tt" or "tb" => "top-first",
+            "bb" or "bt" => "bottom-first",
+            _ => media.FieldOrder
+        };
+        if (recording.Video.FieldOrder is { } expectedOrder && order != expectedOrder)
+            problems.Add($"Video field order '{media.FieldOrder}' differs from the negotiated '{expectedOrder}'.");
+        if (media.HasAudio != (recording.Audio is not null))
+            problems.Add("The audio track does not match the recording report.");
+        if (recording.Audio is { } audio)
+        {
+            Compare("Audio sample rate", media.AudioRate, audio.SampleRate, problems);
+            Compare("Audio channels", media.Channels, audio.Channels, problems);
+            Compare("Audio bit depth", media.AudioBits, audio.BitsPerSample, problems);
+        }
+    }
+
+    private static void AddNativeWarnings(NativeCaptureCounts counts, string stream, bool reordered, List<string> warnings)
+    {
+        if (counts.Discontinuities > 0)
+            warnings.Add($"{stream}: the driver marked {counts.Discontinuities:N0} sample discontinuities.");
+        if (counts.MissingStartTimes > 0)
+            warnings.Add($"{stream}: {counts.MissingStartTimes:N0} samples have no driver timestamp.");
+        if (counts.RepeatedStartTimes > 0 || !reordered && counts.RegressingStartTimes > 0)
+            warnings.Add($"{stream}: {counts.RepeatedStartTimes:N0} repeated and {counts.RegressingStartTimes:N0} regressing driver timestamps.");
+    }
+
     private static void Compare(string subject, long? observed, long? expected, List<string> problems)
     {
         if (expected is not null && observed != expected)
@@ -296,10 +389,11 @@ public static class QcReports
     }
 
     private static Task<DecodedCounts> DecodeAndHashAsync(string executable, string path, MediaFacts media,
-        Stream target, CancellationToken cancellation)
+        Stream target, CancellationToken cancellation, bool useDemuxTimeBase)
     {
+        string[] timeBase = useDemuxTimeBase ? ["-enc_time_base:v", "demux"] : [];
         string[] videoArgs = media.HasVideo
-            ? ["-map", "0:v:0", "-c:v", "rawvideo", "-threads:v", "1", "-fps_mode", "passthrough"] : [];
+            ? ["-map", "0:v:0", "-c:v", "rawvideo", "-threads:v", "1", "-fps_mode", "passthrough", .. timeBase] : [];
         string[] audioArgs = media.HasAudio ? ["-map", "0:a:0", "-c:a", media.AudioCodec] : [];
         var audioStream = media.HasVideo ? "1" : "0";
         return RunProcessAsync(executable, Path.GetDirectoryName(path)!,
@@ -576,7 +670,7 @@ public static class QcReports
     }
 
     private sealed record MediaFacts(bool HasVideo, bool HasAudio, string VideoTag, string FieldOrder, long? VideoFrames, long? AudioSampleFrames,
-        int Width, int Height, string AudioCodec, int AudioBits, int AudioRate, int Channels, string FrameRate);
+        int Width, int Height, string AudioCodec, int AudioBits, int AudioRate, int Channels, string FrameRate, string VideoCodec, string PixelFormat);
     private sealed record DecodedCounts(long VideoFrames, long AudioSampleFrames);
     private sealed record QcToolsCounts(long VideoFrames, long AudioFrames, long? FirstFieldMismatch,
         long VideoFramesWithoutFieldFlags);

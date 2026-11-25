@@ -1,6 +1,8 @@
 using System.Buffers.Binary;
 using CaptureRack.DirectShow.Windows.Capture;
 using Xunit;
+using CaptureRack.QualityControl;
+using System.Text.Json;
 
 namespace CaptureRack.UT;
 
@@ -34,6 +36,11 @@ public sealed class DirectShowRecordingTests
             Assert.True(data.AsSpan().IndexOf(new byte[] { 0x10, 0x80, 0x42, 0x80, 0x7f, 0x80, 0xeb, 0x80 }) >= 0);
             Assert.True(data.AsSpan().IndexOf(new byte[] { 0x11, 0xBB, 0x70, 0xEF, 0x07, 0x81 }) >= 0);
             Assert.False(File.Exists(record.PartialPath));
+            using var report = JsonDocument.Parse(await File.ReadAllTextAsync(NativeCaptureReport.PathFor(path)));
+            Assert.Equal(1, report.RootElement.GetProperty("expectedVideoFrames").GetInt64());
+            Assert.Equal(1, report.RootElement.GetProperty("pcmSampleFrames").GetInt64());
+            Assert.Equal("ToolsUnavailable", report.RootElement.GetProperty("containerAttempts")[0].GetProperty("status").GetString());
+            Assert.Equal("Selected", report.RootElement.GetProperty("containerAttempts")[1].GetProperty("status").GetString());
         }
         finally { Cleanup(path); }
     }
@@ -50,6 +57,8 @@ public sealed class DirectShowRecordingTests
             await Assert.ThrowsAsync<IOException>(async () => await record.Completion);
             Assert.True(File.Exists(record.PartialPath));
             Assert.False(File.Exists(path));
+            using var report = JsonDocument.Parse(await File.ReadAllTextAsync(NativeCaptureReport.PathFor(record.PartialPath)));
+            Assert.NotNull(report.RootElement.GetProperty("error").GetString());
         }
         finally { Cleanup(path); }
     }
@@ -71,19 +80,77 @@ public sealed class DirectShowRecordingTests
         finally { Cleanup(path); }
     }
 
-    private static DirectShowFormat Video()
+    [Theory]
+    [InlineData(false, true)]
+    [InlineData(true, true)]
+    [InlineData(false, false)]
+    public async Task MediaQcChecksNativeCountsAndRejectsTruncation(bool mov, bool withAudio)
+    {
+        if (Environment.GetEnvironmentVariable("CAPTURERACK_TEST_SIGNAL_QC") != "1")
+            return;
+
+        var folder = Directory.CreateTempSubdirectory("capturerack-directshow-qc-");
+        try
+        {
+            const int videoFrames = 12;
+            const int samplesPerPacket = 1920;
+            var tools = QcReports.FindTools();
+            Assert.NotNull(tools.FfmpegPath);
+            Assert.NotNull(tools.FfprobePath);
+            var progress = new List<NativeContainerAttempt>();
+            var record = DirectShowRecording.Start(Path.Combine(folder.FullName, "fixture.mkv"),
+                Video(64, 48) with { FrameInterval100ns = 400_000 }, withAudio ? Audio() : null,
+                mov ? tools : default, "Synthetic DirectShow", progress.Add);
+            var video = new byte[64 * 48 * 2];
+            var audio = new byte[samplesPerPacket * 6];
+            Array.Fill(video, (byte)128);
+            for (int i = 0; i < videoFrames; i++)
+            {
+                var time = TimeSpan.FromMilliseconds(i * 40);
+                record.Accept(true, new(video, false, time));
+                if (withAudio)
+                    record.Accept(false, new(audio, false, time));
+            }
+            record.Complete();
+
+            var path = await record.Completion;
+            Assert.Equal(mov ? ".mov" : ".mkv", Path.GetExtension(path));
+            Assert.Equal(NativeContainerStatus.Selected, progress[^1].Status);
+            var saved = await File.ReadAllBytesAsync(path);
+            var result = await QcReports.RunAsync(path);
+            Assert.True(result.Status == QcStatus.Passed, result.Summary);
+            Assert.Equal(videoFrames, result.DecodedVideoFrames);
+            Assert.Equal(withAudio ? videoFrames * samplesPerPacket : 0, result.DecodedAudioSampleFrames);
+            Assert.DoesNotContain(result.Warnings, warning => warning.Contains("no audio track", StringComparison.OrdinalIgnoreCase));
+            Assert.True(File.Exists(result.FrameMd5));
+            Assert.True(File.Exists(result.QcToolsReport));
+            using (var report = JsonDocument.Parse(await File.ReadAllTextAsync(result.CaptureLog)))
+                Assert.Equal("Synthetic DirectShow", report.RootElement.GetProperty("nativeRecording").GetProperty("device").GetString());
+            Assert.Equal(saved, await File.ReadAllBytesAsync(path));
+
+            var truncated = saved[..(saved.Length / 2)];
+            await File.WriteAllBytesAsync(path, truncated);
+            var damaged = await QcReports.RunAsync(path);
+            Assert.Equal(QcStatus.Failed, damaged.Status);
+            Assert.Contains("Recorded file bytes", damaged.Summary);
+            Assert.Equal(truncated, await File.ReadAllBytesAsync(path));
+        }
+        finally { folder.Delete(recursive: true); }
+    }
+
+    private static DirectShowFormat Video(int width = 2, int height = 2)
     {
         var bitmap = new byte[40];
         BinaryPrimitives.WriteInt32LittleEndian(bitmap, 40);
-        BinaryPrimitives.WriteInt32LittleEndian(bitmap.AsSpan(4), 2);
-        BinaryPrimitives.WriteInt32LittleEndian(bitmap.AsSpan(8), 2);
+        BinaryPrimitives.WriteInt32LittleEndian(bitmap.AsSpan(4), width);
+        BinaryPrimitives.WriteInt32LittleEndian(bitmap.AsSpan(8), height);
         BinaryPrimitives.WriteInt16LittleEndian(bitmap.AsSpan(12), 1);
         BinaryPrimitives.WriteInt16LittleEndian(bitmap.AsSpan(14), 16);
         "YUY2"u8.CopyTo(bitmap.AsSpan(16));
-        BinaryPrimitives.WriteInt32LittleEndian(bitmap.AsSpan(20), 8);
+        BinaryPrimitives.WriteInt32LittleEndian(bitmap.AsSpan(20), width * height * 2);
         return new(0, "Video", "Video", "video", Guid.Empty, Guid.Empty, Guid.Empty)
         {
-            Width = 2, Height = 2, FrameInterval100ns = 333_333, FourCc = "YUY2",
+            Width = width, Height = height, FrameInterval100ns = 333_333, FourCc = "YUY2",
             BitmapHeaderBase64 = Convert.ToBase64String(bitmap)
         };
     }
@@ -95,6 +162,8 @@ public sealed class DirectShowRecordingTests
 
     private static void Cleanup(string path)
     {
+        File.Delete(NativeCaptureReport.PathFor(path + ".partial"));
+        File.Delete(NativeCaptureReport.PathFor(path));
         File.Delete(path + ".partial");
         File.Delete(path);
     }

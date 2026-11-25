@@ -2,6 +2,7 @@ using System.Buffers;
 using System.Diagnostics;
 using System.Threading.Channels;
 using CaptureRack.Core;
+using CaptureRack.QualityControl;
 using CaptureRack.Recording;
 using CaptureRack.Recording.Matroska;
 
@@ -17,18 +18,32 @@ public sealed class DirectShowRecording
     private readonly NativePcmTrack? audio;
     private readonly long started = Stopwatch.GetTimestamp();
     private int queuedBytes;
+    private readonly DateTimeOffset beganUtc = DateTimeOffset.UtcNow;
+    private DateTimeOffset? endedUtc;
+    private readonly string? device;
+    private readonly NativeCaptureFormat videoFormat;
+    private readonly NativeCaptureFormat? audioFormat;
+    private readonly StreamEvidence videoEvidence = new();
+    private readonly StreamEvidence audioEvidence = new();
+    private readonly Action<NativeContainerAttempt>? reportProgress;
+    private readonly List<NativeContainerAttempt> attempts = [];
     private bool completed;
     private bool startedVideo;
     private readonly bool compressed;
     private readonly (string? FfmpegPath, string? FfprobePath) tools;
 
     private DirectShowRecording(string path, FileStream file, NativeVideoTrack video, NativePcmTrack? audio,
-        bool compressed, (string?, string?) tools)
+        DirectShowFormat inputVideo, DirectShowFormat? inputAudio, (string?, string?) tools,
+        string? device, Action<NativeContainerAttempt>? reportProgress)
     {
         Path = path;
         this.video = video;
         this.audio = audio;
-        this.compressed = compressed;
+        compressed = IsCompressed(inputVideo);
+        videoFormat = Describe(inputVideo);
+        audioFormat = inputAudio is null ? null : Describe(inputAudio);
+        this.device = device;
+        this.reportProgress = reportProgress;
         this.tools = tools;
         Completion = Task.Run(() => WriteAsync(file));
     }
@@ -36,6 +51,13 @@ public sealed class DirectShowRecording
     public string Path { get; }
     public string PartialPath => Path + ".partial";
     public Task<string> Completion { get; }
+    public string? ReportError { get; private set; }
+
+    private static NativeCaptureFormat Describe(DirectShowFormat format) =>
+        new(format.PinName, format.IsMpeg2Video ? "MPEG2" : DirectShowPreviewVideo.Encoding(format)
+            ?? (format.IsPcm ? "PCM" : format.Description), format.Subtype,
+            format.Width, format.Height, format.FrameInterval100ns, format.FieldOrder,
+            format.SampleRate, format.Channels, format.BitsPerSample);
 
     public static bool Supports(DirectShowFormat video, DirectShowFormat? audio) =>
         (DirectShowPreviewVideo.Encoding(video) is not null || video.IsMpeg2Video && video.Width > 0 && video.Height > 0)
@@ -50,7 +72,8 @@ public sealed class DirectShowRecording
         video.IsMpeg2Video || DirectShowPreviewVideo.Encoding(video) is { } encoding && DirectShowPreviewVideo.IsJpeg(encoding);
 
     public static DirectShowRecording Start(string path, DirectShowFormat video, DirectShowFormat? audio,
-        (string? FfmpegPath, string? FfprobePath) tools = default)
+        (string? FfmpegPath, string? FfprobePath) tools = default,
+        string? device = null, Action<NativeContainerAttempt>? reportProgress = null)
     {
         if (!Supports(video, audio) || video.BitmapHeaderBase64 is not { } metadata)
             throw new NotSupportedException("The negotiated DirectShow format has no native recording mapping.");
@@ -74,7 +97,7 @@ public sealed class DirectShowRecording
             audio.Channels!.Value, audio.BitsPerSample!.Value, audio.BlockAlign!.Value);
         var file = new FileStream(path + ".partial", FileMode.CreateNew, FileAccess.Write,
             FileShare.Read, 256 * 1024);
-        return new DirectShowRecording(path, file, videoTrack, audioTrack, IsCompressed(video), tools);
+        return new DirectShowRecording(path, file, videoTrack, audioTrack, video, audio, tools, device, reportProgress);
     }
 
     public void Accept(bool isVideo, CaptureSample sample)
@@ -87,6 +110,7 @@ public sealed class DirectShowRecording
         {
             if (completed)
                 return;
+            (isVideo ? videoEvidence : audioEvidence).Observe(sample);
             if (video.Mpeg2 && !startedVideo)
             {
                 if (!isVideo || sample.Bytes.IndexOf(Mpeg2SequenceHeader) < 0)
@@ -116,6 +140,7 @@ public sealed class DirectShowRecording
         lock (gate)
         {
             completed = true;
+            endedUtc ??= DateTimeOffset.UtcNow;
             queue.Writer.TryComplete(error);
         }
     }
@@ -131,6 +156,8 @@ public sealed class DirectShowRecording
 
     private async Task<string> WriteAsync(FileStream file)
     {
+        string? savedPath = null;
+        string? failure = null;
         try
         {
             using (file)
@@ -154,6 +181,7 @@ public sealed class DirectShowRecording
                             var (time, end) = clock.Advance(packet, nativeOrigin, nominal, mpeg2);
                             var bytes = packet.Buffer.AsSpan(0, packet.Length);
                             writer.Write(packet.IsVideo, time, end, bytes, !mpeg2 || IsMpeg2Keyframe(bytes));
+                            (packet.IsVideo ? videoEvidence : audioEvidence).Written(packet.Length);
                         }
                         finally { Release(packet); }
                     }
@@ -168,13 +196,38 @@ public sealed class DirectShowRecording
                 if (audio is not null && !audioClock.Seen)
                     throw new IOException("The selected DirectShow audio stream delivered no samples.");
             }
-            return await NativeRecordingContainer.FinalizeAsync(PartialPath, Path, compressed, tools).ConfigureAwait(false);
+            savedPath = await NativeRecordingContainer.FinalizeAsync(PartialPath, Path, compressed, tools, attempt =>
+            {
+                attempts.Add(attempt);
+                reportProgress?.Invoke(attempt);
+            }).ConfigureAwait(false);
+            return savedPath;
+        }
+        catch (Exception ex)
+        {
+            failure = ex.Message;
+            throw;
         }
         finally
         {
             Complete();
             while (queue.Reader.TryRead(out var packet))
                 Release(packet);
+            var reportMedia = savedPath ?? PartialPath;
+            try
+            {
+                var media = new FileInfo(reportMedia);
+                if (media.Exists)
+                    await new NativeCaptureReport(media.Name, media.Length, device, beganUtc, endedUtc!.Value,
+                        videoFormat, audioFormat, videoEvidence.Snapshot(), audio is null ? null : audioEvidence.Snapshot(),
+                        video.Mpeg2 ? null : videoEvidence.WrittenPackets,
+                        audio is null ? 0 : audioEvidence.WrittenBytes / audio.BlockAlign,
+                        attempts, failure).SaveAsync(reportMedia).ConfigureAwait(false);
+            }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            {
+                ReportError = ex.Message;
+            }
         }
     }
 
@@ -185,6 +238,40 @@ public sealed class DirectShowRecording
     }
 
     private readonly record struct Packet(bool IsVideo, byte[] Buffer, int Length, long? Start, long? End, long Arrival);
+
+    private sealed class StreamEvidence
+    {
+        private long received, missing, repeated, regressing, discontinuities;
+        private long? lastStart;
+        internal long WrittenPackets { get; private set; }
+        internal long WrittenBytes { get; private set; }
+
+        internal void Observe(CaptureSample sample)
+        {
+            if (sample.Discontinuity && received != 0)
+                discontinuities++;
+            received++;
+            if (sample.StartTime is not { } start)
+            {
+                missing++;
+                return;
+            }
+            if (start.Ticks == lastStart)
+                repeated++;
+            else if (start.Ticks < lastStart)
+                regressing++;
+            lastStart = start.Ticks;
+        }
+
+        internal void Written(int bytes)
+        {
+            WrittenPackets++;
+            WrittenBytes += bytes;
+        }
+
+        internal NativeCaptureCounts Snapshot() =>
+            new(received, WrittenPackets, WrittenBytes, missing, repeated, regressing, discontinuities);
+    }
 
     private sealed class TrackClock
     {

@@ -388,13 +388,13 @@
     <value>カウンターは直前のキャプチャ結果を表示しています。</value>
   </data>
   <data name="QcChecking" xml:space="preserve">
-    <value>MOV 保存済み · 検査中</value>
+    <value>メディアファイルを検査しています</value>
   </data>
   <data name="QcStarting" xml:space="preserve">
-    <value>MOV の品質検査を開始しています。</value>
+    <value>ファイルの品質検査を開始しています。</value>
   </data>
   <data name="QcInspecting" xml:space="preserve">
-    <value>MOV の映像・音声トラックを確認しています。</value>
+    <value>映像・音声トラックを確認しています。</value>
   </data>
   <data name="QcDecoding" xml:space="preserve">
     <value>映像と PCM をデコードして FrameMD5 を書き込んでいます。</value>
@@ -949,13 +949,13 @@
     <value>例: Tape04_SideA</value>
   </data>
   <data name="QcCenterSubtitleMulti" xml:space="preserve">
-    <value>MOV ストリーム（FrameMD5・フィールド順・QCTools）検証、または 188 / 192 バイト MPEG-TS のオフライン解析を行います。</value>
+    <value>MOV または MKV をデコードして品質レポートを作成するか、188 / 192 バイト MPEG-TS をオフラインで解析します。</value>
   </data>
   <data name="CheckMediaFile" xml:space="preserve">
-    <value>MOV / TS を検査</value>
+    <value>MOV / MKV / TS を検査</value>
   </data>
   <data name="QcDropPromptMulti" xml:space="preserve">
-    <value>MOV または TS ファイルをここにドロップ、またはファイルを選択</value>
+    <value>MOV、MKV、TS ファイルをドロップするか、検査するファイルを選択</value>
   </data>
   <data name="QcHistoryHeading" xml:space="preserve">
     <value>セッション検査履歴</value>
@@ -1256,5 +1256,26 @@
   </data>
   <data name="DsMpeg2RecordOnly" xml:space="preserve">
     <value>MPEG-2 映像は録画できます。ライブプレビューには対応していません。</value>
+  </data>
+  <data name="DsCheckRecording" xml:space="preserve">
+    <value>録画ファイルを検査</value>
+  </data>
+  <data name="DsOpenRecordingReport" xml:space="preserve">
+    <value>録画レポートを開く</value>
+  </data>
+  <data name="DsTryingContainer" xml:space="preserve">
+    <value>{0} への格納を試行しています…</value>
+  </data>
+  <data name="DsVerifyingContainer" xml:space="preserve">
+    <value>{0} を検証しています…</value>
+  </data>
+  <data name="DsKeepingMkv" xml:space="preserve">
+    <value>MKV を保持しています…</value>
+  </data>
+  <data name="DsReportWriteFailed" xml:space="preserve">
+    <value>録画を保存しました · {0}。レポートを書き込めませんでした · {1}</value>
+  </data>
+  <data name="DsReportOpenFailed" xml:space="preserve">
+    <value>録画レポートを開けませんでした · {0}</value>
   </data>
 </root>

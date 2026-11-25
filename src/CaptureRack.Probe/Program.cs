@@ -88,7 +88,7 @@ internal static class Program
     {
         Console.WriteLine("CaptureRack.Probe list");
         Console.WriteLine("CaptureRack.Probe capture <device-index> <seconds:1-3600> [mode-fourcc]");
-        Console.WriteLine("CaptureRack.Probe qc <mov-path>");
+        Console.WriteLine("CaptureRack.Probe qc <mov-or-mkv-path>");
         Console.WriteLine("CaptureRack.Probe directshow --help");
         Console.WriteLine("CaptureRack.Probe firewire --help");
         Console.WriteLine("CaptureRack.Probe rf --help");

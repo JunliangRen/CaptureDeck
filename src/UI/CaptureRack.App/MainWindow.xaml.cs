@@ -145,6 +145,14 @@ public sealed partial class MainWindow : Window
 
     private void WireModularViews()
     {
+        directShowCapabilitiesView.CheckRecordingRequested += async (_, path) =>
+        {
+            if (qcStop is not null || closing || directShowCapabilitiesView.IsRecording)
+                return;
+            NavigateToPage(ActiveAppPage.QcCenter);
+            await RunMovQcAsync(path, null);
+            CloseAfterRecordingIfRequested();
+        };
         QcCenterPage.CheckFileRequested += async (_, _) => await PickAndCheckMediaFileAsync();
         QcCenterPage.CancelQcRequested += (_, _) => CancelActiveQc();
         QcCenterPage.FileDropped += async (_, path) =>
@@ -1465,6 +1473,7 @@ public sealed partial class MainWindow : Window
         {
             var picker = new FileOpenPicker(AppWindow.Id) { Title = L("CheckMediaFile") };
             picker.FileTypeFilter.Add(".mov");
+            picker.FileTypeFilter.Add(".mkv");
             picker.FileTypeFilter.Add(".ts");
             picker.FileTypeFilter.Add(".ts192");
             picker.FileTypeFilter.Add(".m2t");
@@ -1493,7 +1502,7 @@ public sealed partial class MainWindow : Window
 
     private async Task RunMediaQcFileAsync(string path)
     {
-        if (string.Equals(Path.GetExtension(path), ".mov", StringComparison.OrdinalIgnoreCase))
+        if (QcReports.SupportsFile(path))
             await RunMovQcAsync(path, null);
         else
             await RunTsQcAsync(path);

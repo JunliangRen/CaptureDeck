@@ -388,13 +388,13 @@
     <value>計數顯示上一次擷取的資料。</value>
   </data>
   <data name="QcChecking" xml:space="preserve">
-    <value>MOV 已儲存 · 正在檢查</value>
+    <value>正在檢查媒體檔案</value>
   </data>
   <data name="QcStarting" xml:space="preserve">
-    <value>正在啟動 MOV 品質檢查。</value>
+    <value>正在啟動檔案品質檢查。</value>
   </data>
   <data name="QcInspecting" xml:space="preserve">
-    <value>正在檢查 MOV 音視訊軌。</value>
+    <value>正在檢查音訊及視訊軌。</value>
   </data>
   <data name="QcDecoding" xml:space="preserve">
     <value>正在解碼視訊與 PCM 並寫入 FrameMD5。</value>
@@ -949,13 +949,13 @@
     <value>例如 Tape04_SideA</value>
   </data>
   <data name="QcCenterSubtitleMulti" xml:space="preserve">
-    <value>驗證 MOV 影音串流（FrameMD5、場序、QCTools）或離線分析 188 / 192 位元組 MPEG-TS 檔案。</value>
+    <value>完整解碼 MOV 或 MKV 並產生品質報告，或離線分析 188 / 192 位元組 MPEG-TS。</value>
   </data>
   <data name="CheckMediaFile" xml:space="preserve">
-    <value>檢查 MOV / TS 檔案</value>
+    <value>檢查 MOV / MKV / TS 檔案</value>
   </data>
   <data name="QcDropPromptMulti" xml:space="preserve">
-    <value>將 MOV 或 TS 檔案拖曳至此處，或點擊右上角選擇檔案</value>
+    <value>將 MOV、MKV 或 TS 檔案拖到此處，或選取檔案進行檢查</value>
   </data>
   <data name="QcHistoryHeading" xml:space="preserve">
     <value>本次工作階段品管紀錄</value>
@@ -1256,5 +1256,26 @@
   </data>
   <data name="DsMpeg2RecordOnly" xml:space="preserve">
     <value>MPEG-2 視訊可原樣錄製，目前無法即時預覽畫面。</value>
+  </data>
+  <data name="DsCheckRecording" xml:space="preserve">
+    <value>檢查錄製檔案</value>
+  </data>
+  <data name="DsOpenRecordingReport" xml:space="preserve">
+    <value>開啟錄製報告</value>
+  </data>
+  <data name="DsTryingContainer" xml:space="preserve">
+    <value>正在嘗試封裝為 {0}…</value>
+  </data>
+  <data name="DsVerifyingContainer" xml:space="preserve">
+    <value>正在驗證 {0}…</value>
+  </data>
+  <data name="DsKeepingMkv" xml:space="preserve">
+    <value>正在保留 MKV…</value>
+  </data>
+  <data name="DsReportWriteFailed" xml:space="preserve">
+    <value>錄製已儲存 · {0}。無法寫入錄製報告 · {1}</value>
+  </data>
+  <data name="DsReportOpenFailed" xml:space="preserve">
+    <value>無法開啟錄製報告 · {0}</value>
   </data>
 </root>

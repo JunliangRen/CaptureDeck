@@ -37,6 +37,10 @@
                        Foreground="{ThemeResource StudioTextSecondaryBrush}" />
             <TextBlock x:Name="RecordingStatus" TextWrapping="Wrap" IsTextSelectionEnabled="True"
                        AutomationProperties.LiveSetting="Polite" />
+            <StackPanel x:Name="RecordingActions" Orientation="Horizontal" Spacing="8" Visibility="Collapsed">
+                <Button x:Name="OpenRecordingReportButton" Visibility="Collapsed" Click="OpenRecordingReportClicked" />
+                <Button x:Name="CheckRecordingButton" Visibility="Collapsed" Click="CheckRecordingClicked" />
+            </StackPanel>
             <TextBlock x:Name="PreviewUnavailable" Visibility="Collapsed" TextWrapping="Wrap"
                        Foreground="{ThemeResource StudioTextSecondaryBrush}" />
             <StackPanel x:Name="PreviewPanel" Visibility="Collapsed" Spacing="8">

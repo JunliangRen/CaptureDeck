@@ -112,6 +112,8 @@ In the Windows app, open the source selector and choose **DirectShow Capture**. 
 
 With preview or MPEG-2 input running, select **Start recording** to preserve the negotiated DirectShow samples. Compressed MJPEG and MPEG-2 elementary video try TS, MOV, MP4, then MKV. Raw formats try MOV, MP4, then MKV. PCM audio remains in its negotiated format. Capture stages to a recoverable .mkv.partial file, then tries each container at stop using FFmpeg stream copy and verifies stream formats, SHA-256 payload hashes, and the first decoded video frame. The app keeps MKV when FFmpeg/FFprobe are unavailable or no earlier candidate passes verification. Preview continues while the output is finalized. Leave extra space for one additional copy during finalization.
 
+The DirectShow workspace shows container attempts and writes a .recording.json report beside the output. The report includes negotiated tracks, written sample counts, timestamp anomalies, and container decisions. Use **Check recording** on a saved MOV or MKV to run a full decode in QC Center. QC compares the report with the file when available and generates FrameMD5 and QCTools reports. Transport-stream analysis remains a separate check.
+
 Keep the release package's `App` and `Probe` folders side by side. The app uses the probe as an isolated diagnostic process.
 
 ## Windows DirectShow video-device probe

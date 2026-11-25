@@ -388,13 +388,13 @@
     <value>The counters show the last capture session.</value>
   </data>
   <data name="QcChecking" xml:space="preserve">
-    <value>MOV saved · checking file</value>
+    <value>Checking media file</value>
   </data>
   <data name="QcStarting" xml:space="preserve">
-    <value>Starting MOV QC.</value>
+    <value>Starting file QC.</value>
   </data>
   <data name="QcInspecting" xml:space="preserve">
-    <value>Inspecting MOV streams.</value>
+    <value>Inspecting video and audio tracks.</value>
   </data>
   <data name="QcDecoding" xml:space="preserve">
     <value>Decoding video and PCM and writing FrameMD5.</value>
@@ -949,13 +949,13 @@
     <value>e.g. Tape04_SideA</value>
   </data>
   <data name="QcCenterSubtitleMulti" xml:space="preserve">
-    <value>Verify MOV streams (FrameMD5, field order, QCTools) or analyze 188 / 192-byte MPEG-TS files offline.</value>
+    <value>Decode MOV or MKV and generate QC reports, or analyze 188 / 192-byte MPEG-TS offline.</value>
   </data>
   <data name="CheckMediaFile" xml:space="preserve">
-    <value>Check MOV / TS file</value>
+    <value>Check MOV / MKV / TS file</value>
   </data>
   <data name="QcDropPromptMulti" xml:space="preserve">
-    <value>Drop a MOV or TS file here, or select one to verify</value>
+    <value>Drop a MOV, MKV or TS file here, or select one to verify</value>
   </data>
   <data name="QcHistoryHeading" xml:space="preserve">
     <value>SESSION QC HISTORY</value>
@@ -1256,5 +1256,26 @@
   </data>
   <data name="DsMpeg2RecordOnly" xml:space="preserve">
     <value>MPEG-2 video is available for recording. Live picture preview is unavailable.</value>
+  </data>
+  <data name="DsCheckRecording" xml:space="preserve">
+    <value>Check recording</value>
+  </data>
+  <data name="DsOpenRecordingReport" xml:space="preserve">
+    <value>Open recording report</value>
+  </data>
+  <data name="DsTryingContainer" xml:space="preserve">
+    <value>Trying {0}…</value>
+  </data>
+  <data name="DsVerifyingContainer" xml:space="preserve">
+    <value>Verifying {0}…</value>
+  </data>
+  <data name="DsKeepingMkv" xml:space="preserve">
+    <value>Keeping MKV…</value>
+  </data>
+  <data name="DsReportWriteFailed" xml:space="preserve">
+    <value>Recording saved · {0}. Could not write the report · {1}</value>
+  </data>
+  <data name="DsReportOpenFailed" xml:space="preserve">
+    <value>Could not open the recording report · {0}</value>
   </data>
 </root>

@@ -388,13 +388,13 @@
     <value>计数显示上一次采集的数据。</value>
   </data>
   <data name="QcChecking" xml:space="preserve">
-    <value>MOV 已保存 · 正在检查</value>
+    <value>正在检查媒体文件</value>
   </data>
   <data name="QcStarting" xml:space="preserve">
-    <value>正在启动 MOV 质检。</value>
+    <value>正在启动文件质检。</value>
   </data>
   <data name="QcInspecting" xml:space="preserve">
-    <value>正在检查 MOV 音视频轨。</value>
+    <value>正在检查音视频轨。</value>
   </data>
   <data name="QcDecoding" xml:space="preserve">
     <value>正在解码视频与 PCM 并写入 FrameMD5。</value>
@@ -949,13 +949,13 @@
     <value>例如 Tape04_SideA</value>
   </data>
   <data name="QcCenterSubtitleMulti" xml:space="preserve">
-    <value>校验 MOV 音视频流（FrameMD5、场序、QCTools）或离线分析 188 / 192 字节 MPEG-TS 传输流。</value>
+    <value>完整解码 MOV 或 MKV 并生成质检报告，或离线分析 188 / 192 字节 MPEG-TS。</value>
   </data>
   <data name="CheckMediaFile" xml:space="preserve">
-    <value>检查 MOV / TS 文件</value>
+    <value>检查 MOV / MKV / TS 文件</value>
   </data>
   <data name="QcDropPromptMulti" xml:space="preserve">
-    <value>将 MOV 或 TS 文件拖放到此处，或点击右上角选择文件</value>
+    <value>将 MOV、MKV 或 TS 文件拖到这里，或者选择文件进行检查</value>
   </data>
   <data name="QcHistoryHeading" xml:space="preserve">
     <value>本次会话质检历史</value>
@@ -1256,5 +1256,26 @@
   </data>
   <data name="DsMpeg2RecordOnly" xml:space="preserve">
     <value>MPEG-2 视频可原样录制，当前无法实时预览画面。</value>
+  </data>
+  <data name="DsCheckRecording" xml:space="preserve">
+    <value>检查录制文件</value>
+  </data>
+  <data name="DsOpenRecordingReport" xml:space="preserve">
+    <value>打开录制报告</value>
+  </data>
+  <data name="DsTryingContainer" xml:space="preserve">
+    <value>正在尝试封装为 {0}…</value>
+  </data>
+  <data name="DsVerifyingContainer" xml:space="preserve">
+    <value>正在验证 {0}…</value>
+  </data>
+  <data name="DsKeepingMkv" xml:space="preserve">
+    <value>正在保留 MKV…</value>
+  </data>
+  <data name="DsReportWriteFailed" xml:space="preserve">
+    <value>录制已保存 · {0}。录制报告写入失败 · {1}</value>
+  </data>
+  <data name="DsReportOpenFailed" xml:space="preserve">
+    <value>无法打开录制报告 · {0}</value>
   </data>
 </root>

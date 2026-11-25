@@ -12,6 +12,7 @@ public static class DeckLinkCapture
     private const uint NoConversion = 0x6E6F6E65;
     private const uint VideoInputConnection = 0x7669636E;
     private const uint AudioInputConnection = 0x6169636E;
+    private const uint VideoInputSignalLocked = 0x7669736C; // visl
     private const uint AnalogVideoInputFlags = 0x61766966; // avif
     private const uint AnalogAudioConsumerLevels = 0x6161636C; // aacl
     private const uint AnalogAudioInputScaleChannel1 = 0x61697331; // ais1
@@ -88,7 +89,6 @@ public static class DeckLinkCapture
     // Read only the currently routed input. Do not switch routes or start capture to determine the shape.
     public static uint? GetLockedVideoInputMode(CaptureDevice selected, uint connection)
     {
-        const uint signalLocked = 0x7669736C; // visl
         const uint persistentId = 0x70656964; // peid
         uint? mode = null;
         VisitDevices((index, device) =>
@@ -101,7 +101,7 @@ public static class DeckLinkCapture
                 return false;
             if (device is IDeckLinkConfiguration configuration &&
                 configuration.GetInt(VideoInputConnection, out var currentConnection) == 0 && currentConnection == connection &&
-                device is IDeckLinkStatus status && status.GetFlag(signalLocked, out var locked) == 0 && locked != 0 &&
+                device is IDeckLinkStatus status && status.GetFlag(VideoInputSignalLocked, out var locked) == 0 && locked != 0 &&
                 status.GetInt(DetectedInputMode, out var detected) == 0)
                 mode = (uint)detected;
             return false;
@@ -276,7 +276,8 @@ public static class DeckLinkCapture
         if (modes.Count == 0)
             throw new InvalidOperationException("No capture modes for the selected video format and input.");
 
-        var detectedMode = device is IDeckLinkStatus status &&
+        var status = device as IDeckLinkStatus;
+        var detectedMode = status is not null &&
             status.GetInt(DetectedInputMode, out var detected) == 0 ? (uint)detected : 0;
         var mode = modes.FirstOrDefault(mode => mode.Id == (requestedMode ?? detectedMode));
         var useDetection = requestedMode is null && info.SupportsFormatDetection;
@@ -290,7 +291,7 @@ public static class DeckLinkCapture
         var detect = useDetection;
         while (true)
         {
-            var stats = Capture(input, mode, duration, detect, progress, stop, preview, format, recordingPath,
+            var stats = Capture(input, status, mode, duration, detect, progress, stop, preview, format, recordingPath,
                 audioFormat, previewRecorder, videoConnection, automaticMode: requestedMode is null, localAudioMonitor);
             if (stats.Error is not null || stats.NextMode is not { } next || stop.IsCancellationRequested)
                 return stats;
@@ -302,7 +303,7 @@ public static class DeckLinkCapture
         }
     }
 
-    private static CaptureStats Capture(IDeckLinkInput input, VideoMode mode, TimeSpan? duration,
+    private static CaptureStats Capture(IDeckLinkInput input, IDeckLinkStatus? status, VideoMode mode, TimeSpan? duration,
         bool detect, Action<VideoMode, CaptureStats> progress, CancellationToken stop, PreviewFeed? preview,
         CapturePixelFormat format, string? recordingPath, CaptureAudioFormat audioFormat,
         PreviewRecorder? previewRecorder, uint videoConnection, bool automaticMode, LocalAudioMonitor? localAudioMonitor)
@@ -341,11 +342,20 @@ public static class DeckLinkCapture
                         previewRecorder?.Connect(callback);
                         var clock = Stopwatch.StartNew();
                         var nextReport = TimeSpan.Zero;
+                        var nextLockPoll = TimeSpan.Zero;
                         while (!stop.IsCancellationRequested)
                         {
                             recording?.CheckWriter();
                             preview?.ConvertLatest(lumaScaleBits);
-                            var report = clock.Elapsed >= nextReport;
+                            var elapsed = clock.Elapsed;
+                            if (preview is not null && status is not null && elapsed >= nextLockPoll)
+                            {
+                                if (callback.IsWaitingForVideoFrames() &&
+                                    status.GetFlag(VideoInputSignalLocked, out var locked) == 0)
+                                    callback.ObserveHardwareLock(locked != 0);
+                                nextLockPoll = elapsed + TimeSpan.FromMilliseconds(50);
+                            }
+                            var report = elapsed >= nextReport;
                             var switchMode = detect && callback.TryBeginModeChange();
                             var snapshot = callback.Snapshot(report || switchMode);
                             if (report || switchMode)

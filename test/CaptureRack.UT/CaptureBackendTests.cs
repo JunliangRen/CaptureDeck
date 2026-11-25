@@ -131,6 +131,11 @@ public sealed class CaptureBackendTests
             var stats = recorder.Finish();
             Assert.True(stats.RecordingModeChanged);
             Assert.Equal(1, stats.NoInputFrames);
+            Assert.Equal(0, stats.VideoSignalLossCount);
+            var initialLoss = Assert.Single(stats.VideoSignalLosses);
+            Assert.True(initialLoss.StartedUnlocked);
+            Assert.False(initialLoss.Restored);
+            Assert.Equal(TimeSpan.Zero, initialLoss.Elapsed);
             Assert.Equal(0, stats.VideoFrames);
             Assert.Equal(Ntsc, stats.Recording!.Mode);
             Assert.Equal(1, stats.Recording.VideoFrames);
@@ -307,6 +312,80 @@ public sealed class CaptureBackendTests
         var media = file.AsSpan().IndexOf("mdat"u8);
         Assert.True(media >= 0);
         Assert.Equal(expected, file.AsSpan(media + 12, expected.Length).ToArray());
+    }
+
+    [Fact]
+    public void HardwareStatusFillsCallbackDroughtAndRecordingClipsOpenLossAtStop()
+    {
+        var folder = Directory.CreateTempSubdirectory("capturerack-video-lock-");
+        var elapsed = TimeSpan.Zero;
+        var callback = new CaptureCallback(new PreviewFeed(), CapturePixelFormat.V210, CaptureAudioFormat.Pcm16,
+            Ntsc, null, automaticMode: false, signalClock: () => elapsed);
+        var recorder = new PreviewRecorder();
+        recorder.Connect(callback);
+        using var frame = new VideoFrame(Ntsc, noInput: false);
+        try
+        {
+            callback.CountVideo(frame);
+            recorder.Start(Path.Combine(folder.FullName, "lock.mov"));
+            callback.CountVideo(frame);
+
+            elapsed = TimeSpan.FromMilliseconds(50);
+            callback.ObserveHardwareLock(locked: false);
+            Assert.Equal(VideoSignal.Present, callback.Snapshot(true).Signal);
+            elapsed = TimeSpan.FromMilliseconds(150);
+            callback.ObserveHardwareLock(locked: false);
+            Assert.Equal(VideoSignal.NoInput, callback.Snapshot(true).Signal);
+            elapsed = TimeSpan.FromMilliseconds(350);
+            callback.ObserveHardwareLock(locked: true);
+            elapsed = TimeSpan.FromMilliseconds(400);
+            callback.ObserveHardwareLock(locked: false);
+            elapsed = TimeSpan.FromMilliseconds(600);
+
+            var stats = recorder.Finish();
+            Assert.Equal(0, stats.NoInputFrames);
+            Assert.Equal(2, stats.VideoSignalLossCount);
+            Assert.Equal(TimeSpan.FromMilliseconds(400), stats.VideoSignalLossDuration);
+            Assert.Collection(stats.VideoSignalLosses,
+                first => Assert.Equal(new CaptureRack.Core.VideoSignalLoss(TimeSpan.FromMilliseconds(150),
+                    TimeSpan.FromMilliseconds(200), StartedUnlocked: false, Restored: true), first),
+                second => Assert.Equal(new CaptureRack.Core.VideoSignalLoss(TimeSpan.FromMilliseconds(400),
+                    TimeSpan.FromMilliseconds(200), StartedUnlocked: false, Restored: false), second));
+        }
+        finally
+        {
+            recorder.Disconnect();
+            folder.Delete(recursive: true);
+        }
+    }
+
+    [Fact]
+    public void UyvyLumaRangeCountsOnlyPixelsOutsideInclusiveThresholds()
+    {
+        var frame = new PreviewFrame { Format = CapturePixelFormat.Uyvy };
+        frame.Resize(4, 1, 12);
+        new byte[] { 0, 15, 255, 16, 0, 235, 255, 236 }.CopyTo(frame.Pixels, 0);
+        Assert.Equal(0.5, VideoScopes.MeasureLumaExcursions(frame));
+        frame.NoInput = true;
+        Assert.Null(VideoScopes.Analyze(frame, 8).LumaOutsideLegalFraction);
+    }
+
+    [Fact]
+    public void V210LumaRangeIgnoresChromaAndPaddingAndPreservesFullPrecision()
+    {
+        var frame = new PreviewFrame { Format = CapturePixelFormat.V210 };
+        frame.Resize(8, 1, 128);
+        var words = MemoryMarshal.Cast<byte, uint>(frame.Pixels);
+        uint[] luma = [63, 64, 940, 941, 64, 940, 940, 941, 0, 0, 0, 0];
+        for (var i = 0; i < 2; i++)
+        {
+            var y = luma.AsSpan(i * 6, 6);
+            words[i * 4] = 1023u | (y[0] << 10);
+            words[i * 4 + 1] = y[1] | (1023u << 10) | (y[2] << 20);
+            words[i * 4 + 2] = (y[3] << 10) | (1023u << 20);
+            words[i * 4 + 3] = y[4] | (y[5] << 20);
+        }
+        Assert.Equal(3.0 / 8, VideoScopes.MeasureLumaExcursions(frame));
     }
 
     private static CaptureCallback CreatePreviewCallback(bool automaticMode) =>

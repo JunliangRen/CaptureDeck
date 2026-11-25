@@ -23,6 +23,9 @@ public sealed record QcCaptureLog(
     public RecordingTiming? Timing { get; init; }
     public string? CaptureError { get; init; }
     public long UnreadableNoInputFrames { get; init; }
+    public long VideoSignalLossCount { get; init; }
+    public TimeSpan VideoSignalLossDuration { get; init; }
+    public IReadOnlyList<VideoSignalLoss> VideoSignalLosses { get; init; } = [];
 }
 
 public enum QcStage { Inspecting, Decoding, Analyzing }
@@ -192,6 +195,9 @@ public static class QcReports
             warnings.Add("No audio samples were captured.");
         if (capture.InputModeChanged)
             warnings.Add("The input mode changed. Recording stopped before writing frames in the new mode.");
+        if (capture.VideoSignalLosses.Count > 0)
+            warnings.Add($"Video lock lost {capture.VideoSignalLossCount:N0} time(s). Total time unlocked: " +
+                $"{capture.VideoSignalLossDuration.TotalSeconds:F3} s. See videoSignalLosses for recording-relative times.");
         if (capture.NoInputFrames > 0)
             warnings.Add($"The capture source marked {capture.NoInputFrames:N0} frames as no input.");
         if (capture.UnreadableNoInputFrames > 0)

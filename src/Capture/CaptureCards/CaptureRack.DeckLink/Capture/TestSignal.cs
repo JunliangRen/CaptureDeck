@@ -44,7 +44,8 @@ public static class TestSignal
         private readonly PreviewFeed feed;
         private readonly PreviewRecorder recorder;
         private readonly CaptureCallback callback;
-        private readonly GeneratedVideo video = new();
+        private readonly GeneratedVideo video;
+        private TimeSpan elapsed;
         private readonly GeneratedAudio audio = new();
         private const int CycleFrames = 120;
 
@@ -54,14 +55,17 @@ public static class TestSignal
             this.scenario = scenario;
             this.feed = feed;
             this.recorder = recorder;
+            video = new(scenario == TestSignalScenario.TimingFaults);
             // Require a readable frame before opening the MOV, even though the mode is fixed.
-            callback = new(feed, PixelFormat, AudioFormat, Mode, null, automaticMode: true, audioMonitor);
+            callback = new(feed, PixelFormat, AudioFormat, Mode, null, automaticMode: true, audioMonitor,
+                signalClock: () => elapsed);
             callback.UseMonitoringAudioFormat(CaptureAudioFormat.Pcm32);
             recorder.Connect(callback);
         }
 
         internal void Emit(long index)
         {
+            elapsed = TimeSpan.FromTicks(index * Mode.FrameDuration * TimeSpan.TicksPerSecond / Mode.TimeScale);
             var phase = (int)(index % CycleFrames);
             var faults = scenario == TestSignalScenario.TimingFaults;
             var noInput = faults && phase is >= 45 and < 57;
@@ -107,7 +111,7 @@ public static class TestSignal
         private long index;
         private bool noInput;
 
-        public GeneratedVideo()
+        public GeneratedVideo(bool includeLumaExcursions)
         {
             pixels = GC.AllocateUninitializedArray<byte>(stride * Mode.Height, pinned: true);
             chart = new byte[pixels.Length];
@@ -121,6 +125,8 @@ public static class TestSignal
                     var (y, cb, cr) = row < 324
                         ? Bars[group * Bars.Length / (Mode.Width / 6)]
                         : row < 416 + 26 ? (24u, 128u, 128u) : (16u + (uint)group * 219 / 119, 128u, 128u);
+                    if (includeLumaExcursions && group is 0 or 119)
+                        (y, cb, cr) = (group == 0 ? 8u : 245u, 128u, 128u);
                     FillGroup(chartRow[(group * 4)..], y, cb, cr);
                     FillGroup(blackRow[(group * 4)..], 16, 128, 128);
                 }

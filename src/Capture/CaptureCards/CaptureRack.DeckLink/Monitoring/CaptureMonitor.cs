@@ -1,4 +1,5 @@
 using System.Numerics;
+using CaptureRack.Core;
 
 namespace CaptureRack.DeckLink;
 
@@ -16,12 +17,13 @@ public sealed record CaptureEvent(TimeSpan Elapsed, string Description)
 {
     public CaptureEventKind Kind { get; init; }
     public long MissingFrames { get; init; }
+    public TimeSpan? SignalLossDuration { get; init; }
 
     public string TimeLabel =>
         $"{(int)Elapsed.TotalHours:00}:{Elapsed.Minutes:00}:{Elapsed.Seconds:00}.{Elapsed.Milliseconds:000}";
 }
 
-internal sealed class FrameTimeline(VideoMode mode)
+internal sealed class FrameTimeline(VideoMode mode, bool keepSignalHistory = false)
 {
     private const int MaxEvents = 200;
     private readonly Queue<CaptureEvent> events = new();
@@ -29,13 +31,30 @@ internal sealed class FrameTimeline(VideoMode mode)
     private long? firstTime;
     private readonly FrameTimestampTracker timestamps = new(mode.FrameDuration);
     private bool? previousNoInput;
+    private TimeSpan? lossStarted;
+    private bool startedUnlocked;
+    private TimeSpan completedLossDuration;
+    private readonly List<VideoSignalLoss>? signalLosses = keepSignalHistory ? [] : null;
     public long MissingFrames { get; private set; }
+    public long SignalLossCount { get; private set; }
 
-    public void Observe(long time, bool noInput)
+    public TimeSpan SignalLossDuration(TimeSpan elapsed) =>
+        completedLossDuration + (lossStarted is { } start ? elapsed - start : TimeSpan.Zero);
+
+    public IReadOnlyList<VideoSignalLoss> SignalLosses(TimeSpan elapsed)
+    {
+        if (signalLosses is null)
+            return [];
+        return lossStarted is { } start
+            ? [.. signalLosses, new(start, elapsed - start, startedUnlocked, Restored: false)]
+            : signalLosses.ToArray();
+    }
+
+    public void Observe(long time, bool noInput, TimeSpan? observedElapsed = null)
     {
         firstTime ??= time;
         var elapsedTicks = ((decimal)time - firstTime.Value) * TimeSpan.TicksPerSecond / mode.TimeScale;
-        var elapsed = TimeSpan.FromTicks((long)Math.Clamp(elapsedTicks, 0, TimeSpan.MaxValue.Ticks));
+        var elapsed = observedElapsed ?? TimeSpan.FromTicks((long)Math.Clamp(elapsedTicks, 0, TimeSpan.MaxValue.Ticks));
 
         if (timestamps.Observe(time) is { } interval)
         {
@@ -50,22 +69,41 @@ internal sealed class FrameTimeline(VideoMode mode)
             }
         }
 
-        if (previousNoInput != noInput)
-        {
-            if (noInput)
-                Add(elapsed, previousNoInput is null ? CaptureEventKind.NoInputAtStart : CaptureEventKind.SignalLost,
-                    previousNoInput is null ? "No input signal at start." : "Video input signal lost.");
-            else if (previousNoInput == true)
-                Add(elapsed, CaptureEventKind.SignalRestored, "Video input signal restored.");
-            previousNoInput = noInput;
-        }
+        ObserveSignal(elapsed, noInput);
     }
 
-    private void Add(TimeSpan elapsed, CaptureEventKind kind, string message, long missing = 0)
+    public void ObserveSignal(TimeSpan elapsed, bool noInput)
+    {
+        if (previousNoInput == noInput)
+            return;
+
+        if (noInput)
+        {
+            lossStarted = elapsed;
+            startedUnlocked = previousNoInput is null;
+            if (!startedUnlocked)
+                SignalLossCount++;
+            Add(elapsed, startedUnlocked ? CaptureEventKind.NoInputAtStart : CaptureEventKind.SignalLost,
+                startedUnlocked ? "No input signal at start." : "Video input signal lost.");
+        }
+        else if (lossStarted is { } start)
+        {
+            var duration = elapsed - start;
+            completedLossDuration += duration;
+            signalLosses?.Add(new(start, duration, startedUnlocked, Restored: true));
+            lossStarted = null;
+            Add(elapsed, CaptureEventKind.SignalRestored, $"Video input signal restored after {duration.TotalSeconds:F3} s.",
+                signalLossDuration: duration);
+        }
+        previousNoInput = noInput;
+    }
+
+    private void Add(TimeSpan elapsed, CaptureEventKind kind, string message, long missing = 0,
+        TimeSpan? signalLossDuration = null)
     {
         if (events.Count == MaxEvents)
             events.Dequeue();
-        events.Enqueue(new(elapsed, message) { Kind = kind, MissingFrames = missing });
+        events.Enqueue(new(elapsed, message) { Kind = kind, MissingFrames = missing, SignalLossDuration = signalLossDuration });
         snapshot = null;
     }
 

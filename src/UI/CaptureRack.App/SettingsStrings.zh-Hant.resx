@@ -1104,4 +1104,19 @@
   <data name="TestSignalSimulatedNoInput" xml:space="preserve">
     <value>正在模擬視訊訊號中斷。</value>
   </data>
+  <data name="VideoLocked" xml:space="preserve">
+    <value>視訊已鎖定</value>
+  </data>
+  <data name="VideoUnlocked" xml:space="preserve">
+    <value>視訊未鎖定</value>
+  </data>
+  <data name="VideoLockSummary" xml:space="preserve">
+    <value>失鎖 {0:N0} 次 · 未鎖定 {1:F3} 秒</value>
+  </data>
+  <data name="EventLockRestoredWithDuration" xml:space="preserve">
+    <value>視訊恢復鎖定，未鎖定 {0:F3} 秒。</value>
+  </data>
+  <data name="ScopeLumaOutOfRange" xml:space="preserve">
+    <value>亮度超出範圍 {0:P2}</value>
+  </data>
 </root>

@@ -1104,4 +1104,19 @@
   <data name="TestSignalSimulatedNoInput" xml:space="preserve">
     <value>映像信号の途切れを再現しています。</value>
   </data>
+  <data name="VideoLocked" xml:space="preserve">
+    <value>映像ロック済み</value>
+  </data>
+  <data name="VideoUnlocked" xml:space="preserve">
+    <value>映像ロックなし</value>
+  </data>
+  <data name="VideoLockSummary" xml:space="preserve">
+    <value>ロック喪失 {0:N0} 回・未ロック {1:F3} 秒</value>
+  </data>
+  <data name="EventLockRestoredWithDuration" xml:space="preserve">
+    <value>{0:F3} 秒後に映像ロックが復帰しました。</value>
+  </data>
+  <data name="ScopeLumaOutOfRange" xml:space="preserve">
+    <value>輝度範囲外 {0:P2}</value>
+  </data>
 </root>

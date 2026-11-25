@@ -26,6 +26,7 @@ public sealed record VideoScopes(byte[] LumaWaveform, byte[] Vectorscope, bool N
 
     public int LumaScaleBits { get; init; }
     public int InputBits { get; init; }
+    public double? LumaOutsideLegalFraction { get; init; }
     public VideoScopeWaveformMode WaveformMode { get; init; } = VideoScopeWaveformMode.Luma;
 
     internal static VideoScopes Analyze(PreviewFrame frame, int lumaScaleBits,
@@ -63,8 +64,45 @@ public sealed record VideoScopes(byte[] LumaWaveform, byte[] Vectorscope, bool N
         {
             LumaScaleBits = lumaScaleBits,
             InputBits = inputBits,
+            LumaOutsideLegalFraction = frame.NoInput ? null : MeasureLumaExcursions(frame),
             WaveformMode = waveformMode
         };
+    }
+
+    internal static double MeasureLumaExcursions(PreviewFrame frame)
+    {
+        var outside = 0L;
+        for (var row = 0; row < frame.Height; row++)
+        {
+            var bytes = frame.Pixels.AsSpan(row * frame.Stride, frame.Stride);
+            if (frame.Format == CapturePixelFormat.Uyvy)
+            {
+                for (var x = 0; x < frame.Width; x++)
+                    outside += Outside(bytes[x * 2 + 1], 16, 235);
+                continue;
+            }
+
+            var words = MemoryMarshal.Cast<byte, uint>(bytes);
+            var groups = frame.Width / 6;
+            for (var group = 0; group < groups; group++)
+            {
+                var i = group * 4;
+                var b = words[i + 1];
+                var d = words[i + 3];
+                outside += Outside10(words[i] >> 10) + Outside10(b) + Outside10(b >> 20) +
+                    Outside10(words[i + 2] >> 10) + Outside10(d) + Outside10(d >> 20);
+            }
+            for (var x = groups * 6; x < frame.Width; x++)
+            {
+                PreviewFeed.ReadYuv(bytes, words, x, frame.Format, out var y, out _, out _);
+                outside += Outside10((uint)y);
+            }
+        }
+
+        return outside / ((double)frame.Width * frame.Height);
+
+        static int Outside(uint value, uint low, uint high) => value < low || value > high ? 1 : 0;
+        static int Outside10(uint value) => Outside(value & 1023, 64, 940);
     }
 
     private static byte[] BuildLumaWaveform(PreviewFrame frame, int[] vectorscope, int rowStep, int lumaMaximum,

@@ -1104,4 +1104,19 @@
   <data name="TestSignalSimulatedNoInput" xml:space="preserve">
     <value>正在模拟视频信号丢失。</value>
   </data>
+  <data name="VideoLocked" xml:space="preserve">
+    <value>视频已锁定</value>
+  </data>
+  <data name="VideoUnlocked" xml:space="preserve">
+    <value>视频未锁定</value>
+  </data>
+  <data name="VideoLockSummary" xml:space="preserve">
+    <value>掉锁 {0:N0} 次 · 未锁定 {1:F3} 秒</value>
+  </data>
+  <data name="EventLockRestoredWithDuration" xml:space="preserve">
+    <value>视频恢复锁定，未锁定 {0:F3} 秒。</value>
+  </data>
+  <data name="ScopeLumaOutOfRange" xml:space="preserve">
+    <value>亮度超范围 {0:P2}</value>
+  </data>
 </root>

@@ -1,4 +1,6 @@
+using System.Diagnostics;
 using System.Runtime.InteropServices;
+using CaptureRack.Core;
 
 namespace CaptureRack.DeckLink;
 
@@ -6,7 +8,7 @@ namespace CaptureRack.DeckLink;
 [ClassInterface(ClassInterfaceType.None)]
 internal sealed class CaptureCallback(PreviewFeed? preview, CapturePixelFormat pixelFormat,
     CaptureAudioFormat audioFormat, VideoMode mode, MovRecording? recording, bool automaticMode,
-    LocalAudioMonitor? localAudioMonitor = null) : IDeckLinkInputCallback
+    LocalAudioMonitor? localAudioMonitor = null, Func<TimeSpan>? signalClock = null) : IDeckLinkInputCallback
 {
     private const uint NoInput = 1u << 31;
     private const uint BufferRead = 1;
@@ -14,6 +16,10 @@ internal sealed class CaptureCallback(PreviewFeed? preview, CapturePixelFormat p
 
     private readonly object gate = new();
     private readonly CaptureStats stats = new();
+    private readonly long started = Stopwatch.GetTimestamp();
+    private TimeSpan Elapsed => signalClock?.Invoke() ?? Stopwatch.GetElapsedTime(started);
+    private TimeSpan recordingStart;
+    private TimeSpan lastVideoObservation;
     private readonly FrameTimeline? timeline = preview is null ? null : new(mode);
     private StereoMonitor? audioMonitor = preview is null ? null : new(audioFormat);
     private readonly CaptureAudioFormat defaultOutputAudioFormat = audioFormat;
@@ -53,7 +59,10 @@ internal sealed class CaptureCallback(PreviewFeed? preview, CapturePixelFormat p
                 EnsureRecordingReady();
                 recordingBaseline = stats.Clone();
                 recordingModeChanged = false;
-                recordingTimeline = new FrameTimeline(mode);
+                recordingTimeline = new FrameTimeline(mode, keepSignalHistory: true);
+                recordingStart = Elapsed;
+                if (stats.Signal != VideoSignal.Unknown)
+                    recordingTimeline.ObserveSignal(TimeSpan.Zero, stats.Signal == VideoSignal.NoInput);
                 recordingClips = audioMonitor?.ClipCounts ?? default;
                 recordingAudioTime = recordingVideoTime = null;
                 recordingRegressions = 0;
@@ -100,6 +109,7 @@ internal sealed class CaptureCallback(PreviewFeed? preview, CapturePixelFormat p
             recording = null;
             var baseline = recordingBaseline!;
             var clips = audioMonitor?.ClipCounts ?? default;
+            var elapsed = Elapsed - recordingStart;
             var result = new CaptureStats
             {
                 VideoFrames = stats.VideoFrames - baseline.VideoFrames,
@@ -109,6 +119,9 @@ internal sealed class CaptureCallback(PreviewFeed? preview, CapturePixelFormat p
                 MissingVideoFrames = recordingTimeline!.MissingFrames,
                 TimestampRegressions = recordingRegressions,
                 Events = recordingTimeline.Events(),
+                VideoSignalLossCount = recordingTimeline.SignalLossCount,
+                VideoSignalLossDuration = recordingTimeline.SignalLossDuration(elapsed),
+                VideoSignalLosses = recordingTimeline.SignalLosses(elapsed),
                 AudioLevels = new StereoLevels(0, 0, clips.Left - recordingClips.Left,
                     clips.Right - recordingClips.Right, null, null),
                 RecordingModeChanged = recordingModeChanged,
@@ -136,6 +149,8 @@ internal sealed class CaptureCallback(PreviewFeed? preview, CapturePixelFormat p
             if (publishMonitor && timeline is not null)
             {
                 snapshot.Events = timeline.Events();
+                snapshot.VideoSignalLossCount = timeline.SignalLossCount;
+                snapshot.VideoSignalLossDuration = timeline.SignalLossDuration(Elapsed);
                 snapshot.MissingVideoFrames = timeline.MissingFrames;
             }
         }
@@ -248,16 +263,45 @@ internal sealed class CaptureCallback(PreviewFeed? preview, CapturePixelFormat p
         }
     }
 
+    internal bool IsWaitingForVideoFrames()
+    {
+        lock (gate)
+            return WaitingForVideoFrames(Elapsed);
+    }
+
+    private bool WaitingForVideoFrames(TimeSpan elapsed) =>
+        elapsed - lastVideoObservation >= TimeSpan.FromMilliseconds(100);
+
+    internal void ObserveHardwareLock(bool locked)
+    {
+        lock (gate)
+        {
+            var elapsed = Elapsed;
+            // The callback flag gives frame-level edges. Polling fills periods when no frames arrive.
+            if (WaitingForVideoFrames(elapsed))
+                ObserveSignal(!locked, elapsed);
+        }
+    }
+
+    private void ObserveSignal(bool noInput, TimeSpan elapsed)
+    {
+        stats.Signal = noInput ? VideoSignal.NoInput : VideoSignal.Present;
+        timeline?.ObserveSignal(elapsed, noInput);
+        recordingTimeline?.ObserveSignal(elapsed - recordingStart, noInput);
+    }
+
     // Called under the callback gate. Managed frame fixtures can exercise this path without the driver.
     internal void CountVideo(IDeckLinkVideoInputFrame video)
     {
         var noInput = (video.GetFlags() & NoInput) != 0;
+        var elapsed = Elapsed;
+        lastVideoObservation = elapsed;
+        ObserveSignal(noInput, elapsed);
         if (timeline is not null && video.GetStreamTime(out var monitorTime, out _, mode.TimeScale) == 0)
-            timeline.Observe(monitorTime, noInput);
+            timeline.Observe(monitorTime, noInput, elapsed);
         if (noInput)
         {
             hasRecordableFrame = false;
-            stats.Signal = VideoSignal.NoInput;
             stats.NoInputFrames++;
             if (preview is not null || recording is not null || stats.NoInputVideoPayload is null)
             {
@@ -277,7 +321,6 @@ internal sealed class CaptureCallback(PreviewFeed? preview, CapturePixelFormat p
             return;
         }
 
-        stats.Signal = VideoSignal.Present;
         DeckLinkCapture.Check(video.GetStreamTime(out var time, out _, Timescale), "GetStreamTime");
         if (stats.VideoTime is long previous && time < previous)
             stats.TimestampRegressions++;
@@ -321,7 +364,7 @@ internal sealed class CaptureCallback(PreviewFeed? preview, CapturePixelFormat p
                 DeckLinkCapture.Check(video.GetStreamTime(out var time, out var duration, recording.VideoTimeScale),
                     "Get recording video stream time");
                 recording.SubmitVideo(bytes, width, height, rowBytes, time, duration, stats.Signal);
-                recordingTimeline?.Observe(time, noInput);
+                recordingTimeline?.Observe(time, noInput, lastVideoObservation - recordingStart);
                 ObserveRecordingTimestamp(ref recordingVideoTime, time);
             }
             preview?.Offer(bytes, width, height, rowBytes, length, noInput, pixelFormat, mode.FieldDominance);
@@ -413,6 +456,9 @@ public sealed class CaptureStats
     public StereoLevels? AudioLevels { get; internal set; }
     public long MissingVideoFrames { get; internal set; }
     public IReadOnlyList<CaptureEvent> Events { get; internal set; } = [];
+    public long VideoSignalLossCount { get; internal set; }
+    public TimeSpan VideoSignalLossDuration { get; internal set; }
+    public IReadOnlyList<VideoSignalLoss> VideoSignalLosses { get; internal set; } = [];
     internal long? FirstVideoTime;
     internal long? FirstAudioTime;
     public long? VideoTime { get; internal set; }

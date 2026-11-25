@@ -1104,4 +1104,19 @@
   <data name="TestSignalSimulatedNoInput" xml:space="preserve">
     <value>Showing a simulated loss of video signal.</value>
   </data>
+  <data name="VideoLocked" xml:space="preserve">
+    <value>Video locked</value>
+  </data>
+  <data name="VideoUnlocked" xml:space="preserve">
+    <value>Video unlocked</value>
+  </data>
+  <data name="VideoLockSummary" xml:space="preserve">
+    <value>Lock losses: {0:N0} · Unlocked {1:F3} s</value>
+  </data>
+  <data name="EventLockRestoredWithDuration" xml:space="preserve">
+    <value>Video lock restored after {0:F3} s.</value>
+  </data>
+  <data name="ScopeLumaOutOfRange" xml:space="preserve">
+    <value>Luma out of range {0:P2}</value>
+  </data>
 </root>

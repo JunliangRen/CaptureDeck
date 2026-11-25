@@ -16,6 +16,8 @@ public sealed partial class MainWindow
     private enum ScopeLumaScaleMode { Code, Ire }
 
     private IReadOnlyList<CaptureEvent>? visibleEvents;
+    private long visibleSignalLossCount;
+    private TimeSpan visibleSignalLossDuration;
     private VideoScopes? visibleScopes;
     private StereoLevels? visibleAudio;
     private EventFilterMode eventFilter = EventFilterMode.All;
@@ -33,6 +35,8 @@ public sealed partial class MainWindow
     private void ResetMonitoring()
     {
         visibleEvents = null;
+        visibleSignalLossCount = 0;
+        visibleSignalLossDuration = TimeSpan.Zero;
         visibleAudio = null;
         visibleScopes = null;
         spectrumPeakHoldValues = null;
@@ -58,10 +62,17 @@ public sealed partial class MainWindow
 
     private void ShowMonitoring(CaptureStats stats)
     {
+        visibleSignalLossCount = stats.VideoSignalLossCount;
+        visibleSignalLossDuration = stats.VideoSignalLossDuration;
+        RenderLumaRange(visibleScopes);
         if (!ReferenceEquals(visibleEvents, stats.Events))
         {
             visibleEvents = stats.Events;
             RenderEvents();
+        }
+        else if (GetDisplayedSecondaryInstrument() == SplitSecondaryInstrument.Events)
+        {
+            UpdateSecondaryInstrumentHeader(SplitSecondaryInstrument.Events);
         }
 
         if (stats.AudioLevels is not { } audio || ReferenceEquals(visibleAudio, audio))
@@ -144,6 +155,8 @@ public sealed partial class MainWindow
         CaptureEventKind.FrameGap => LocalFormat("EventFrameGap", item.MissingFrames),
         CaptureEventKind.NoInputAtStart => L("EventNoInputAtStart"),
         CaptureEventKind.SignalLost => L("EventSignalLost"),
+        CaptureEventKind.SignalRestored when item.SignalLossDuration is { } duration =>
+            LocalFormat("EventLockRestoredWithDuration", duration.TotalSeconds),
         CaptureEventKind.SignalRestored => L("EventSignalRestored"),
         _ => item.Description
     };
@@ -167,7 +180,7 @@ public sealed partial class MainWindow
         }).Select(item => new EventRow(item.TimeLabel, LocalEventDescription(item), EventAccentBrush(item.Kind))).ToArray();
 
         var hasRows = filtered is { Length: > 0 };
-        EventsSummary.Text = L(visibleEvents is { Count: > 0 } ? "EventsRecent" : "EventsEmpty");
+        EventsSummary.Text = L("EventsEmpty");
         EventsEmptyState.Visibility = hasRows ? Visibility.Collapsed : Visibility.Visible;
         EventList.Visibility = hasRows ? Visibility.Visible : Visibility.Collapsed;
         EventList.ItemsSource = filtered;
@@ -214,9 +227,9 @@ public sealed partial class MainWindow
                 break;
             case SplitSecondaryInstrument.Events:
                 SecondaryInstrumentTitle.Text = L("EventsTab");
-                SecondaryInstrumentSubtitle.Text = visibleEvents is { Count: > 0 }
-                    ? LocalFormat("EventsCountBadge", visibleEvents.Count)
-                    : "";
+                SecondaryInstrumentSubtitle.Text = visibleSignalLossCount > 0 || visibleSignalLossDuration > TimeSpan.Zero
+                    ? LocalFormat("VideoLockSummary", visibleSignalLossCount, visibleSignalLossDuration.TotalSeconds)
+                    : visibleEvents is { Count: > 0 } ? LocalFormat("EventsCountBadge", visibleEvents.Count) : "";
                 break;
         }
     }
@@ -257,6 +270,7 @@ public sealed partial class MainWindow
             RenderScopeLabels(scopes);
 
         visibleScopes = scopes;
+        RenderLumaRange(scopes);
         PaintPlot(WaveformPlot, scopes.LumaWaveform, VideoScopes.WaveformWidth, VideoScopes.WaveformHeight);
         PaintPlot(VectorPlot, scopes.Vectorscope, VideoScopes.VectorSize, VideoScopes.VectorSize);
     }
@@ -311,7 +325,16 @@ public sealed partial class MainWindow
                 : LocalFormat("LumaScaled", maximum, scopes.LumaScaleBits, scopes.InputBits);
             AutomationProperties.SetName(WaveformPlot, LocalFormat("LumaPlotRange", maximum));
         }
-        ScopeStatus.Text = L(scopes.NoInput ? "ScopeNoInput" : "ScopeLive");
+        RenderLumaRange(scopes);
+    }
+
+    private void RenderLumaRange(VideoScopes? scopes)
+    {
+        var noInput = displayedStats?.Signal == VideoSignal.NoInput || scopes?.NoInput == true;
+        ScopeStatus.Text = noInput ? L("ScopeNoInput")
+            : scopes?.LumaOutsideLegalFraction is { } fraction
+                ? LocalFormat("ScopeLumaOutOfRange", fraction)
+                : L("ScopeWaiting");
     }
 
     private void SpectrumPlot_SizeChanged(object sender, SizeChangedEventArgs e)

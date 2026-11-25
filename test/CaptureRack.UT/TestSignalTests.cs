@@ -31,6 +31,8 @@ public sealed class TestSignalTests
             Assert.NotEqual(frame.Pixels[0], frame.Pixels[120 * 4]);
             Assert.Equal(255, frame.Pixels[3]);
             Assert.NotNull(feed.Scopes);
+            Assert.Equal(scenario == TestSignalScenario.TimingFaults ? 1.0 / 60 : 0,
+                feed.Scopes.LumaOutsideLegalFraction!.Value, 8);
             Assert.True(session.Snapshot().AudioPeak > 0);
             Assert.True(session.Snapshot().CanStartRecording);
             var started = recorder.Start(path);
@@ -64,14 +66,24 @@ public sealed class TestSignalTests
                 Assert.Equal(-4800m, log.Timing.FirstAudioIssue!.Offset);
                 Assert.Equal(70, log.Timing.FirstAudioIssue.PacketNumber);
                 Assert.Contains(stats.Events, item => item.Kind == CaptureEventKind.FrameGap &&
-                    item.MissingFrames == 1 && item.Elapsed == TimeSpan.FromTicks(10_010_000));
-                Assert.Contains(stats.Events, item => item.Kind == CaptureEventKind.SignalLost);
-                Assert.Contains(stats.Events, item => item.Kind == CaptureEventKind.SignalRestored);
+                    item.MissingFrames == 1 && item.Elapsed == TimeSpan.FromTicks(10_343_666));
+                var interval = Assert.Single(log.VideoSignalLosses);
+                Assert.Equal(1, log.VideoSignalLossCount);
+                Assert.Equal(TimeSpan.FromTicks(15_015_000), interval.Elapsed);
+                Assert.Equal(TimeSpan.FromTicks(4_004_000), interval.Duration);
+                Assert.Equal(interval.Duration, log.VideoSignalLossDuration);
+                Assert.True(interval.Restored);
+                Assert.False(interval.StartedUnlocked);
+                Assert.Contains(stats.Events, item => item.Kind == CaptureEventKind.SignalLost && item.Elapsed == interval.Elapsed);
+                Assert.Contains(stats.Events, item => item.Kind == CaptureEventKind.SignalRestored &&
+                    item.Elapsed == interval.Elapsed + interval.Duration && item.SignalLossDuration == interval.Duration);
             }
             else
             {
                 Assert.Null(log.Timing.FirstAudioIssue);
                 Assert.Empty(log.RecentEvents);
+                Assert.Empty(log.VideoSignalLosses);
+                Assert.Equal(0, log.VideoSignalLossCount);
             }
 
             Assert.True(File.Exists(path));
@@ -95,6 +107,13 @@ public sealed class TestSignalTests
                 else
                 {
                     Assert.Contains(result.Warnings, warning => warning.Contains("missing frames", StringComparison.OrdinalIgnoreCase));
+                    Assert.Contains(result.Warnings, warning => warning.Contains("Video lock lost 1", StringComparison.OrdinalIgnoreCase));
+                    using var report = System.Text.Json.JsonDocument.Parse(File.ReadAllText(result.CaptureLog));
+                    var capture = report.RootElement.GetProperty("capture");
+                    var intervals = capture.GetProperty("videoSignalLosses");
+                    Assert.Equal(1, intervals.GetArrayLength());
+                    Assert.Equal("00:00:01.5015000", intervals[0].GetProperty("elapsed").GetString());
+                    Assert.Equal("00:00:00.4004000", intervals[0].GetProperty("duration").GetString());
                     Assert.Contains(result.Warnings, warning => warning.Contains("no input", StringComparison.OrdinalIgnoreCase));
                     Assert.Contains(result.Warnings, warning => warning.Contains("audio timestamp", StringComparison.OrdinalIgnoreCase));
                 }

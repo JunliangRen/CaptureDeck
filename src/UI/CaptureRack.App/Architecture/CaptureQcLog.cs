@@ -27,7 +27,10 @@ internal static class CaptureQcLog
             InputModeChanged = stats.RecordingModeChanged,
             Timing = saved.Timing,
             CaptureError = captureError ?? stats.Error,
-            UnreadableNoInputFrames = stats.UnreadableNoInputFrames
+            UnreadableNoInputFrames = stats.UnreadableNoInputFrames,
+            VideoSignalLossCount = stats.VideoSignalLossCount,
+            VideoSignalLossDuration = stats.VideoSignalLossDuration,
+            VideoSignalLosses = stats.VideoSignalLosses
         };
     }
 }

@@ -333,6 +333,9 @@ public static class QcWarningFormatter
             warnings.Add(string.Format(formatProvider, localize("QcWarnCaptureEnded"), captureError));
         if (capture is { InputModeChanged: true })
             warnings.Add(localize("QcWarnInputModeChange"));
+        if (capture is { VideoSignalLosses.Count: > 0 })
+            warnings.Add(string.Format(formatProvider, localize("VideoLockSummary"), capture.VideoSignalLossCount,
+                capture.VideoSignalLossDuration.TotalSeconds));
         if (result is not null)
         {
             if (capture is { NoInputFrames: > 0 })

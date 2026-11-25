@@ -169,8 +169,8 @@ public sealed partial class MainWindow
                     : ThemeBrush("StudioInfoBrush");
             StageSignalDot.Fill = signalBrush;
             FullscreenSignalDot.Fill = signalBrush;
-            StageSignalText.Text = FullscreenStatusText.Text = L(isLocked ? "SignalPresent" :
-                liveSignal == VideoSignal.NoInput ? "NoInputSignal" : "WaitingFrames");
+            StageSignalText.Text = FullscreenStatusText.Text = L(isLocked ? "VideoLocked" :
+                liveSignal == VideoSignal.NoInput ? "VideoUnlocked" : "WaitingFrames");
             StageSignalBadge.Background = ThemeBrush(isLocked ? "StudioSignalLockSoftBrush" :
                 liveSignal == VideoSignal.NoInput ? "StudioCautionSoftBrush" : "StudioNeutralPillBrush");
         }

@@ -16,11 +16,30 @@ public sealed partial class MainWindow
     private LocalAudioMonitor? activeAudioMonitor;
     private int lastSignalWidth;
     private int lastSignalHeight;
+    private bool previewDeinterlaceLocked;
+    private bool UsesDoubleRatePreview =>
+        !previewDeinterlaceLocked && previewDeinterlace == PreviewDeinterlaceMode.BobWeave2x;
+
+    private void UpdatePreviewScanMode(bool? interlaced)
+    {
+        var locked = interlaced == false;
+        if (previewDeinterlaceLocked == locked)
+            return;
+
+        previewDeinterlaceLocked = locked;
+        ApplyPreviewOptionsToUi();
+    }
+
+    private static PreviewDeinterlaceMode ParsePreviewDeinterlace(string tag) =>
+        Enum.TryParse<PreviewDeinterlaceMode>(tag, ignoreCase: true, out var mode) &&
+        mode is PreviewDeinterlaceMode.Off or PreviewDeinterlaceMode.BobWeave2x
+            ? mode : PreviewDeinterlaceMode.BobWeave;
 
     private void ApplyPreviewOptionsToUi()
     {
         monitorOptionsBar.SyncState(
             previewDeinterlace.ToString(),
+            previewDeinterlaceLocked,
             previewAspectMode.ToString(),
             previewColorMatrix.ToString(),
             showSafeArea,
@@ -39,9 +58,14 @@ public sealed partial class MainWindow
         if (preview is { } feed)
         {
             feed.DeinterlaceMode = previewDeinterlace;
-            feed.ColorMatrix = previewColorMatrix;
+            feed.ColorMatrix = LiveMediaSource is null ? previewColorMatrix : PreviewColorMatrix.Auto;
             feed.ScopeWaveformMode = scopeWaveformMode;
+            feed.ScopeIreScale = scopeLumaScale == ScopeLumaScaleMode.Ire;
+            var interval = TimeSpan.FromMilliseconds(1000d / (UsesDoubleRatePreview ? 120 : 60));
+            if (previewTimer.Interval != interval)
+                previewTimer.Interval = interval;
         }
+        LiveMediaSource?.SetAudioMonitor(audioMonitorEnabled, audioMonitorVolume);
         if (activeAudioMonitor is { } monitor)
         {
             monitor.Enabled = audioMonitorEnabled;
@@ -51,8 +75,10 @@ public sealed partial class MainWindow
 
     private void SetPreviewDeinterlace(string tag)
     {
-        previewDeinterlace = Enum.TryParse<PreviewDeinterlaceMode>(tag, out var parsed)
-            ? parsed : PreviewDeinterlaceMode.BobWeave;
+        if (previewDeinterlaceLocked)
+            return;
+
+        previewDeinterlace = ParsePreviewDeinterlace(tag);
         ApplyPreviewOptionsToUi();
         SettingsChanged();
     }
@@ -101,6 +127,7 @@ public sealed partial class MainWindow
         audioMonitorVolume = Math.Clamp(volume, 0.0, 1.0);
         if (activeAudioMonitor is { } monitor)
             monitor.Volume = audioMonitorVolume;
+        LiveMediaSource?.SetAudioMonitor(audioMonitorEnabled, audioMonitorVolume);
         SettingsChanged();
     }
 
@@ -113,13 +140,14 @@ public sealed partial class MainWindow
         PreviewAspectMode.Ratio16x9 => 16d / 9,
         PreviewAspectMode.Square1x1 when width > 0 && height > 0 => (double)width / height,
         PreviewAspectMode.Square1x1 => 720d / 486,
+        _ when decodedDisplayAspectRatio > 0 => decodedDisplayAspectRatio,
         _ => width <= 0 || height <= 0 || (width == 720 && height <= 576)
             ? DefaultPreviewAspectRatio : (double)width / height
     };
 
     private void UpdateNtsc480GuideLayout()
     {
-        var show = showNtsc480Guide && PreviewPlaceholder.Visibility == Visibility.Collapsed;
+        var show = LiveMediaSource is null && showNtsc480Guide && PreviewPlaceholder.Visibility == Visibility.Collapsed;
         Ntsc480GuideOverlay.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
         if (!show || PreviewSurface.Height <= 0)
             return;
@@ -134,6 +162,7 @@ public sealed partial class MainWindow
         monitorOptionsBar.ApplyLanguage(
             L,
             previewDeinterlace.ToString(),
+            previewDeinterlaceLocked,
             previewAspectMode.ToString(),
             previewColorMatrix.ToString(),
             showSafeArea,

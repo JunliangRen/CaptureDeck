@@ -1,5 +1,6 @@
 using System.Collections.ObjectModel;
 using System.ComponentModel;
+using CaptureRack.Core;
 using CaptureRack.DeckLink;
 using CaptureRack.QualityControl;
 using Microsoft.UI.Xaml;
@@ -17,6 +18,7 @@ public sealed partial class MainWindow
     private string? sdkVersion;
     private CaptureStats? displayedStats;
     private PreviewCaption? previewCaption;
+    private CaptureAudioInfo? previewAudio;
 
     private void ApplyWorkspaceLanguage()
     {
@@ -53,7 +55,7 @@ public sealed partial class MainWindow
         AutomationProperties.SetName(EventList, L("EventTimeline"));
         ToolTipService.SetToolTip(RecordingElapsed, L("ElapsedHelp"));
 
-        PreviewPlaceholderText.Text = L("WaitingPreview");
+        PreviewPlaceholderText.Text = L(LiveMediaSource?.PreviewHint ?? "WaitingPreview");
         PreviewPlaceholderHint.Text = L("PreviewBeforeRecording");
         PlaceholderStartLabel.Text = L("StartPreview");
         VectorAxes.Text = L("VectorAxes");
@@ -70,6 +72,7 @@ public sealed partial class MainWindow
         RenderApiVersion();
         RenderStatus();
         RenderPreviewCaption();
+        RenderPreviewAudioCaption();
         RenderQcSummaryBadge();
         RenderCounts(HasLiveCapture ? displayedStats : null);
         RefreshLocalizedMonitoring();
@@ -119,11 +122,15 @@ public sealed partial class MainWindow
 
     private void RenderCaptureActions()
     {
-        var previewActive = captureTask is not null;
-        var recordingActive = recordingSession && qcStop is null;
+        var previewActive = IsCaptureInputActive;
+        var recordingActive = IsCaptureRecording && qcStop is null;
 
         PreviewActionIcon.Glyph = previewActive ? "\uE71A" : "\uE768";
-        PreviewActionLabel.Text = L(previewActive ? "StopPreview" : "StartPreview");
+        var captureOnly = LiveMediaSource is { HasPreview: false };
+        PreviewActionLabel.Text = L(captureOnly
+            ? previewActive ? "DsStopInput" : "DsStartInput"
+            : previewActive ? "StopPreview" : "StartPreview");
+        PlaceholderStartLabel.Text = PreviewActionLabel.Text;
 
         RecordActionLabel.Text = L(recordingActive ? "StopRecording" : "StartRecording");
         RecordActionDot.Visibility = recordingActive ? Visibility.Collapsed : Visibility.Visible;
@@ -159,7 +166,7 @@ public sealed partial class MainWindow
         AutomationProperties.SetName(StatusDetailsButton, StatusTitleText.Text);
         ToolTipService.SetToolTip(StatusDetailsButton, recordingWithoutInput ? L("RecordingNoInput") : SignalStatus.Message);
 
-        if (captureTask is not null)
+        if (IsCaptureInputActive)
         {
             var isLocked = liveSignal == VideoSignal.Present;
             var signalBrush = isLocked
@@ -187,16 +194,48 @@ public sealed partial class MainWindow
     {
         if (previewCaption is { } caption)
         {
+            var scanLabel = L(caption.ScanMode switch
+            {
+                PreviewScanMode.Progressive => "DsProgressive",
+                PreviewScanMode.TopFirst => "PreviewTopFirst",
+                PreviewScanMode.BottomFirst => "PreviewBottomFirst",
+                PreviewScanMode.ProgressiveSegmented => "PreviewPsf",
+                _ => "DsFieldUnknown"
+            });
             PreviewDetail.Text = LocalFormat("PreviewFrameDetail",
                 L(caption.NoInput ? "PreviewNoInputFrame" : "PreviewLiveFrame"), caption.Width,
-                caption.Height, caption.Format, caption.Frames);
+                caption.Height, caption.Format, scanLabel, caption.Frames);
             PreviewHudDot.Fill = ThemeBrush(caption.NoInput ? "StudioCautionBrush" : "StudioSignalLockBrush");
         }
     }
 
+    private void SetPreviewAudio(CaptureAudioInfo? audio)
+    {
+        if (audio == previewAudio)
+            return;
+        previewAudio = audio;
+        RenderPreviewAudioCaption();
+    }
+
+    private void RenderPreviewAudioCaption()
+    {
+        PreviewAudioDetail.Visibility = previewAudio is null ? Visibility.Collapsed : Visibility.Visible;
+        if (previewAudio is not { } audio)
+            return;
+        var depth = audio.BitDepth is { } bits ? LocalFormat("PreviewAudioBitDepth", bits) : LocalFormat("PreviewAudioBitDepth", "—");
+        var rate = audio.SampleRateHz is { } hz ? LocalFormat("PreviewAudioSampleRate", (hz / 1000d).ToString("0.###", settingsCulture))
+            : LocalFormat("PreviewAudioSampleRate", "—");
+        var channels = LocalFormat("PreviewAudioChannels", audio.Channels?.ToString(settingsCulture) ?? "—");
+        var bitrate = audio.BitRate is { } bps ? (audio.BitRateEstimated ? "≈" : "") + (bps / 1000d).ToString("N0", settingsCulture)
+            : "—";
+        PreviewAudioDetail.Text = LocalFormat("PreviewAudioDetail", L("PreviewAudioHeading"), audio.Codec, depth, rate,
+            channels, LocalFormat("PreviewAudioBitRate", bitrate));
+    }
+
     private void RenderCounts(CaptureStats? stats)
     {
-        var metrics = activeModule.BuildTelemetry(stats, displayedPreviewSkips, L, settingsCulture);
+        var metrics = LiveMediaSource is { } media ? BuildDecodedMediaTelemetry(media) :
+            activeModule.BuildTelemetry(stats, displayedPreviewSkips, L, settingsCulture);
         if (!ReferenceEquals(TelemetryStrip.ItemsSource, telemetryItems))
             TelemetryStrip.ItemsSource = telemetryItems;
 
@@ -280,5 +319,5 @@ public sealed partial class MainWindow
         private void Notify(string name) => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
     }
 
-    private readonly record struct PreviewCaption(bool NoInput, int Width, int Height, string Format, long Frames);
+    private readonly record struct PreviewCaption(bool NoInput, int Width, int Height, string Format, PreviewScanMode ScanMode, long Frames);
 }

@@ -45,6 +45,7 @@ internal sealed record DeckLinkSettings
     public double AnalogAudioGainLeftDb { get; init; }
     public double AnalogAudioGainRightDb { get; init; }
     public bool AnalogAudioGainLinked { get; init; } = true;
+    public VancInputOptions VancInput { get; init; } = new();
 }
 
 internal static class CaptureSettingsStore

@@ -1,3 +1,5 @@
+using System.Diagnostics;
+using System.Numerics;
 using System.Runtime.InteropServices.WindowsRuntime;
 using CaptureRack.DeckLink;
 using Microsoft.UI.Xaml;
@@ -31,6 +33,36 @@ public sealed partial class MainWindow
     private readonly SolidColorBrush eventLockBrush = new(Windows.UI.Color.FromArgb(255, 34, 197, 94));
     private readonly SolidColorBrush eventInfoBrush = new(Windows.UI.Color.FromArgb(255, 56, 189, 248));
     private float[]? spectrumPeakHoldValues;
+    private long lastSpectrumPaint;
+    private long nextMonitorFrame;
+    private static readonly long MonitorFrameTicks = (long)Math.Round(Stopwatch.Frequency / 60d);
+    private static readonly long RenderToleranceTicks = Stopwatch.Frequency / 1000;
+
+    private void StartPreviewClock()
+    {
+        nextMonitorFrame = 0;
+        CompositionTarget.Rendering += RenderMonitorFrame;
+        previewTimer.Start();
+    }
+
+    private void StopPreviewClock()
+    {
+        CompositionTarget.Rendering -= RenderMonitorFrame;
+        previewTimer.Stop();
+    }
+
+    private void RenderMonitorFrame(object? sender, object args)
+    {
+        var now = Stopwatch.GetTimestamp();
+        if (now + RenderToleranceTicks < nextMonitorFrame)
+            return;
+        nextMonitorFrame = now - nextMonitorFrame >= MonitorFrameTicks
+            ? now + MonitorFrameTicks : nextMonitorFrame + MonitorFrameTicks;
+
+        ShowVideoScopes();
+        ShowAudioMonitoring(LiveMediaSource is { } media ? media.ReadAudioLevels() : previewRecorder?.ReadAudioLevels());
+        UpdateMeterBallistics();
+    }
 
     private void ResetMonitoring()
     {
@@ -40,6 +72,7 @@ public sealed partial class MainWindow
         visibleAudio = null;
         visibleScopes = null;
         spectrumPeakHoldValues = null;
+        lastSpectrumPaint = 0;
 
         EventList.ItemsSource = null;
         EventList.Visibility = Visibility.Collapsed;
@@ -75,14 +108,22 @@ public sealed partial class MainWindow
             UpdateSecondaryInstrumentHeader(SplitSecondaryInstrument.Events);
         }
 
-        if (stats.AudioLevels is not { } audio || ReferenceEquals(visibleAudio, audio))
+    }
+
+    private void ShowAudioMonitoring(StereoLevels? audio)
+    {
+        if (audio is null || ReferenceEquals(visibleAudio, audio))
             return;
 
-        var spectrumScaleChanged = visibleAudio?.SpectrumFloorDbfs != audio.SpectrumFloorDbfs;
+        var previous = visibleAudio;
         visibleAudio = audio;
-        RenderStereoLevels(audio);
-        if (spectrumScaleChanged)
-            PaintSpectrumScale(audio.SpectrumFloorDbfs);
+        StereoMeter.UpdateLevels(audio, settingsCulture);
+        if (previous?.SampleRate != audio.SampleRate || previous?.SampleBits != audio.SampleBits ||
+            previous.SpectrumFloorDbfs != audio.SpectrumFloorDbfs)
+            RenderSpectrumLabels(audio);
+        if (audio.Spectrum is { } spectrum && SpectrumBody.Visibility == Visibility.Visible &&
+            EffectiveWorkspaceLayout is WorkspaceLayoutMode.Split or WorkspaceLayoutMode.Spectrum)
+            PaintSpectrum(spectrum, audio.SpectrumFloorDbfs);
     }
 
     private void ScopeWaveformMode_Click(object sender, RoutedEventArgs e)
@@ -105,10 +146,13 @@ public sealed partial class MainWindow
             return;
 
         scopeLumaScale = tag == "Ire" ? ScopeLumaScaleMode.Ire : ScopeLumaScaleMode.Code;
+        if (preview is { } feed)
+            feed.ScopeIreScale = scopeLumaScale == ScopeLumaScaleMode.Ire;
         UpdateScopeModeButtons();
-        RenderScopeScaleAxis(visibleScopes);
         if (visibleScopes is { } scopes)
             RenderScopeLabels(scopes);
+        else
+            RenderScopeScaleAxis(null);
         SettingsChanged();
     }
 
@@ -188,27 +232,23 @@ public sealed partial class MainWindow
             UpdateSecondaryInstrumentHeader(SplitSecondaryInstrument.Events);
     }
 
-    private void RenderStereoLevels(StereoLevels audio)
+    private void RenderSpectrumLabels(StereoLevels audio)
     {
         SpectrumMidFrequency.Text = (audio.SampleRate / 4000d).ToString("0.##", settingsCulture) + " kHz";
         SpectrumMaxFrequency.Text = (audio.SampleRate / 2000d).ToString("0.##", settingsCulture) + " kHz";
-        StereoMeter.UpdateLevels(audio, settingsCulture);
-
-        if (audio.Spectrum is { } spectrum)
-            PaintSpectrum(spectrum, audio.SpectrumFloorDbfs);
-
+        PaintSpectrumScale(audio.SpectrumFloorDbfs);
         if (GetDisplayedSecondaryInstrument() == SplitSecondaryInstrument.Spectrum)
             UpdateSecondaryInstrumentHeader(SplitSecondaryInstrument.Spectrum);
     }
 
     private void UpdateMeterBallistics() => StereoMeter.StepBallistics();
 
-    private SplitSecondaryInstrument GetDisplayedSecondaryInstrument() => workspaceLayout switch
+    private SplitSecondaryInstrument GetDisplayedSecondaryInstrument() => EffectiveWorkspaceLayout switch
     {
         WorkspaceLayoutMode.Scopes => SplitSecondaryInstrument.Vector,
         WorkspaceLayoutMode.Spectrum => SplitSecondaryInstrument.Spectrum,
         WorkspaceLayoutMode.Events => SplitSecondaryInstrument.Events,
-        _ => splitSecondary
+        _ => EffectiveSplitInstrument
     };
 
     private void UpdateSecondaryInstrumentHeader(SplitSecondaryInstrument instrument)
@@ -249,10 +289,7 @@ public sealed partial class MainWindow
         }
         StereoMeter.ApplyLanguage(L, settingsCulture);
         if (visibleAudio is { } audio)
-        {
-            RenderStereoLevels(audio);
-            PaintSpectrumScale(audio.SpectrumFloorDbfs);
-        }
+            RenderSpectrumLabels(audio);
         UpdateSecondaryInstrumentHeader(GetDisplayedSecondaryInstrument());
     }
 
@@ -260,7 +297,28 @@ public sealed partial class MainWindow
 
     private void ShowVideoScopes()
     {
-        if (preview?.Scopes is not { } scopes || ReferenceEquals(visibleScopes, scopes))
+        if (preview is not { } feed)
+            return;
+
+        feed.RenderScopes = EffectiveWorkspaceLayout is WorkspaceLayoutMode.Split or WorkspaceLayoutMode.Scopes;
+        if (!feed.RenderScopes)
+            return;
+
+        var scale = RootShell.XamlRoot?.RasterizationScale ?? 1;
+        var waveformVisible = WaveformPlot.ActualWidth > 0 && WaveformPlot.ActualHeight > 0;
+        var vectorSide = Math.Min(VectorPlot.ActualWidth, VectorPlot.ActualHeight);
+        if (waveformVisible || vectorSide > 0)
+        {
+            feed.SetScopeDisplaySize(waveformVisible ? WaveformPlot.ActualWidth : VideoScopes.WaveformWidth / scale,
+                waveformVisible ? WaveformPlot.ActualHeight : VideoScopes.WaveformHeight / scale,
+                vectorSide > 0 ? vectorSide : VideoScopes.VectorSize / scale, scale);
+        }
+        feed.VisitScopes(PaintVideoScopes);
+    }
+
+    private void PaintVideoScopes(VideoScopes scopes)
+    {
+        if (ReferenceEquals(visibleScopes, scopes))
             return;
 
         if (visibleScopes?.LumaScaleBits != scopes.LumaScaleBits ||
@@ -271,14 +329,63 @@ public sealed partial class MainWindow
 
         visibleScopes = scopes;
         RenderLumaRange(scopes);
-        PaintPlot(WaveformPlot, scopes.LumaWaveform, VideoScopes.WaveformWidth, VideoScopes.WaveformHeight);
-        PaintPlot(VectorPlot, scopes.Vectorscope, VideoScopes.VectorSize, VideoScopes.VectorSize);
+        var (width, height, vectorSize) = scopes.Raster;
+        PaintPlot(WaveformPlot, scopes.LumaWaveform, width, height);
+        if (VectorBody.Visibility == Visibility.Visible)
+            PaintPlot(VectorPlot, scopes.Vectorscope, vectorSize, vectorSize);
+    }
+
+    private void LumaAxis_SizeChanged(object sender, SizeChangedEventArgs e)
+    {
+        if (LumaScaleSetup is not null)
+            PositionLumaAxis(visibleScopes);
+    }
+
+    private void PositionLumaAxis(VideoScopes? scopes)
+    {
+        var height = LumaAxis.ActualHeight;
+        const double labelHeight = 12;
+        var luma = scopeWaveformMode == VideoScopeWaveformMode.Luma;
+        var ire = luma && scopeLumaScale == ScopeLumaScaleMode.Ire;
+        var showCodeGuides = luma && scopeLumaScale == ScopeLumaScaleMode.Code && scopes is not null;
+        var bits = scopes?.LumaScaleBits ?? 8;
+        // Give full-range ticks and reference codes separate columns when the axis is short.
+        var extraColumn = showCodeGuides && height < 300;
+        var tickX = extraColumn ? -36 : 0;
+        var width = new GridLength(extraColumn ? 72 : 38);
+        if (LumaAxisColumn.Width != width)
+            LumaAxisColumn.Width = width;
+        double Row(double value) => VideoScopes.LumaIreYFraction(bits, value) * height;
+        void Position(TextBlock label, double y, double x = 0) =>
+            label.Translation = new Vector3((float)x, (float)Math.Clamp(y - labelHeight / 2, 0, Math.Max(0, height - labelHeight)), 0);
+
+        Position(LumaScaleTop, ire ? Row(100) : 0, tickX);
+        Position(LumaScaleHigh, ire ? Row(75) : height / 4, tickX);
+        Position(LumaScaleMid, ire ? Row(50) : height / 2, tickX);
+        Position(LumaScaleLow, ire ? Row(25) : height * 3 / 4, tickX);
+        Position(LumaScaleZero, ire ? Row(0) : height, tickX);
+        LumaCodeWhite.Visibility = LumaCodeBlack.Visibility = showCodeGuides ? Visibility.Visible : Visibility.Collapsed;
+        LumaScaleSetup.Visibility = ire || showCodeGuides ? Visibility.Visible : Visibility.Collapsed;
+        var setup = Row(VideoScopes.SetupIre);
+        var black = Row(0);
+        if (showCodeGuides)
+        {
+            Position(LumaCodeWhite, Row(100));
+            Position(LumaCodeBlack, black);
+            Position(LumaScaleSetup, setup, black - setup < labelHeight ? -16 : 0);
+        }
+        else if (ire)
+        {
+            Position(LumaScaleSetup, setup, black - setup < labelHeight ? -10 : 0);
+        }
     }
 
     private void RenderScopeScaleAxis(VideoScopes? scopes)
     {
+        PositionLumaAxis(scopes);
         if (scopeLumaScale == ScopeLumaScaleMode.Ire)
         {
+            LumaScaleSetup.Text = VideoScopes.SetupIre.ToString("0.#", settingsCulture);
             LumaScaleTop.Text = "100";
             LumaScaleHigh.Text = "75";
             LumaScaleMid.Text = "50";
@@ -296,6 +403,13 @@ public sealed partial class MainWindow
 
         var maximum = scopeWaveformMode == VideoScopeWaveformMode.RgbParade
             ? 255 : (1 << scopes.LumaScaleBits) - 1;
+        if (scopeWaveformMode == VideoScopeWaveformMode.Luma)
+        {
+            string Code(double ire) => VideoScopes.LumaCodeAtIre(scopes.LumaScaleBits, ire).ToString("0.#", settingsCulture);
+            LumaCodeWhite.Text = Code(100);
+            LumaScaleSetup.Text = Code(VideoScopes.SetupIre);
+            LumaCodeBlack.Text = Code(0);
+        }
         var quarter = (maximum + 1) / 4;
         LumaScaleTop.Text = maximum.ToString(settingsCulture);
         LumaScaleHigh.Text = (quarter * 3).ToString(settingsCulture);
@@ -410,6 +524,9 @@ public sealed partial class MainWindow
             Array.Fill(spectrumPeakHoldValues, (float)floorDbfs);
         }
 
+        var now = Stopwatch.GetTimestamp();
+        var peakDecay = lastSpectrumPaint == 0 ? 0 : 5.4 * Stopwatch.GetElapsedTime(lastSpectrumPaint, now).TotalSeconds;
+        lastSpectrumPaint = now;
         var tracePoints = new PointCollection();
         var fillPoints = new PointCollection();
         var peakPoints = new PointCollection();
@@ -425,7 +542,7 @@ public sealed partial class MainWindow
             fillPoints.Add(new Point(x, y));
 
             var held = spectrumPeakHoldValues[bin];
-            held = value >= held ? value : (float)Math.Max(floorDbfs, held - 0.65f);
+            held = value >= held ? value : (float)Math.Max(floorDbfs, held - peakDecay);
             spectrumPeakHoldValues[bin] = held;
             peakPoints.Add(new Point(x, SpectrumLevelY(held, floorDbfs, height)));
         }

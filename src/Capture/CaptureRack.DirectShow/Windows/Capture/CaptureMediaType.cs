@@ -1,4 +1,5 @@
 using System.Buffers.Binary;
+using CaptureRack.Core;
 using CaptureRack.DirectShow.Windows.Interop;
 
 namespace CaptureRack.DirectShow.Windows.Capture;
@@ -15,6 +16,7 @@ public sealed record DirectShowFormat(int Index, string PinId, string PinName, s
     internal string? BitmapHeaderBase64 { get; init; }
     public long? FrameInterval100ns { get; init; }
     public double? FramesPerSecond => FrameInterval100ns is > 0 ? 10_000_000d / FrameInterval100ns : null;
+    public double? DisplayAspectRatio { get; init; }
     public uint? InterlaceFlags { get; init; }
     public string? FieldOrder => InterlaceFlags is { } flags
         ? (flags & 1) == 0 ? "progressive" : (flags & 4) != 0 ? "top-first" : "bottom-first"
@@ -24,9 +26,33 @@ public sealed record DirectShowFormat(int Index, string PinId, string PinName, s
     public int? BitsPerSample { get; init; }
     public int? ValidBitsPerSample { get; init; }
     public int? BlockAlign { get; init; }
+    public uint? AverageBytesPerSecond { get; init; }
     public uint? ChannelMask { get; init; }
     public int? WaveFormatTag { get; init; }
     public Guid? WaveSubformat { get; init; }
+
+    public CaptureAudioInfo? DescribeAudio()
+    {
+        if (Kind != "audio")
+            return null;
+        var isFloat = WaveFormatTag == 3 ||
+            WaveFormatTag == 0xfffe && WaveSubformat == new Guid("00000003-0000-0010-8000-00AA00389B71");
+        var uncompressed = IsPcm || isFloat;
+        var codec = uncompressed ? isFloat ? "PCM Float" : "PCM" : WaveFormatTag switch
+        {
+            0x0050 => "MPEG Audio",
+            0x0055 => "MP3",
+            0x00ff => "AAC",
+            0x2000 => "AC-3",
+            _ => FourCc ?? (WaveFormatTag is > 0 and not 0xfffe ? $"WAVE 0x{WaveFormatTag:X4}" : "—")
+        };
+        long? bitRate = uncompressed && SampleRate is > 0 && BlockAlign is > 0
+            ? (long)SampleRate.Value * BlockAlign.Value * 8
+            : AverageBytesPerSecond is > 0 ? (long)AverageBytesPerSecond.Value * 8 : null;
+        return new(codec, uncompressed && ValidBitsPerSample is > 0 ? ValidBitsPerSample :
+            uncompressed && BitsPerSample is > 0 ? BitsPerSample : null,
+            SampleRate is > 0 ? SampleRate : null, Channels is > 0 ? Channels : null, bitRate);
+    }
 
     public string? InfraredEncoding => Subtype switch
     {
@@ -92,7 +118,11 @@ internal static unsafe class CaptureMediaType
                 BitmapBitsPerPixel = BinaryPrimitives.ReadUInt16LittleEndian(header[14..]),
                 ImageBytes = BinaryPrimitives.ReadUInt32LittleEndian(header[20..]),
                 FrameInterval100ns = BinaryPrimitives.ReadInt64LittleEndian(data[40..]),
-                InterlaceFlags = bitmap == 72 ? BinaryPrimitives.ReadUInt32LittleEndian(data[48..]) : null
+                InterlaceFlags = bitmap == 72 ? BinaryPrimitives.ReadUInt32LittleEndian(data[48..]) : null,
+                DisplayAspectRatio = bitmap == 72 && BinaryPrimitives.ReadUInt32LittleEndian(data[60..]) is > 0 and < 100000 &&
+                    BinaryPrimitives.ReadUInt32LittleEndian(data[64..]) is > 0 and < 100000
+                    ? (double)BinaryPrimitives.ReadUInt32LittleEndian(data[60..]) / BinaryPrimitives.ReadUInt32LittleEndian(data[64..])
+                    : null
             };
         }
 
@@ -107,6 +137,7 @@ internal static unsafe class CaptureMediaType
             WaveFormatTag = tag,
             Channels = BinaryPrimitives.ReadUInt16LittleEndian(data[2..]),
             SampleRate = BinaryPrimitives.ReadInt32LittleEndian(data[4..]),
+            AverageBytesPerSecond = BinaryPrimitives.ReadUInt32LittleEndian(data[8..]),
             BlockAlign = BinaryPrimitives.ReadUInt16LittleEndian(data[12..]),
             BitsPerSample = BinaryPrimitives.ReadUInt16LittleEndian(data[14..]),
             ValidBitsPerSample = extended ? BinaryPrimitives.ReadUInt16LittleEndian(data[18..]) : null,

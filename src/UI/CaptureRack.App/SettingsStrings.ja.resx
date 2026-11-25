@@ -154,7 +154,7 @@
     <value>音声スペクトラム</value>
   </data>
   <data name="PreviewImage" xml:space="preserve">
-    <value>DeckLink 映像プレビュー</value>
+    <value>映像プレビュー</value>
   </data>
   <data name="WaitingPreview" xml:space="preserve">
     <value>プレビュー待機中</value>
@@ -474,8 +474,35 @@
   <data name="PreviewLiveFrame" xml:space="preserve">
     <value>ライブフレーム</value>
   </data>
+  <data name="PreviewTopFirst" xml:space="preserve">
+    <value>インターレース（Top First）</value>
+  </data>
+  <data name="PreviewBottomFirst" xml:space="preserve">
+    <value>インターレース（Bottom First）</value>
+  </data>
+  <data name="PreviewPsf" xml:space="preserve">
+    <value>プログレッシブ分割（PsF）</value>
+  </data>
+  <data name="PreviewAudioHeading" xml:space="preserve">
+    <value>音声</value>
+  </data>
+  <data name="PreviewAudioDetail" xml:space="preserve">
+    <value>{0} · {1} · {2} · {3} · {4} · {5}</value>
+  </data>
+  <data name="PreviewAudioBitDepth" xml:space="preserve">
+    <value>{0} bit</value>
+  </data>
+  <data name="PreviewAudioSampleRate" xml:space="preserve">
+    <value>{0} kHz</value>
+  </data>
+  <data name="PreviewAudioChannels" xml:space="preserve">
+    <value>{0} ch</value>
+  </data>
+  <data name="PreviewAudioBitRate" xml:space="preserve">
+    <value>{0} kb/s</value>
+  </data>
   <data name="PreviewFrameDetail" xml:space="preserve">
-    <value>{0} · {1} × {2} {3} · {4:N0} フレーム表示済み</value>
+    <value>{0} · {1} × {2} {3} · {4} · {5:N0} フレーム表示済み</value>
   </data>
   <data name="EventTimestampRegression" xml:space="preserve">
     <value>映像タイムスタンプが不連続です。</value>
@@ -753,6 +780,63 @@
   <data name="EventsCountBadge" xml:space="preserve">
     <value>{0:N0} 件</value>
   </data>
+  <data name="VancScan" xml:space="preserve">
+    <value>VANC/VBI をスキャンして入力</value>
+  </data>
+  <data name="VancScanFilled" xml:space="preserve">
+    <value>マッピング欄に {0} / {1} / {2} を入力しました。</value>
+  </data>
+  <data name="VancScanCancel" xml:space="preserve">
+    <value>スキャンをキャンセル</value>
+  </data>
+  <data name="VancScanCancelling" xml:space="preserve">
+    <value>スキャンをキャンセルしています…</value>
+  </data>
+  <data name="VancScanReading" xml:space="preserve">
+    <value>VANC/VBI を直接読み取っています…</value>
+  </data>
+  <data name="VancScanMapping" xml:space="preserve">
+    <value>マッピングした行をスキャンしています（{0}/{1}）…</value>
+  </data>
+  <data name="VancScanCancelled" xml:space="preserve">
+    <value>スキャンをキャンセルしました。</value>
+  </data>
+  <data name="VancScanFailed" xml:space="preserve">
+    <value>スキャンに失敗しました。{0}</value>
+  </data>
+  <data name="VancScanDirectResult" xml:space="preserve">
+    <value>直接読み取り</value>
+  </data>
+  <data name="VancScanMappedResult" xml:space="preserve">
+    <value>ラインマッピング</value>
+  </data>
+  <data name="VancScanUnreadable" xml:space="preserve">
+    <value>{0} · 読み取れる VANC/VBI データがドライバーから返されませんでした。</value>
+  </data>
+  <data name="VancScanNoLines" xml:space="preserve">
+    <value>{0} · VANC/VBI ラインは検出されませんでした（{1}）。</value>
+  </data>
+  <data name="VancScanAncLines" xml:space="preserve">
+    <value>VANC パケット — {0}</value>
+  </data>
+  <data name="VancScanCaptionLines" xml:space="preserve">
+    <value>CEA-608 データ — {0}</value>
+  </data>
+  <data name="VancScanWaveformLines" xml:space="preserve">
+    <value>未識別の波形 — {0}</value>
+  </data>
+  <data name="VancScanFound" xml:space="preserve">
+    <value>{0} · スキャン結果（{1}）</value>
+  </data>
+  <data name="CaptureVancInput" xml:space="preserve">
+    <value>VANC 入力ラインを取り込む</value>
+  </data>
+  <data name="VancPictureLine" xml:space="preserve">
+    <value>映像の {0} 行目</value>
+  </data>
+  <data name="VancInputHint" xml:space="preserve">
+    <value>各映像行に対応する入力ライン番号を指定します。2、3 行目は 0 で無効になります。プレビュー開始時に適用されます。</value>
+  </data>
   <data name="AnalogSectionHeading" xml:space="preserve">
     <value>アナログ入力レベル（ハードウェア）</value>
   </data>
@@ -808,7 +892,7 @@
     <value>インターレース解除（プレビュー専用）</value>
   </data>
   <data name="PreviewDeinterlaceDesc" xml:space="preserve">
-    <value>動き適応 Bob-Weave で静止部の解像度を保ちつつ動きのコーミングを除去します。</value>
+    <value>動き適応 Bob-Weave は、×1 で入力フレームごとに、×2 でフィールドごとに 1 枚を表示します。プログレッシブ入力は常にそのまま表示します。</value>
   </data>
   <data name="PreviewAspectLabel" xml:space="preserve">
     <value>表示アスペクト比（プレビュー専用）</value>
@@ -841,13 +925,13 @@
     <value>プレビュー表示（プレビュー専用・収録に影響なし）</value>
   </data>
   <data name="DeinterlaceBobWeave" xml:space="preserve">
-    <value>Bob-Weave（動き適応）</value>
+    <value>Bob-Weave ×1（動き適応）</value>
   </data>
-  <data name="DeinterlaceField" xml:space="preserve">
-    <value>片フィールド補間（Field Bob）</value>
+  <data name="DeinterlaceBobWeave2x" xml:space="preserve">
+    <value>Bob-Weave ×2（動き適応）</value>
   </data>
   <data name="DeinterlaceOff" xml:space="preserve">
-    <value>オフ（生インターレース）</value>
+    <value>オリジナル</value>
   </data>
   <data name="AspectAuto" xml:space="preserve">
     <value>自動（SD 4:3 / HD 等比）</value>
@@ -903,8 +987,53 @@
   <data name="BackendFireWireName" xml:space="preserve">
     <value>FireWire / i.LINK (MSTape)</value>
   </data>
+  <data name="FwPreviewName" xml:space="preserve">
+    <value>i.LINK プレビュー</value>
+  </data>
+  <data name="FwPreviewStandby" xml:space="preserve">
+    <value>プレビューを開始してから、デッキで再生してください。</value>
+  </data>
+  <data name="FwUnsupported" xml:space="preserve">
+    <value>i.LINK のキャプチャには Windows x64 が必要です。</value>
+  </data>
+  <data name="FwNoDevices" xml:space="preserve">
+    <value>i.LINK テープデバイスが見つかりません。</value>
+  </data>
+  <data name="FwDeviceScanFailed" xml:space="preserve">
+    <value>i.LINK デバイスを一覧表示できませんでした。</value>
+  </data>
+  <data name="FwMissingFfmpeg" xml:space="preserve">
+    <value>プレビューには FFmpeg が必要です。元の TS は録画できます。</value>
+  </data>
+  <data name="FwReacquiringVideo" xml:space="preserve">
+    <value>i.LINK データ受信中。映像ストリームを検出しています…</value>
+  </data>
+  <data name="FwWaitForData" xml:space="preserve">
+    <value>i.LINK MPEG-TS を待機しています。デッキで再生してください。</value>
+  </data>
+  <data name="FwDecodeFailed" xml:space="preserve">
+    <value>i.LINK プレビューをデコードできませんでした。</value>
+  </data>
+  <data name="FwCaptureStillAvailable" xml:space="preserve">
+    <value>元の TS は録画できます。</value>
+  </data>
+  <data name="FwInputStatus" xml:space="preserve">
+    <value>受信 {0:N1} MiB · デコード {1:N0} フレーム</value>
+  </data>
+  <data name="FwRecordingProgress" xml:space="preserve">
+    <value>元の TS を録画中 · 書き込み済み {0:N1} MiB</value>
+  </data>
+  <data name="FwRecordFailed" xml:space="preserve">
+    <value>i.LINK 録画を保存できませんでした。</value>
+  </data>
+  <data name="FwSavedRecording" xml:space="preserve">
+    <value>保存済み {0} · TS パケット {1:N0} 個</value>
+  </data>
+  <data name="FwCheckRecording" xml:space="preserve">
+    <value>TS 録画を検査…</value>
+  </data>
   <data name="BackendFireWireDesc" xml:space="preserve">
-    <value>バイト保存型の IEEE 1394 MPEG-TS、D-VHS、HDV、DV テープキャプチャ。</value>
+    <value>i.LINK テープデバイスからの元の MPEG-TS をプレビューして録画します。</value>
   </data>
   <data name="BackendRfName" xml:space="preserve">
     <value>RF / ベースバンド信号キャプチャ</value>
@@ -1277,5 +1406,161 @@
   </data>
   <data name="DsReportOpenFailed" xml:space="preserve">
     <value>録画レポートを開けませんでした · {0}</value>
+  </data>
+  <data name="FwInfoHeading" xml:space="preserve">
+    <value>i.LINK 情報</value>
+  </data>
+  <data name="FwInfoDeviceSection" xml:space="preserve">
+    <value>デッキとテープ</value>
+  </data>
+  <data name="FwInfoProgramSection" xml:space="preserve">
+    <value>番組とトラック</value>
+  </data>
+  <data name="FwInfoStatsSection" xml:space="preserve">
+    <value>TS リアルタイム統計</value>
+  </data>
+  <data name="FwInfoRawSection" xml:space="preserve">
+    <value>生データ</value>
+  </data>
+  <data name="FwInfoCopy" xml:space="preserve">
+    <value>現在の情報をコピー</value>
+  </data>
+  <data name="FwInfoMode" xml:space="preserve">
+    <value>走行状態</value>
+  </data>
+  <data name="FwInfoTransportCode" xml:space="preserve">
+    <value>AV/C 走行状態コード</value>
+  </data>
+  <data name="FwInfoCounter" xml:space="preserve">
+    <value>テープカウンター</value>
+  </data>
+  <data name="FwInfoMediaPresent" xml:space="preserve">
+    <value>テープ装填</value>
+  </data>
+  <data name="FwInfoMediaType" xml:space="preserve">
+    <value>メディア種別（ドライバーコード）</value>
+  </data>
+  <data name="FwInfoMediaLength" xml:space="preserve">
+    <value>テープ長（機器単位）</value>
+  </data>
+  <data name="FwInfoRemaining" xml:space="preserve">
+    <value>テープ残り時間</value>
+  </data>
+  <data name="FwInfoMedium" xml:space="preserve">
+    <value>AV/C メディアコード</value>
+  </data>
+  <data name="FwInfoPower" xml:space="preserve">
+    <value>電源</value>
+  </data>
+  <data name="FwInfoSpeed" xml:space="preserve">
+    <value>記録速度コード</value>
+  </data>
+  <data name="FwInfoRecordFormat" xml:space="preserve">
+    <value>記録形式コード</value>
+  </data>
+  <data name="FwInfoPlaybackFormat" xml:space="preserve">
+    <value>再生形式コード</value>
+  </data>
+  <data name="FwInfoInputMode" xml:space="preserve">
+    <value>入力信号モードコード</value>
+  </data>
+  <data name="FwInfoOutputMode" xml:space="preserve">
+    <value>出力信号モードコード</value>
+  </data>
+  <data name="FwInfoSmpte" xml:space="preserve">
+    <value>SMPTE タイムコード</value>
+  </data>
+  <data name="FwInfoAtn" xml:space="preserve">
+    <value>絶対トラック番号</value>
+  </data>
+  <data name="FwInfoPlaying" xml:space="preserve">
+    <value>再生中</value>
+  </data>
+  <data name="FwInfoStopped" xml:space="preserve">
+    <value>停止中</value>
+  </data>
+  <data name="FwInfoPaused" xml:space="preserve">
+    <value>一時停止</value>
+  </data>
+  <data name="FwInfoFastForward" xml:space="preserve">
+    <value>早送り中</value>
+  </data>
+  <data name="FwInfoRewind" xml:space="preserve">
+    <value>巻き戻し中</value>
+  </data>
+  <data name="FwInfoRecording" xml:space="preserve">
+    <value>デッキで記録中</value>
+  </data>
+  <data name="FwInfoUnavailable" xml:space="preserve">
+    <value>取得不可</value>
+  </data>
+  <data name="FwInfoUnsupported" xml:space="preserve">
+    <value>機器が非対応</value>
+  </data>
+  <data name="FwInfoWaiting" xml:space="preserve">
+    <value>入力待ち</value>
+  </data>
+  <data name="FwInfoNotSeen" xml:space="preserve">
+    <value>現在のストリームでは未検出</value>
+  </data>
+  <data name="FwInfoYes" xml:space="preserve">
+    <value>はい</value>
+  </data>
+  <data name="FwInfoNo" xml:space="preserve">
+    <value>いいえ</value>
+  </data>
+  <data name="FwInfoProgram" xml:space="preserve">
+    <value>番組</value>
+  </data>
+  <data name="FwInfoServiceName" xml:space="preserve">
+    <value>サービス名</value>
+  </data>
+  <data name="FwInfoEventName" xml:space="preserve">
+    <value>番組名</value>
+  </data>
+  <data name="FwInfoBroadcastStart" xml:space="preserve">
+    <value>放送開始時刻</value>
+  </data>
+  <data name="FwInfoBroadcastClock" xml:space="preserve">
+    <value>放送時刻（入力）</value>
+  </data>
+  <data name="FwInfoPreviewTrack" xml:space="preserve">
+    <value>プレビュー中</value>
+  </data>
+  <data name="FwInfoPrivateData" xml:space="preserve">
+    <value>プライベートデータ / PES</value>
+  </data>
+  <data name="FwInfoSegment" xml:space="preserve">
+    <value>ストリーム区間</value>
+  </data>
+  <data name="FwInfoDuration" xml:space="preserve">
+    <value>ストリーム経過時間</value>
+  </data>
+  <data name="FwInfoRate" xml:space="preserve">
+    <value>TS192 受信ビットレート</value>
+  </data>
+  <data name="FwInfoMalformed" xml:space="preserve">
+    <value>不正パケット</value>
+  </data>
+  <data name="FwInfoTransportErrors" xml:space="preserve">
+    <value>伝送エラー（TEI）</value>
+  </data>
+  <data name="FwInfoClockJumps" xml:space="preserve">
+    <value>タイムスタンプの飛び</value>
+  </data>
+  <data name="FwInfoPidColumns" xml:space="preserve">
+    <value>PID · パケット · 連続性エラー · TEI</value>
+  </data>
+  <data name="FwInfoPrefix" xml:space="preserve">
+    <value>TS192 プレフィックス例</value>
+  </data>
+  <data name="FwInfoServicePids" xml:space="preserve">
+    <value>サービス情報テーブル PID</value>
+  </data>
+  <data name="FwInfoReadAt" xml:space="preserve">
+    <value>最終取得</value>
+  </data>
+  <data name="FwInfoNetwork" xml:space="preserve">
+    <value>放送ネットワーク</value>
   </data>
 </root>

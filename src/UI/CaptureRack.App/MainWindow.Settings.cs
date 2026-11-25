@@ -67,8 +67,7 @@ public sealed partial class MainWindow
         inspectorPinned = settings.InspectorPinned;
         showSafeArea = settings.ShowSafeArea;
         showNtsc480Guide = settings.ShowNtsc480Guide;
-        previewDeinterlace = Enum.TryParse<PreviewDeinterlaceMode>(settings.PreviewDeinterlace, out var deint)
-            ? deint : PreviewDeinterlaceMode.BobWeave;
+        previewDeinterlace = ParsePreviewDeinterlace(settings.PreviewDeinterlace);
         previewAspectMode = Enum.TryParse<PreviewAspectMode>(settings.PreviewAspectRatio, out var aspect)
             ? aspect : PreviewAspectMode.Auto;
         previewColorMatrix = Enum.TryParse<PreviewColorMatrix>(settings.PreviewColorMatrix, out var matrix)
@@ -87,6 +86,7 @@ public sealed partial class MainWindow
             settings.DeckLink.AnalogAudioGainLeftDb,
             settings.DeckLink.AnalogAudioGainRightDb,
             settings.DeckLink.AnalogAudioGainLinked);
+        deckLinkInspector.RestoreVancSettings(settings.DeckLink.VancInput);
 
         ApplySettingsLanguage(language, settings.DeckLink.VideoFormat, settings.DeckLink.AudioFormat);
         OutputPath.Text = settings.OutputFolder ?? "";
@@ -119,6 +119,7 @@ public sealed partial class MainWindow
             settingsCulture.Name,
             layoutTag,
             previewDeinterlace.ToString(),
+            previewDeinterlaceLocked,
             previewAspectMode.ToString(),
             previewColorMatrix.ToString());
     }
@@ -182,7 +183,8 @@ public sealed partial class MainWindow
             AnalogAudioGainOverride = deckLinkInspector.AnalogAudioGainOverride,
             AnalogAudioGainLeftDb = deckLinkInspector.AnalogAudioGainLeftDb,
             AnalogAudioGainRightDb = deckLinkInspector.AnalogAudioGainRightDb,
-            AnalogAudioGainLinked = deckLinkInspector.AnalogAudioGainLinked
+            AnalogAudioGainLinked = deckLinkInspector.AnalogAudioGainLinked,
+            VancInput = deckLinkInspector.VancInput
         };
         var savedLayout = workspaceLayout == WorkspaceLayoutMode.Focus ? "Focus" : "Split";
         SaveSettings(settings with
@@ -245,7 +247,7 @@ public sealed partial class MainWindow
 
     private void UpdateCaptureFooter()
     {
-        var sessionActive = captureTask is not null || recordingTransition || qcStop is not null;
+        var sessionActive = IsCaptureInputActive || IsCaptureRecording || recordingTransition || qcStop is not null;
         CaptureFooter.Visibility = !previewFullscreen && (activePage != ActiveAppPage.Settings || sessionActive)
             ? Visibility.Visible : Visibility.Collapsed;
     }
@@ -299,6 +301,10 @@ public sealed partial class MainWindow
         UpdateRecordingFilenamePreview();
 
         ApplyTestSignalLanguage();
+        if (IsFireWireActive)
+            fireWireView.Bind(L, () => OutputPath.Text.Trim(), GetRecordingLabel);
+        if (IsDirectShowActive)
+            directShowCapabilitiesView.Bind(L);
         if (!HasLiveCapture)
         {
             plannedStageView.Bind(activeModule.Descriptor, L);
@@ -312,6 +318,7 @@ public sealed partial class MainWindow
             language,
             layoutTag,
             previewDeinterlace.ToString(),
+            previewDeinterlaceLocked,
             previewAspectMode.ToString(),
             previewColorMatrix.ToString());
 
@@ -350,10 +357,10 @@ public sealed partial class MainWindow
             var text = IsTestSignalActive
                 ? $"{backendName} · {L(TestSignalScenarioKey)} · {TestSignal.Mode.Description} · " +
                     $"{LocalFormat("ShortVideoFormat", "v210", 10)} / {LocalFormat("ShortPcmFormat", (uint)TestSignal.AudioFormat)}"
-                : $"{backendName} · {L(IsDirectShowActive ? "DsDiagnostics" : "SourceStatusPlanned")}";
+                : IsFireWireActive ? $"{backendName} · MPEG-TS (192 B)"
+                : IsDirectShowActive ? backendName : $"{backendName} · {L("SourceStatusPlanned")}";
             ConfigurationSummary.Text = text;
             AutomationProperties.SetName(QuickSourceButton, $"{L("Capture")} · {text}");
-            ToolTipService.SetToolTip(QuickSourceButton, text);
             QuickSourceDot.Fill = ThemeBrush("StudioInfoBrush");
             InspectorNotice.Visibility = settingsError is not null ? Visibility.Visible : Visibility.Collapsed;
             if (settingsError is { } err)
@@ -389,7 +396,6 @@ public sealed partial class MainWindow
                 LocalFormat("ShortPcmFormat", (uint)deckLinkInspector.SelectedAudioFormat);
         ConfigurationSummary.Text = summary;
         AutomationProperties.SetName(QuickSourceButton, $"{L("Capture")} · {summary}");
-        ToolTipService.SetToolTip(QuickSourceButton, summary);
 
         var selectedMode = mode?.Id is { } id
             ? video?.ModesFor(deckLinkInspector.SelectedVideoFormat).FirstOrDefault(option => option.Id == id)
@@ -476,14 +482,14 @@ public sealed partial class MainWindow
         else
         {
             var free = LocalFormat("StorageCapacity", (space.AvailableBytes / (double)(1L << 30)).ToString("N1", settingsCulture));
-            var estimate = !HasLiveCapture
+            var estimate = !HasLiveCapture || LiveMediaSource is not null
                 ? free
                 : selectedMode is null
                     ? L(mode is { Id: null } ? "StorageWaitingForAutoMode" : "StorageNeedsMode")
                     : LocalFormat("StorageDuration", FormatRecordingTime(space.AvailableBytes /
                         DeckLinkCapture.EstimateRecordingBytesPerSecond(selectedMode, RecordingVideoFormat, RecordingAudioFormat)));
-            InspectorStorageStatus.Text = HasLiveCapture ? $"{free} · {estimate}" : free;
-            StorageStatus.Text = HasLiveCapture && selectedMode is not null ? estimate : free;
+            InspectorStorageStatus.Text = HasLiveCapture && LiveMediaSource is null ? $"{free} · {estimate}" : free;
+            StorageStatus.Text = HasLiveCapture && LiveMediaSource is null && selectedMode is not null ? estimate : free;
 
             if (space.TotalBytes > 0)
             {

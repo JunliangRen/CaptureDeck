@@ -154,7 +154,7 @@
     <value>音訊頻譜</value>
   </data>
   <data name="PreviewImage" xml:space="preserve">
-    <value>DeckLink 視訊預覽</value>
+    <value>視訊預覽</value>
   </data>
   <data name="WaitingPreview" xml:space="preserve">
     <value>等待預覽</value>
@@ -474,8 +474,35 @@
   <data name="PreviewLiveFrame" xml:space="preserve">
     <value>即時影格</value>
   </data>
+  <data name="PreviewTopFirst" xml:space="preserve">
+    <value>交錯（Top First）</value>
+  </data>
+  <data name="PreviewBottomFirst" xml:space="preserve">
+    <value>交錯（Bottom First）</value>
+  </data>
+  <data name="PreviewPsf" xml:space="preserve">
+    <value>循序分段（PsF）</value>
+  </data>
+  <data name="PreviewAudioHeading" xml:space="preserve">
+    <value>音訊</value>
+  </data>
+  <data name="PreviewAudioDetail" xml:space="preserve">
+    <value>{0} · {1} · {2} · {3} · {4} · {5}</value>
+  </data>
+  <data name="PreviewAudioBitDepth" xml:space="preserve">
+    <value>{0} bit</value>
+  </data>
+  <data name="PreviewAudioSampleRate" xml:space="preserve">
+    <value>{0} kHz</value>
+  </data>
+  <data name="PreviewAudioChannels" xml:space="preserve">
+    <value>{0} 聲道</value>
+  </data>
+  <data name="PreviewAudioBitRate" xml:space="preserve">
+    <value>{0} kb/s</value>
+  </data>
   <data name="PreviewFrameDetail" xml:space="preserve">
-    <value>{0} · {1} × {2} {3} · 已顯示 {4:N0} 個影格</value>
+    <value>{0} · {1} × {2} {3} · {4} · 已顯示 {5:N0} 個影格</value>
   </data>
   <data name="EventTimestampRegression" xml:space="preserve">
     <value>視訊時間戳記不連續。</value>
@@ -753,6 +780,63 @@
   <data name="EventsCountBadge" xml:space="preserve">
     <value>{0:N0} 筆事件</value>
   </data>
+  <data name="VancScan" xml:space="preserve">
+    <value>掃描並填入 VANC/VBI</value>
+  </data>
+  <data name="VancScanFilled" xml:space="preserve">
+    <value>已填入映射行 {0} / {1} / {2}。</value>
+  </data>
+  <data name="VancScanCancel" xml:space="preserve">
+    <value>取消掃描</value>
+  </data>
+  <data name="VancScanCancelling" xml:space="preserve">
+    <value>正在取消掃描…</value>
+  </data>
+  <data name="VancScanReading" xml:space="preserve">
+    <value>正在直接讀取 VANC/VBI…</value>
+  </data>
+  <data name="VancScanMapping" xml:space="preserve">
+    <value>正在掃描映射行（{0}/{1}）…</value>
+  </data>
+  <data name="VancScanCancelled" xml:space="preserve">
+    <value>已取消掃描。</value>
+  </data>
+  <data name="VancScanFailed" xml:space="preserve">
+    <value>掃描失敗。{0}</value>
+  </data>
+  <data name="VancScanDirectResult" xml:space="preserve">
+    <value>直接讀取</value>
+  </data>
+  <data name="VancScanMappedResult" xml:space="preserve">
+    <value>行映射</value>
+  </data>
+  <data name="VancScanUnreadable" xml:space="preserve">
+    <value>{0} · 驅動程式未回傳可讀的 VANC/VBI 資料。</value>
+  </data>
+  <data name="VancScanNoLines" xml:space="preserve">
+    <value>{0} · 未偵測到 VANC/VBI 行（{1}）。</value>
+  </data>
+  <data name="VancScanAncLines" xml:space="preserve">
+    <value>VANC 封包 — {0}</value>
+  </data>
+  <data name="VancScanCaptionLines" xml:space="preserve">
+    <value>CEA-608 資料 — {0}</value>
+  </data>
+  <data name="VancScanWaveformLines" xml:space="preserve">
+    <value>未識別的波形 — {0}</value>
+  </data>
+  <data name="VancScanFound" xml:space="preserve">
+    <value>{0} · 掃描結果（{1}）</value>
+  </data>
+  <data name="CaptureVancInput" xml:space="preserve">
+    <value>擷取 VANC 輸入行</value>
+  </data>
+  <data name="VancPictureLine" xml:space="preserve">
+    <value>畫面第 {0} 行</value>
+  </data>
+  <data name="VancInputHint" xml:space="preserve">
+    <value>填入各畫面行對應的輸入行號。第 2、3 行填 0 可略過。啟動預覽時套用。</value>
+  </data>
   <data name="AnalogSectionHeading" xml:space="preserve">
     <value>類比輸入準位（硬體擷取）</value>
   </data>
@@ -808,7 +892,7 @@
     <value>去交錯（僅預覽）</value>
   </data>
   <data name="PreviewDeinterlaceDesc" xml:space="preserve">
-    <value>動態自適應 Bob-Weave 在靜止區保留全解析度細節，動態邊緣平滑消除拉絲。</value>
+    <value>動態自適應 Bob-Weave ×1 每影格輸出一張預覽，×2 每場輸出一張。循序掃描訊號一律使用原始輸出。</value>
   </data>
   <data name="PreviewAspectLabel" xml:space="preserve">
     <value>顯示長寬比（僅預覽）</value>
@@ -841,13 +925,13 @@
     <value>預覽與監看（僅預覽，不影響最終擷取）</value>
   </data>
   <data name="DeinterlaceBobWeave" xml:space="preserve">
-    <value>Bob-Weave（動態自適應）</value>
+    <value>Bob-Weave ×1（動態自適應）</value>
   </data>
-  <data name="DeinterlaceField" xml:space="preserve">
-    <value>單場去拉絲（Field Bob）</value>
+  <data name="DeinterlaceBobWeave2x" xml:space="preserve">
+    <value>Bob-Weave ×2（動態自適應）</value>
   </data>
   <data name="DeinterlaceOff" xml:space="preserve">
-    <value>關閉（原始交錯）</value>
+    <value>原始輸出</value>
   </data>
   <data name="AspectAuto" xml:space="preserve">
     <value>自動（SD 4:3 / HD 原比例）</value>
@@ -903,8 +987,53 @@
   <data name="BackendFireWireName" xml:space="preserve">
     <value>FireWire / i.LINK (MSTape)</value>
   </data>
+  <data name="FwPreviewName" xml:space="preserve">
+    <value>i.LINK 預覽</value>
+  </data>
+  <data name="FwPreviewStandby" xml:space="preserve">
+    <value>啟動預覽後，請在錄影機上播放。</value>
+  </data>
+  <data name="FwUnsupported" xml:space="preserve">
+    <value>i.LINK 擷取需要 Windows x64。</value>
+  </data>
+  <data name="FwNoDevices" xml:space="preserve">
+    <value>找不到 i.LINK 磁帶裝置。</value>
+  </data>
+  <data name="FwDeviceScanFailed" xml:space="preserve">
+    <value>無法列出 i.LINK 裝置。</value>
+  </data>
+  <data name="FwMissingFfmpeg" xml:space="preserve">
+    <value>預覽需要 FFmpeg。仍可錄製原始 TS。</value>
+  </data>
+  <data name="FwReacquiringVideo" xml:space="preserve">
+    <value>已收到 i.LINK 資料，正在辨識視訊串流…</value>
+  </data>
+  <data name="FwWaitForData" xml:space="preserve">
+    <value>正在等待 i.LINK MPEG-TS。請在錄影機上播放。</value>
+  </data>
+  <data name="FwDecodeFailed" xml:space="preserve">
+    <value>無法解碼 i.LINK 預覽。</value>
+  </data>
+  <data name="FwCaptureStillAvailable" xml:space="preserve">
+    <value>仍可錄製原始 TS。</value>
+  </data>
+  <data name="FwInputStatus" xml:space="preserve">
+    <value>已接收 {0:N1} MiB · 已解碼 {1:N0} 影格</value>
+  </data>
+  <data name="FwRecordingProgress" xml:space="preserve">
+    <value>正在錄製原始 TS · 已寫入 {0:N1} MiB</value>
+  </data>
+  <data name="FwRecordFailed" xml:space="preserve">
+    <value>無法儲存 i.LINK 錄製。</value>
+  </data>
+  <data name="FwSavedRecording" xml:space="preserve">
+    <value>已儲存 {0} · {1:N0} 個 TS 封包</value>
+  </data>
+  <data name="FwCheckRecording" xml:space="preserve">
+    <value>檢查 TS 錄製…</value>
+  </data>
   <data name="BackendFireWireDesc" xml:space="preserve">
-    <value>原位元組保留的 IEEE 1394 MPEG-TS、D-VHS、HDV 與 DV 磁帶擷取。</value>
+    <value>預覽並錄製 i.LINK 磁帶裝置輸出的原始 MPEG-TS。</value>
   </data>
   <data name="BackendRfName" xml:space="preserve">
     <value>RF / 基頻訊號擷取 (SignalCapture)</value>
@@ -1277,5 +1406,161 @@
   </data>
   <data name="DsReportOpenFailed" xml:space="preserve">
     <value>無法開啟錄製報告 · {0}</value>
+  </data>
+  <data name="FwInfoHeading" xml:space="preserve">
+    <value>i.LINK 資訊</value>
+  </data>
+  <data name="FwInfoDeviceSection" xml:space="preserve">
+    <value>錄影機與磁帶</value>
+  </data>
+  <data name="FwInfoProgramSection" xml:space="preserve">
+    <value>節目與軌道</value>
+  </data>
+  <data name="FwInfoStatsSection" xml:space="preserve">
+    <value>TS 即時統計</value>
+  </data>
+  <data name="FwInfoRawSection" xml:space="preserve">
+    <value>原始資料</value>
+  </data>
+  <data name="FwInfoCopy" xml:space="preserve">
+    <value>複製目前快照</value>
+  </data>
+  <data name="FwInfoMode" xml:space="preserve">
+    <value>走帶狀態</value>
+  </data>
+  <data name="FwInfoTransportCode" xml:space="preserve">
+    <value>AV/C 走帶狀態碼</value>
+  </data>
+  <data name="FwInfoCounter" xml:space="preserve">
+    <value>磁帶計數</value>
+  </data>
+  <data name="FwInfoMediaPresent" xml:space="preserve">
+    <value>已裝帶</value>
+  </data>
+  <data name="FwInfoMediaType" xml:space="preserve">
+    <value>媒體類型（驅動碼）</value>
+  </data>
+  <data name="FwInfoMediaLength" xml:space="preserve">
+    <value>磁帶總長（裝置單位）</value>
+  </data>
+  <data name="FwInfoRemaining" xml:space="preserve">
+    <value>磁帶剩餘時間</value>
+  </data>
+  <data name="FwInfoMedium" xml:space="preserve">
+    <value>AV/C 媒體碼</value>
+  </data>
+  <data name="FwInfoPower" xml:space="preserve">
+    <value>電源</value>
+  </data>
+  <data name="FwInfoSpeed" xml:space="preserve">
+    <value>錄製速度碼</value>
+  </data>
+  <data name="FwInfoRecordFormat" xml:space="preserve">
+    <value>錄製格式碼</value>
+  </data>
+  <data name="FwInfoPlaybackFormat" xml:space="preserve">
+    <value>播放格式碼</value>
+  </data>
+  <data name="FwInfoInputMode" xml:space="preserve">
+    <value>輸入訊號模式碼</value>
+  </data>
+  <data name="FwInfoOutputMode" xml:space="preserve">
+    <value>輸出訊號模式碼</value>
+  </data>
+  <data name="FwInfoSmpte" xml:space="preserve">
+    <value>SMPTE 時間碼</value>
+  </data>
+  <data name="FwInfoAtn" xml:space="preserve">
+    <value>絕對軌號</value>
+  </data>
+  <data name="FwInfoPlaying" xml:space="preserve">
+    <value>播放中</value>
+  </data>
+  <data name="FwInfoStopped" xml:space="preserve">
+    <value>已停止</value>
+  </data>
+  <data name="FwInfoPaused" xml:space="preserve">
+    <value>已暫停</value>
+  </data>
+  <data name="FwInfoFastForward" xml:space="preserve">
+    <value>快轉中</value>
+  </data>
+  <data name="FwInfoRewind" xml:space="preserve">
+    <value>倒帶中</value>
+  </data>
+  <data name="FwInfoRecording" xml:space="preserve">
+    <value>錄影機錄製中</value>
+  </data>
+  <data name="FwInfoUnavailable" xml:space="preserve">
+    <value>未取得</value>
+  </data>
+  <data name="FwInfoUnsupported" xml:space="preserve">
+    <value>裝置不支援</value>
+  </data>
+  <data name="FwInfoWaiting" xml:space="preserve">
+    <value>等待读取</value>
+  </data>
+  <data name="FwInfoNotSeen" xml:space="preserve">
+    <value>目前串流中未發現</value>
+  </data>
+  <data name="FwInfoYes" xml:space="preserve">
+    <value>是</value>
+  </data>
+  <data name="FwInfoNo" xml:space="preserve">
+    <value>否</value>
+  </data>
+  <data name="FwInfoProgram" xml:space="preserve">
+    <value>節目</value>
+  </data>
+  <data name="FwInfoServiceName" xml:space="preserve">
+    <value>台名</value>
+  </data>
+  <data name="FwInfoEventName" xml:space="preserve">
+    <value>節目名</value>
+  </data>
+  <data name="FwInfoBroadcastStart" xml:space="preserve">
+    <value>節目播出時間</value>
+  </data>
+  <data name="FwInfoBroadcastClock" xml:space="preserve">
+    <value>廣播時鐘（源串流）</value>
+  </data>
+  <data name="FwInfoPreviewTrack" xml:space="preserve">
+    <value>目前預覽</value>
+  </data>
+  <data name="FwInfoPrivateData" xml:space="preserve">
+    <value>私有資料 / PES</value>
+  </data>
+  <data name="FwInfoSegment" xml:space="preserve">
+    <value>目前段落</value>
+  </data>
+  <data name="FwInfoDuration" xml:space="preserve">
+    <value>節目串流時長</value>
+  </data>
+  <data name="FwInfoRate" xml:space="preserve">
+    <value>TS192 接收位元率</value>
+  </data>
+  <data name="FwInfoMalformed" xml:space="preserve">
+    <value>畸形封包</value>
+  </data>
+  <data name="FwInfoTransportErrors" xml:space="preserve">
+    <value>傳輸錯誤（TEI）</value>
+  </data>
+  <data name="FwInfoClockJumps" xml:space="preserve">
+    <value>時間戳跳變</value>
+  </data>
+  <data name="FwInfoPidColumns" xml:space="preserve">
+    <value>PID · 封包數 · 連續性錯誤 · TEI</value>
+  </data>
+  <data name="FwInfoPrefix" xml:space="preserve">
+    <value>TS192 封包前綴樣本</value>
+  </data>
+  <data name="FwInfoServicePids" xml:space="preserve">
+    <value>節目資訊表 PID</value>
+  </data>
+  <data name="FwInfoReadAt" xml:space="preserve">
+    <value>最近讀取</value>
+  </data>
+  <data name="FwInfoNetwork" xml:space="preserve">
+    <value>廣播網路</value>
   </data>
 </root>

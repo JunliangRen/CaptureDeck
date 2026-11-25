@@ -88,6 +88,36 @@ public interface IDeckLinkVideoInputFrame
     [PreserveSig] int GetStreamTime(out long time, out long duration, long scale);
 }
 
+[ComImport, Guid("732E723C-D1A4-4E29-9E8E-4A88797A0004"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+internal interface IDeckLinkScanAncillary
+{
+    [PreserveSig] int GetBufferForVerticalBlankingLine(uint line, out IntPtr buffer);
+    [PreserveSig] uint GetPixelFormat();
+}
+
+[ComImport, Guid("8A72D630-8070-4D05-8A93-E60C40EE088A"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+internal interface IDeckLinkScanAncillaryPackets
+{
+    [PreserveSig] int GetPacketIterator(out IDeckLinkScanAncillaryIterator? iterator);
+}
+
+[ComImport, Guid("10F1AA88-54BE-42F7-B9F8-EC2F5F099551"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+internal interface IDeckLinkScanAncillaryIterator
+{
+    [PreserveSig] int Next(out IDeckLinkScanAncillaryPacket? packet);
+}
+
+[ComImport, Guid("F5C0D498-5CD3-4C77-9773-8EFA20BB334B"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+internal interface IDeckLinkScanAncillaryPacket
+{
+    [PreserveSig] int GetBytes(uint format, out IntPtr data, out uint size);
+    [PreserveSig] byte GetDid();
+    [PreserveSig] byte GetSdid();
+    [PreserveSig] uint GetLineNumber();
+    [PreserveSig] byte GetDataStreamIndex();
+    [PreserveSig] uint GetDataSpace();
+}
+
 [ComImport, Guid("81F03D70-DE13-4B17-873A-C8AC9689C682"), InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
 internal interface IDeckLinkVideoBuffer
 {

@@ -82,8 +82,8 @@ public sealed partial class MainWindow
 
     private void PreviewFullscreen_Invoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
     {
-        if (activePage != ActiveAppPage.Capture || !HasLiveCapture ||
-            workspaceLayout is not (WorkspaceLayoutMode.Focus or WorkspaceLayoutMode.Split))
+        if (activePage != ActiveAppPage.Capture || !ActiveWorkspaceCapabilities.SupportsVideoPreview ||
+            EffectiveWorkspaceLayout is not (WorkspaceLayoutMode.Focus or WorkspaceLayoutMode.Split))
             return;
 
         SetPreviewFullscreen(!previewFullscreen);
@@ -140,8 +140,6 @@ public sealed partial class MainWindow
         PreviewFullscreenIcon.Glyph = previewFullscreen ? "\uE73F" : "\uE740";
         AutomationProperties.SetName(PreviewFullscreenButton,
             L(previewFullscreen ? "ExitPreviewFullScreen" : "PreviewFullScreen"));
-        ToolTipService.SetToolTip(PreviewFullscreenButton,
-            L(previewFullscreen ? "ExitPreviewFullScreen" : "PreviewFullScreen"));
     }
 
     private void SetPreviewFullscreen(bool fullscreen)
@@ -173,7 +171,7 @@ public sealed partial class MainWindow
         PreviewSurface.BorderThickness = fullscreen ? new Thickness(0) : new Thickness(1);
         PreviewSurface.CornerRadius = new CornerRadius(0);
         PreviewHudPill.Visibility = !fullscreen && previewCaption is not null ? Visibility.Visible : Visibility.Collapsed;
-        StereoMeter.Visibility = !fullscreen && HasLiveCapture && activeModule.Descriptor.Capabilities.SupportsAudioMeters && lastWindowWidth >= 680
+        StereoMeter.Visibility = !fullscreen && HasLiveCapture && ActiveWorkspaceCapabilities.SupportsAudioMeters && lastWindowWidth >= 680
             ? Visibility.Visible : Visibility.Collapsed;
 
         UpdateInspectorLayout();

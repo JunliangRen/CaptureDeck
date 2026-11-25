@@ -110,15 +110,20 @@ internal sealed class FrameTimeline(VideoMode mode, bool keepSignalHistory = fal
     public IReadOnlyList<CaptureEvent> Events() => snapshot ??= events.Reverse().ToArray();
 }
 
-internal sealed class StereoMonitor(CaptureAudioFormat format)
+public sealed class StereoMonitor(CaptureAudioFormat format, uint sampleRate = CaptureAudio.SampleRate,
+    uint? sourceBits = null)
 {
     private const int SpectrumWindow = 2048;
-    private readonly double[] leftRing = new double[SpectrumWindow];
-    private readonly double[] rightRing = new double[SpectrumWindow];
+    private const int DisplayFramesPerSecond = 60;
+    private const int BufferedDisplayFrames = 4;
+    private readonly int displayHop = SamplesPerDisplayFrame(sampleRate);
+    private readonly double[] leftRing = new double[SpectrumWindow + BufferedDisplayFrames * SamplesPerDisplayFrame(sampleRate)];
+    private readonly double[] rightRing = new double[SpectrumWindow + BufferedDisplayFrames * SamplesPerDisplayFrame(sampleRate)];
     private readonly double fullScale = format == CaptureAudioFormat.Pcm16 ? 32768.0 : 2147483648.0;
     private readonly long nearFullScale = format == CaptureAudioFormat.Pcm16 ? short.MaxValue : 0x7FFFFF00L;
-    private int next;
-    private int sampleCount;
+    private long receivedSamples;
+    private long lastDisplaySample;
+    private StereoLevels? lastLevel;
     private long leftClips;
     private long rightClips;
     private long leftPeak;
@@ -147,42 +152,64 @@ internal sealed class StereoMonitor(CaptureAudioFormat format)
         leftPower += l * l;
         rightPower += r * r;
         crossPower += l * r;
-        leftRing[next] = l;
-        rightRing[next] = r;
-        next = (next + 1) % SpectrumWindow;
-        sampleCount = Math.Min(sampleCount + 1, SpectrumWindow);
+        var index = (int)(receivedSamples % leftRing.Length);
+        leftRing[index] = l;
+        rightRing[index] = r;
+        receivedSamples++;
         receivedAudio = true;
     }
 
-    public AudioWindow? Read()
-    {
-        if (!receivedAudio)
-            return null;
+    private static int SamplesPerDisplayFrame(uint rate) =>
+        (int)Math.Clamp(rate / DisplayFramesPerSecond, 1u, 768_000u / DisplayFramesPerSecond);
 
+    public AudioWindow? Read() => receivedAudio ? ReadWindow(receivedSamples, ReadLevels()) : null;
+
+    // Use overlapping windows so one capture packet can feed several display frames.
+    // If the display falls behind, stay within the most recent buffered audio.
+    public AudioWindow? ReadForDisplay()
+    {
+        long end = Math.Max(displayHop, lastDisplaySample + displayHop);
+        if (end > receivedSamples)
+            return null;
+        if (end < receivedSamples - (long)BufferedDisplayFrames * displayHop)
+            end = receivedSamples - displayHop;
+        lastDisplaySample = end;
+        return ReadWindow(end, receivedAudio ? ReadLevels() : lastLevel!);
+    }
+
+    private StereoLevels ReadLevels()
+    {
         var power = Math.Sqrt(leftPower * rightPower);
         var level = new StereoLevels(leftPeak / fullScale, rightPeak / fullScale, leftClips, rightClips,
             power > 0 ? Math.Clamp(crossPower / power, -1, 1) : null, null)
         {
-            SampleRate = CaptureAudio.SampleRate,
-            SampleBits = (uint)format,
-            SpectrumFloorDbfs = -20 * Math.Log10(fullScale)
+            SampleRate = sampleRate,
+            SampleBits = sourceBits ?? (uint)format,
+            SpectrumFloorDbfs = -20 * Math.Log10(Math.ScaleB(1, (int)(sourceBits ?? (uint)format) - 1))
         };
-        var left = new double[SpectrumWindow];
-        var right = new double[SpectrumWindow];
-        for (var i = 0; i < sampleCount; i++)
-        {
-            var index = (next - sampleCount + i + SpectrumWindow) % SpectrumWindow;
-            left[SpectrumWindow - sampleCount + i] = leftRing[index];
-            right[SpectrumWindow - sampleCount + i] = rightRing[index];
-        }
-
         leftPeak = rightPeak = 0;
         leftPower = rightPower = crossPower = 0;
         receivedAudio = false;
+        return lastLevel = level;
+    }
+
+    private AudioWindow ReadWindow(long end, StereoLevels level)
+    {
+        var left = new double[SpectrumWindow];
+        var right = new double[SpectrumWindow];
+        var sampleCount = (int)Math.Min(end, SpectrumWindow);
+        var start = end - sampleCount;
+        var ringStart = (int)(start % leftRing.Length);
+        var firstPart = Math.Min(sampleCount, leftRing.Length - ringStart);
+        var target = SpectrumWindow - sampleCount;
+        leftRing.AsSpan(ringStart, firstPart).CopyTo(left.AsSpan(target));
+        rightRing.AsSpan(ringStart, firstPart).CopyTo(right.AsSpan(target));
+        leftRing.AsSpan(0, sampleCount - firstPart).CopyTo(left.AsSpan(target + firstPart));
+        rightRing.AsSpan(0, sampleCount - firstPart).CopyTo(right.AsSpan(target + firstPart));
         return new AudioWindow(level, left, right);
     }
 
-    internal sealed record AudioWindow(StereoLevels Level, double[] Left, double[] Right)
+    public sealed record AudioWindow(StereoLevels Level, double[] Left, double[] Right)
     {
         private static readonly double[] Hann = Enumerable.Range(0, SpectrumWindow)
             .Select(i => 0.5 - 0.5 * Math.Cos(2 * Math.PI * i / (SpectrumWindow - 1))).ToArray();

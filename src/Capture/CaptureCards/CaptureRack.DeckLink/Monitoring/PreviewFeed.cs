@@ -1,9 +1,12 @@
 using System.Diagnostics;
+using System.Buffers;
 using System.Runtime.InteropServices;
 
 namespace CaptureRack.DeckLink;
 
-public enum PreviewDeinterlaceMode { Off, BobWeave, Field }
+public enum PreviewDeinterlaceMode { Off, BobWeave, BobWeave2x }
+
+public enum PreviewScanMode { Unknown, Progressive, TopFirst, BottomFirst, ProgressiveSegmented }
 
 public enum PreviewColorMatrix { Auto, Bt601, Bt709 }
 
@@ -19,19 +22,73 @@ public sealed class PreviewFeed
     private readonly LatestFrame outgoing = new();
     private PreviewFrame? source;
     private PreviewFrame? converted;
+    private readonly object scopeGate = new();
     private VideoScopes? scopes;
+    private VideoScopes? scopeBackBuffer;
+    private volatile bool renderScopes = true;
+    private volatile bool scopeIreScale;
+    private VideoScopeRaster scopeRaster = VideoScopeRaster.Default;
+    private VideoScopes.Renderer? scopeRenderer;
     private byte[] previousLuma = [];
     private int previousLumaWidth;
     private int previousLumaHeight;
+    private uint previousFieldDominance;
     private byte[] currentLuma = [];
-    private long lastScopeUpdate;
     private int deinterlaceMode = (int)PreviewDeinterlaceMode.BobWeave;
     private int colorMatrix = (int)PreviewColorMatrix.Auto;
     private int scopeWaveformMode = (int)VideoScopeWaveformMode.Luma;
 
     public long PresentedSequence { get; private set; }
     public long SkippedFrames => incoming.SkippedFrames + outgoing.SkippedFrames;
-    public VideoScopes? Scopes => Volatile.Read(ref scopes);
+    public bool RenderScopes
+    {
+        get => renderScopes;
+        set => renderScopes = value;
+    }
+
+    public bool ScopeIreScale
+    {
+        get => scopeIreScale;
+        set => scopeIreScale = value;
+    }
+
+    public VideoScopes? Scopes
+    {
+        get
+        {
+            lock (scopeGate)
+            {
+                return scopes is { } current ? current with
+                {
+                    LumaWaveform = (byte[])current.LumaWaveform.Clone(),
+                    Vectorscope = (byte[])current.Vectorscope.Clone(),
+                    SecondField = null
+                } : null;
+            }
+        }
+    }
+
+    // The visitor can copy pixels into its display surfaces before this buffer is recycled.
+    public void VisitScopes(Action<VideoScopes> visitor) => VisitScopes(visitor, Stopwatch.GetTimestamp());
+
+    internal void VisitScopes(Action<VideoScopes> visitor, long now)
+    {
+        lock (scopeGate)
+        {
+            if (scopes is { } current)
+                visitor(current.SecondField is { } second && now >= current.SecondFieldDueAt ? second : current);
+        }
+    }
+
+    internal void WaitForInput(TimeSpan timeout) => incoming.WaitForFrame(timeout);
+
+    public void SetScopeDisplaySize(double waveformWidth, double waveformHeight, double vectorSide, double scale)
+    {
+        var current = Volatile.Read(ref scopeRaster);
+        var requested = VideoScopeRaster.FromDisplay(waveformWidth, waveformHeight, vectorSide, scale);
+        if (requested != current)
+            Volatile.Write(ref scopeRaster, requested);
+    }
 
     public PreviewDeinterlaceMode DeinterlaceMode
     {
@@ -62,42 +119,139 @@ public sealed class PreviewFeed
         incoming.Offer(bytes, width, height, stride, noInput, format, fieldDominance);
     }
 
-    internal void ConvertLatest(int lumaScaleBits)
+    // Called by a single decoder worker after it owns a decoded progressive or interlaced frame.
+    public unsafe void SubmitDecodedFrame(ReadOnlySpan<byte> pixels, int width, int height,
+        bool? topFieldFirst, double framesPerSecond, int signalWidth, int signalHeight, double displayAspectRatio,
+        string? signalFormat = null, PreviewScanMode? signalScanMode = null)
+    {
+        var stride = checked(width * 4);
+        if (width <= 0 || height <= 0 || pixels.Length < checked(stride * height))
+            throw new ArgumentException("Invalid decoded BGRA frame.", nameof(pixels));
+        var field = topFieldFirst switch { true => UpperFieldFirst, false => LowerFieldFirst, null => 0u };
+        fixed (byte* address = pixels)
+            incoming.Offer((IntPtr)address, width, height, stride, false, CapturePixelFormat.Bgra, field);
+        var interval = framesPerSecond > 0 ? (long)(Stopwatch.Frequency / (2 * framesPerSecond)) : 0;
+        ConvertLatest(8, interval, signalWidth, signalHeight, displayAspectRatio, signalFormat, signalScanMode);
+    }
+
+    internal static bool IsInterlaced(uint fieldDominance) =>
+        fieldDominance is UpperFieldFirst or LowerFieldFirst;
+
+    internal void ConvertLatest(int lumaScaleBits, long fieldInterval = 0,
+        int signalWidth = 0, int signalHeight = 0, double displayAspectRatio = 0, string? signalFormat = null,
+        PreviewScanMode? signalScanMode = null)
     {
         if (!incoming.TryTake(ref source) || source is null)
             return;
 
         var input = source;
-        var mode = DeinterlaceMode;
-        var interlaced = input.FieldDominance is UpperFieldFirst or LowerFieldFirst;
-        var stepX = (input.Width + 959) / 960;
+        var mode = input.IsInterlaced ? DeinterlaceMode : PreviewDeinterlaceMode.Off;
+        var decoded = input.Format == CapturePixelFormat.Bgra;
+        var stepX = decoded ? 1 : (input.Width + 959) / 960;
         // Keep full scanlines when deinterlacing interlaced SD/HD up to 1080i so Bob-Weave sees both fields.
-        var stepY = interlaced && mode != PreviewDeinterlaceMode.Off && input.Height <= 1080
+        var stepY = mode != PreviewDeinterlaceMode.Off && input.Height <= 1080
             ? 1 : stepX;
         var width = (input.Width + stepX - 1) / stepX;
         var height = (input.Height + stepY - 1) / stepY;
 
         converted ??= new PreviewFrame();
         converted.Resize(width, height, checked(width * 4));
-        converted.SignalWidth = input.Width;
-        converted.SignalHeight = input.Height;
+        input.SignalWidth = converted.SignalWidth = signalWidth > 0 ? signalWidth : input.Width;
+        input.SignalHeight = converted.SignalHeight = signalHeight > 0 ? signalHeight : input.Height;
+        converted.DisplayAspectRatio = displayAspectRatio;
+        converted.SignalFormat = signalFormat;
         converted.NoInput = input.NoInput;
         converted.Format = input.Format;
         converted.FieldDominance = input.FieldDominance;
-
-        ConvertToBgra(input, converted, stepX, stepY, ColorMatrix,
-            interlaced ? mode : PreviewDeinterlaceMode.Off, input.FieldDominance == LowerFieldFirst);
-
-        outgoing.Publish(ref converted);
-        if (lastScopeUpdate == 0 || Stopwatch.GetElapsedTime(lastScopeUpdate) >= TimeSpan.FromMilliseconds(125))
+        converted.SignalScanMode = signalScanMode ?? (input.FieldDominance switch
         {
-            Volatile.Write(ref scopes, VideoScopes.Analyze(input, lumaScaleBits, ScopeWaveformMode, ColorMatrix));
-            lastScopeUpdate = Stopwatch.GetTimestamp();
+            UpperFieldFirst => PreviewScanMode.TopFirst,
+            LowerFieldFirst => PreviewScanMode.BottomFirst,
+            0x70726F67 => PreviewScanMode.Progressive, // prog
+            0x70736666 => PreviewScanMode.ProgressiveSegmented, // psff
+            _ => PreviewScanMode.Unknown
+        });
+
+        var deinterlace = mode != PreviewDeinterlaceMode.Off && stepY == 1 && height >= 4;
+        var doubleRate = deinterlace && mode == PreviewDeinterlaceMode.BobWeave2x;
+        var bottomFieldFirst = input.FieldDominance == LowerFieldFirst;
+        if (decoded)
+            CopyDecodedPixels(input, converted, deinterlace);
+        else
+            ConvertToBgra(input, converted, stepX, stepY, ColorMatrix, deinterlace);
+        converted.SecondFieldDueAt = 0;
+        if (previousFieldDominance != input.FieldDominance || input.NoInput)
+            previousLumaWidth = 0;
+        if (doubleRate)
+        {
+            var secondFieldPixels = converted.CopyPixelsForSecondField();
+            ApplyMotionAdaptiveBobWeave(secondFieldPixels, width, height, converted.Stride, !bottomFieldFirst);
         }
+        if (deinterlace)
+        {
+            ApplyMotionAdaptiveBobWeave(converted.Pixels, width, height, converted.Stride, bottomFieldFirst);
+            (previousLuma, currentLuma) = (currentLuma, previousLuma);
+            previousLumaWidth = width;
+            previousLumaHeight = height;
+            previousFieldDominance = input.FieldDominance;
+        }
+        else
+        {
+            previousLumaWidth = 0;
+        }
+
+        if (doubleRate)
+            converted.SecondFieldDueAt = Stopwatch.GetTimestamp() + fieldInterval;
+        outgoing.Publish(ref converted);
+        if (!RenderScopes)
+            return;
+
+        var raster = Volatile.Read(ref scopeRaster);
+        if (scopeRenderer?.Raster != raster)
+            scopeRenderer = new VideoScopes.Renderer(raster);
+
+        var waveformMode = ScopeWaveformMode;
+        var matrix = ColorMatrix;
+        var splitFields = fieldInterval > 0 && input.IsInterlaced && input.Height >= 2 && !input.NoInput;
+        int? firstField = splitFields ? (bottomFieldFirst ? 1 : 0) : null;
+        var ireScale = ScopeIreScale;
+        var next = scopeRenderer.Analyze(input, lumaScaleBits, waveformMode, matrix, scopeBackBuffer, firstField, ireScale: ireScale);
+        if (firstField is int parity)
+        {
+            var second = scopeRenderer.Analyze(input, lumaScaleBits, waveformMode, matrix,
+                scopeBackBuffer?.SecondField, 1 - parity, measureLuma: false, ireScale: ireScale);
+            next = next with
+            {
+                SecondField = second with { LumaOutsideLegalFraction = next.LumaOutsideLegalFraction },
+                SecondFieldDueAt = Stopwatch.GetTimestamp() + fieldInterval
+            };
+        }
+
+        lock (scopeGate)
+            (scopes, scopeBackBuffer) = (next, scopes);
     }
 
-    public bool TryTakeLatest(ref PreviewFrame? frame)
+    public bool TryTakeLatest(ref PreviewFrame? frame) =>
+        TryTakeLatest(ref frame, Stopwatch.GetTimestamp());
+
+    internal bool TryTakeLatest(ref PreviewFrame? frame, long now)
     {
+        // Finish the displayed field pair before taking the next completed input frame.
+        if (frame is { SecondFieldDueAt: > 0 })
+        {
+            if (DeinterlaceMode == PreviewDeinterlaceMode.BobWeave2x)
+            {
+                if (now < frame.SecondFieldDueAt)
+                    return false;
+
+                frame.PresentSecondField();
+                PresentedSequence++;
+                return true;
+            }
+
+            frame.SecondFieldDueAt = 0;
+        }
+
         if (!outgoing.TryTake(ref frame))
             return false;
 
@@ -105,8 +259,27 @@ public sealed class PreviewFeed
         return true;
     }
 
+    private void CopyDecodedPixels(PreviewFrame input, PreviewFrame output, bool recordLuma)
+    {
+        var pixels = input.Pixels.AsSpan(0, input.Stride * input.Height);
+        pixels.CopyTo(output.Pixels);
+        if (!recordLuma)
+            return;
+
+        var packed = MemoryMarshal.Cast<byte, uint>(pixels);
+        if (currentLuma.Length < packed.Length)
+            currentLuma = new byte[packed.Length];
+        var luma = currentLuma.AsSpan(0, packed.Length);
+        for (var i = 0; i < packed.Length; i++)
+        {
+            var pixel = packed[i];
+            luma[i] = (byte)((29 * (pixel & 255) + 150 * ((pixel >> 8) & 255) +
+                77 * ((pixel >> 16) & 255) + 128) >> 8);
+        }
+    }
+
     private void ConvertToBgra(PreviewFrame source, PreviewFrame destination, int stepX, int stepY,
-        PreviewColorMatrix matrix, PreviewDeinterlaceMode deinterlace, bool bottomFieldFirst)
+        PreviewColorMatrix matrix, bool recordLuma)
     {
         var useBt601 = matrix switch
         {
@@ -122,13 +295,8 @@ public sealed class PreviewFeed
         var width = destination.Width;
         var height = destination.Height;
 
-        var recordLuma = deinterlace == PreviewDeinterlaceMode.BobWeave && stepY == 1;
-        if (recordLuma)
-        {
-            var pixelCount = width * height;
-            if (currentLuma.Length < pixelCount)
-                currentLuma = new byte[pixelCount];
-        }
+        if (recordLuma && currentLuma.Length < width * height)
+            currentLuma = new byte[width * height];
 
         for (var row = 0; row < height; row++)
         {
@@ -150,47 +318,11 @@ public sealed class PreviewFeed
                 output[index + 3] = 255;
             }
         }
-
-        if (stepY == 1 && height >= 4)
-        {
-            if (deinterlace == PreviewDeinterlaceMode.Field)
-                ApplySingleFieldBob(output, width, height, destination.Stride, bottomFieldFirst);
-            else if (deinterlace == PreviewDeinterlaceMode.BobWeave)
-                ApplyMotionAdaptiveBobWeave(output, width, height, destination.Stride, bottomFieldFirst);
-        }
-
-        if (recordLuma)
-        {
-            var pixelCount = width * height;
-            if (previousLuma.Length < pixelCount)
-                previousLuma = new byte[pixelCount];
-            Buffer.BlockCopy(currentLuma, 0, previousLuma, 0, pixelCount);
-            previousLumaWidth = width;
-            previousLumaHeight = height;
-        }
-    }
-
-    // Pure single-field Bob: keeps dominant field lines and linearly interpolates alternate lines.
-    internal static void ApplySingleFieldBob(Span<byte> bgra, int width, int height, int stride, bool bottomFieldFirst)
-    {
-        var secondaryParity = bottomFieldFirst ? 0 : 1;
-        for (var row = secondaryParity; row < height; row += 2)
-        {
-            var prevRow = Math.Max(0, row - 1) * stride;
-            var nextRow = Math.Min(height - 1, row + 1) * stride;
-            var currRow = row * stride;
-            for (var x = 0; x < width * 4; x += 4)
-            {
-                bgra[currRow + x] = (byte)((bgra[prevRow + x] + bgra[nextRow + x] + 1) >> 1);
-                bgra[currRow + x + 1] = (byte)((bgra[prevRow + x + 1] + bgra[nextRow + x + 1] + 1) >> 1);
-                bgra[currRow + x + 2] = (byte)((bgra[prevRow + x + 2] + bgra[nextRow + x + 2] + 1) >> 1);
-            }
-        }
     }
 
     // Motion-adaptive Bob-Weave: weaves crisp full-detail pixels in static regions, smoothly
-    // transitions to vertical Bob interpolation wherever spatial combing or inter-frame motion occurs.
-    internal void ApplyMotionAdaptiveBobWeave(Span<byte> bgra, int width, int height, int stride, bool bottomFieldFirst)
+    // transitions to vertical Bob interpolation where moving fields produce spatial combing.
+    private void ApplyMotionAdaptiveBobWeave(Span<byte> bgra, int width, int height, int stride, bool bottomFieldFirst)
     {
         var hasPrev = previousLumaWidth == width && previousLumaHeight == height;
         var secondaryParity = bottomFieldFirst ? 0 : 1;
@@ -199,8 +331,8 @@ public sealed class PreviewFeed
 
         for (var row = secondaryParity; row < height; row += 2)
         {
-            var upY = Math.Max(0, row - 1);
-            var downY = Math.Min(height - 1, row + 1);
+            var upY = row == 0 ? 1 : row - 1;
+            var downY = row == height - 1 ? row - 1 : row + 1;
             var upRow = upY * stride;
             var downRow = downY * stride;
             var currRow = row * stride;
@@ -214,15 +346,19 @@ public sealed class PreviewFeed
                 var yUp = currentLuma[upLumaRow + x];
                 var yDown = currentLuma[downLumaRow + x];
 
-                // Spatial comb metric: how far current scanline deviates from its vertical neighbors
-                // beyond natural vertical edge slope.
-                var avgNeighbor = (yUp + yDown) >> 1;
-                var spatialComb = Math.Abs(yCurr - avgNeighbor) - (Math.Abs(yUp - yDown) >> 1);
-                var temporalDiff = hasPrev ? Math.Abs(yCurr - previousLuma[currLumaRow + x]) : 0;
+                // A static horizontal line can have the same vertical profile as a comb tooth.
+                // Once a previous frame is available, require motion in the local three-line window.
+                var temporal = hasPrev ? Math.Max(
+                    Math.Abs(yCurr - previousLuma[currLumaRow + x]), Math.Max(
+                    Math.Abs(yUp - previousLuma[upLumaRow + x]),
+                    Math.Abs(yDown - previousLuma[downLumaRow + x]))) : highThreshold;
+                if (temporal <= lowThreshold)
+                    continue;
 
-                var motion = Math.Max(spatialComb, temporalDiff);
+                var spatialComb = Math.Abs(yCurr - ((yUp + yDown) >> 1)) - (Math.Abs(yUp - yDown) >> 1);
+                var motion = Math.Min(spatialComb, temporal);
                 if (motion <= lowThreshold)
-                    continue; // Static pixel -> pure Weave (full vertical detail)
+                    continue;
 
                 var idx = x * 4;
                 var bobB = (bgra[upRow + idx] + bgra[downRow + idx] + 1) >> 1;
@@ -310,6 +446,7 @@ public sealed class PreviewFeed
                 if (ready)
                     Interlocked.Increment(ref skippedFrames);
                 ready = true;
+                Monitor.Pulse(gate);
             }
             finally
             {
@@ -325,6 +462,15 @@ public sealed class PreviewFeed
                     Interlocked.Increment(ref skippedFrames);
                 (slot, frame) = (frame, slot);
                 ready = true;
+            }
+        }
+
+        public void WaitForFrame(TimeSpan timeout)
+        {
+            lock (gate)
+            {
+                if (!ready && timeout > TimeSpan.Zero)
+                    Monitor.Wait(gate, timeout);
             }
         }
 
@@ -345,15 +491,38 @@ public sealed class PreviewFeed
 
 public sealed class PreviewFrame
 {
+    private byte[] secondFieldPixels = [];
+
     public byte[] Pixels { get; private set; } = [];
     public int Width { get; private set; }
     public int Height { get; private set; }
     public int Stride { get; private set; }
     public int SignalWidth { get; internal set; }
     public int SignalHeight { get; internal set; }
+    public double DisplayAspectRatio { get; internal set; }
+    public string? SignalFormat { get; internal set; }
+    public PreviewScanMode SignalScanMode { get; internal set; }
     public bool NoInput { get; internal set; }
     public CapturePixelFormat Format { get; internal set; }
     public uint FieldDominance { get; internal set; }
+    public bool IsInterlaced => PreviewFeed.IsInterlaced(FieldDominance);
+    internal long SecondFieldDueAt { get; set; }
+
+    internal Span<byte> CopyPixelsForSecondField()
+    {
+        var length = checked(Stride * Height);
+        if (secondFieldPixels.Length < length)
+            secondFieldPixels = new byte[length];
+
+        Pixels.AsSpan(0, length).CopyTo(secondFieldPixels);
+        return secondFieldPixels.AsSpan(0, length);
+    }
+
+    internal void PresentSecondField()
+    {
+        (Pixels, secondFieldPixels) = (secondFieldPixels, Pixels);
+        SecondFieldDueAt = 0;
+    }
 
     internal void Resize(int width, int height, int stride)
     {

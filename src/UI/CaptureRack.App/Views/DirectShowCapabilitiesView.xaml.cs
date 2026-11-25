@@ -4,7 +4,7 @@ using Microsoft.UI.Xaml.Controls;
 
 namespace CaptureRack.App.Views;
 
-public sealed partial class DirectShowCapabilitiesView : UserControl
+public sealed partial class DirectShowCapabilitiesView : UserControl, ILiveMediaSource
 {
     private Func<string, string> localize = key => key;
     private DirectShowDeviceCapabilities? capabilities;
@@ -32,8 +32,6 @@ public sealed partial class DirectShowCapabilitiesView : UserControl
     internal void Bind(Func<string, string> translate)
     {
         localize = translate;
-        PageTitle.Text = L("DsCapabilities");
-        PageDescription.Text = L("DsCapabilitiesHelp");
         DevicePicker.Header = L("Device");
         DevicePicker.PlaceholderText = L("DsSelectDevice");
         VideoStreamPicker.Header = L("DsVideoStream");
@@ -45,7 +43,6 @@ public sealed partial class DirectShowCapabilitiesView : UserControl
         AdvertisedHeading.Text = L("DsDriverReported");
         NegotiatedHeading.Text = L("DsNegotiated");
         SampleHeading.Text = L("DsSampleResult");
-        BindPreview();
         if (capabilities is not null)
             PopulateFormats();
         RenderEvidence();
@@ -205,7 +202,6 @@ public sealed partial class DirectShowCapabilitiesView : UserControl
         AudioPicker.ItemsSource = null;
         updatingPickers = false;
         capabilities = null;
-        PreviewPanel.Visibility = Visibility.Collapsed;
         ClearTests();
     }
 
@@ -214,9 +210,6 @@ public sealed partial class DirectShowCapabilitiesView : UserControl
         negotiated = null;
         sampled = null;
         Notice.IsOpen = false;
-        PreviewPicture.Source = null;
-        previewBitmap = null;
-        PreviewPanel.Visibility = Visibility.Collapsed;
     }
 
     private void RenderEvidence()
@@ -228,7 +221,7 @@ public sealed partial class DirectShowCapabilitiesView : UserControl
         AudioPicker.Visibility = capabilities?.Formats.Any(format => format.Kind == "audio") == true
             ? Visibility.Visible : Visibility.Collapsed;
         ResultPanel.Visibility = visible ? Visibility.Visible : Visibility.Collapsed;
-        var idle = operation is null && previewStop is null;
+        var idle = operation is null && !IsCapturing && !IsRecording;
         RefreshButton.IsEnabled = idle;
         DevicePicker.IsEnabled = idle && DevicePicker.Items.Count > 0;
         VideoStreamPicker.IsEnabled = idle && VideoStreamPicker.Items.Count > 0;
@@ -238,6 +231,7 @@ public sealed partial class DirectShowCapabilitiesView : UserControl
         SampleButton.IsEnabled = idle && visible;
         BusyBar.Visibility = operation is null ? Visibility.Collapsed : Visibility.Visible;
         UpdatePreviewControls();
+        StateChanged?.Invoke(this, EventArgs.Empty);
 
         if (video is null)
             return;

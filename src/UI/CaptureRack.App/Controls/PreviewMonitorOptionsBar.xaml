@@ -31,13 +31,13 @@
                             </StackPanel>
                         </Border>
 
-                        <StackPanel>
+                        <StackPanel x:Name="DeinterlaceOptions">
                             <TextBlock x:Name="PreviewDeinterlaceLabel" Style="{StaticResource StudioFieldLabelStyle}" />
                             <ComboBox x:Name="PreviewDeinterlacePicker" CornerRadius="3" HorizontalAlignment="Stretch"
                                       SelectionChanged="PreviewDeinterlacePicker_SelectionChanged">
-                                <ComboBoxItem x:Name="DeinterlaceBobWeaveItem" Tag="BobWeave" Content="Bob-Weave (Adaptive)" />
-                                <ComboBoxItem x:Name="DeinterlaceFieldItem" Tag="Field" Content="Single-Field Bob" />
-                                <ComboBoxItem x:Name="DeinterlaceOffItem" Tag="Off" Content="Off (Interlaced)" />
+                                <ComboBoxItem x:Name="DeinterlaceBobWeaveItem" Tag="BobWeave" Content="Bob-Weave ×1 (Adaptive)" />
+                                <ComboBoxItem x:Name="DeinterlaceBobWeave2xItem" Tag="BobWeave2x" Content="Bob-Weave ×2 (Adaptive)" />
+                                <ComboBoxItem x:Name="DeinterlaceOffItem" Tag="Off" Content="Original" />
                             </ComboBox>
                         </StackPanel>
 
@@ -52,7 +52,7 @@
                             </ComboBox>
                         </StackPanel>
 
-                        <StackPanel>
+                        <StackPanel x:Name="MatrixOptions">
                             <TextBlock x:Name="PreviewMatrixLabel" Style="{StaticResource StudioFieldLabelStyle}" />
                             <ComboBox x:Name="PreviewMatrixPicker" CornerRadius="3" HorizontalAlignment="Stretch"
                                       SelectionChanged="PreviewMatrixPicker_SelectionChanged">

@@ -135,13 +135,23 @@ internal sealed class CaptureCallback(PreviewFeed? preview, CapturePixelFormat p
     }
 
 
-    internal CaptureStats Snapshot(bool publishMonitor)
+    internal StereoLevels? ReadAudioLevels()
+    {
+        StereoMonitor.AudioWindow? window;
+        lock (gate)
+            window = audioMonitor?.ReadForDisplay();
+        if (window is not null)
+            Volatile.Write(ref lastLevels, window.Analyze());
+        return Volatile.Read(ref lastLevels);
+    }
+
+    internal CaptureStats Snapshot(bool publishMonitor, bool readAudio = true)
     {
         StereoMonitor.AudioWindow? audioWindow;
         CaptureStats snapshot;
         lock (gate)
         {
-            audioWindow = publishMonitor ? audioMonitor?.Read() : null;
+            audioWindow = publishMonitor && readAudio ? audioMonitor?.Read() : null;
             snapshot = stats.Clone();
             snapshot.CanStartRecording = CanAttachRecording;
             snapshot.InputAudioFormat = inputAudioFormat;
@@ -156,8 +166,8 @@ internal sealed class CaptureCallback(PreviewFeed? preview, CapturePixelFormat p
         }
 
         if (audioWindow is not null)
-            lastLevels = audioWindow.Analyze();
-        snapshot.AudioLevels = lastLevels;
+            Volatile.Write(ref lastLevels, audioWindow.Analyze());
+        snapshot.AudioLevels = Volatile.Read(ref lastLevels);
         return snapshot;
     }
 
@@ -446,6 +456,10 @@ public sealed class CaptureStats
     public VideoSignal Signal { get; internal set; }
     public bool CanStartRecording { get; internal set; }
     public CaptureAudioFormat? InputAudioFormat { get; internal set; }
+    public CaptureAudioInfo? AudioInfo => AudioPackets > 0 && InputAudioFormat is { } format
+        ? new("PCM", (int)format, (int)CaptureAudio.SampleRate, (int)CaptureAudio.Channels,
+            (long)CaptureAudio.BytesPerFrame(format) * CaptureAudio.SampleRate * 8)
+        : null;
     public bool RecordingModeChanged { get; internal set; }
     public long VideoFrames { get; internal set; }
     public long NoInputFrames { get; internal set; }

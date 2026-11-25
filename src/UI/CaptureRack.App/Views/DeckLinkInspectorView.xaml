@@ -49,6 +49,34 @@
                                TextWrapping="Wrap" Visibility="Collapsed"
                                Foreground="{ThemeResource StudioTextSecondaryBrush}" />
                 </StackPanel>
+                <StackPanel x:Name="VancScanGroup" Spacing="5" Visibility="Collapsed">
+                    <Button x:Name="VancScanButton" Style="{StaticResource SubtleButtonStyle}"
+                            HorizontalAlignment="Left" Click="VancScan_Click" />
+                    <TextBlock x:Name="VancScanStatusText" FontSize="11" TextWrapping="Wrap" Visibility="Collapsed"
+                               AutomationProperties.LiveSetting="Polite"
+                               Foreground="{ThemeResource StudioTextSecondaryBrush}" />
+                </StackPanel>
+
+                <StackPanel x:Name="VancInputGroup" Spacing="5" Visibility="Collapsed">
+                    <CheckBox x:Name="VancInputCheckBox" Click="VancInput_Click" />
+                    <StackPanel x:Name="VancInputLines" Spacing="5" Visibility="Collapsed">
+                        <Grid ColumnSpacing="6">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <NumberBox x:Name="VancInputLine1" Minimum="1" Maximum="30" SmallChange="1"
+                                       ValueChanged="VancLine_ValueChanged" />
+                            <NumberBox x:Name="VancInputLine2" Grid.Column="1" Minimum="0" Maximum="30" SmallChange="1"
+                                       ValueChanged="VancLine_ValueChanged" />
+                            <NumberBox x:Name="VancInputLine3" Grid.Column="2" Minimum="0" Maximum="30" SmallChange="1"
+                                       ValueChanged="VancLine_ValueChanged" />
+                        </Grid>
+                        <TextBlock x:Name="VancInputHint" FontSize="11" TextWrapping="Wrap"
+                                   Foreground="{ThemeResource StudioTextSecondaryBrush}" />
+                    </StackPanel>
+                </StackPanel>
             </StackPanel>
         </Border>
 
@@ -165,10 +193,10 @@
                                 <ColumnDefinition Width="*" />
                                 <ColumnDefinition Width="*" />
                             </Grid.ColumnDefinitions>
-                            <Button x:Name="VideoFormat10Button" Style="{StaticResource StudioFormatSegmentButtonStyle}"
-                                    Tag="V210" Click="VideoFormatSegment_Click" />
-                            <Button x:Name="VideoFormat8Button" Grid.Column="1" Style="{StaticResource StudioFormatSegmentButtonStyle}"
+                            <Button x:Name="VideoFormat8Button" Style="{StaticResource StudioFormatSegmentButtonStyle}"
                                     Tag="Uyvy" Click="VideoFormatSegment_Click" />
+                            <Button x:Name="VideoFormat10Button" Grid.Column="1" Style="{StaticResource StudioFormatSegmentButtonStyle}"
+                                    Tag="V210" Click="VideoFormatSegment_Click" />
                         </Grid>
                     </Border>
                 </StackPanel>

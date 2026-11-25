@@ -38,6 +38,16 @@ public sealed class PreviewRecorder
         }
     }
 
+    public bool ReadAudioFromUi { get; init; }
+
+    public StereoLevels? ReadAudioLevels()
+    {
+        CaptureCallback? current;
+        lock (gate)
+            current = callback;
+        return current?.ReadAudioLevels();
+    }
+
     public DateTimeOffset Start(string path, CaptureAudioFormat? outputAudioFormat = null)
     {
         lock (gate)

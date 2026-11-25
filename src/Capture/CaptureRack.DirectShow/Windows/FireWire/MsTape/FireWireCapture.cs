@@ -59,6 +59,8 @@ public static unsafe class FireWireCapture
 {
     private static readonly JsonSerializerOptions ReportJson = new() { PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower };
 
+    public const string BackendId = "windows.firewire";
+
     public static bool IsSupported => OperatingSystem.IsWindows() && RuntimeInformation.ProcessArchitecture == Architecture.X64;
 
     public static IReadOnlyList<FireWireDevice> List()

@@ -77,9 +77,9 @@
                         </toolkit:SettingsCard.HeaderIcon>
                         <ComboBox x:Name="SettingsDeinterlacePicker" MinWidth="190" CornerRadius="3"
                                   SelectionChanged="DeinterlacePicker_SelectionChanged">
-                            <ComboBoxItem x:Name="DeinterlaceBobWeaveItem" Tag="BobWeave" Content="Bob-Weave (Adaptive)" />
-                            <ComboBoxItem x:Name="DeinterlaceFieldItem" Tag="Field" Content="Single-Field Bob" />
-                            <ComboBoxItem x:Name="DeinterlaceOffItem" Tag="Off" Content="Off (Interlaced)" />
+                            <ComboBoxItem x:Name="DeinterlaceBobWeaveItem" Tag="BobWeave" Content="Bob-Weave ×1 (Adaptive)" />
+                            <ComboBoxItem x:Name="DeinterlaceBobWeave2xItem" Tag="BobWeave2x" Content="Bob-Weave ×2 (Adaptive)" />
+                            <ComboBoxItem x:Name="DeinterlaceOffItem" Tag="Off" Content="Original" />
                         </ComboBox>
                     </toolkit:SettingsCard>
                     <toolkit:SettingsCard x:Name="SettingsAspectCard" CornerRadius="4">

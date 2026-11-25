@@ -30,7 +30,7 @@ public sealed partial class SettingsView : UserControl
     public void FocusBack() => BackButton.Focus(FocusState.Programmatic);
 
     public void SyncSelections(string theme, string language, string layout,
-        string deinterlace, string aspect, string matrix)
+        string deinterlace, bool deinterlaceLocked, string aspect, string matrix)
     {
         syncing = true;
         try
@@ -38,7 +38,10 @@ public sealed partial class SettingsView : UserControl
             SelectTag(ThemePicker, theme, ThemeSystemItem);
             SelectTag(LanguagePicker, language, LanguagePicker.Items.OfType<ComboBoxItem>().First());
             SelectTag(DefaultLayoutPicker, layout, DefaultLayoutSplitItem);
-            SelectTag(SettingsDeinterlacePicker, deinterlace, DeinterlaceBobWeaveItem);
+            SettingsDeinterlacePicker.IsEnabled = !deinterlaceLocked;
+            if (deinterlaceLocked)
+                SettingsDeinterlacePicker.IsDropDownOpen = false;
+            SelectTag(SettingsDeinterlacePicker, deinterlaceLocked ? "Off" : deinterlace, DeinterlaceBobWeaveItem);
             SelectTag(SettingsAspectPicker, aspect, AspectAutoItem);
             SelectTag(SettingsMatrixPicker, matrix, MatrixAutoItem);
         }
@@ -49,7 +52,7 @@ public sealed partial class SettingsView : UserControl
     }
 
     public void ApplyLanguage(Func<string, string> localize, string theme, string language, string layout,
-        string deinterlace, string aspect, string matrix)
+        string deinterlace, bool deinterlaceLocked, string aspect, string matrix)
     {
         SettingsHeading.Text = localize("Settings");
         AutomationProperties.SetName(BackButton, localize("Back"));
@@ -74,7 +77,7 @@ public sealed partial class SettingsView : UserControl
         SettingsDeinterlaceCard.Header = localize("PreviewDeinterlaceLabel");
         SettingsDeinterlaceCard.Description = localize("PreviewDeinterlaceDesc");
         DeinterlaceBobWeaveItem.Content = localize("DeinterlaceBobWeave");
-        DeinterlaceFieldItem.Content = localize("DeinterlaceField");
+        DeinterlaceBobWeave2xItem.Content = localize("DeinterlaceBobWeave2x");
         DeinterlaceOffItem.Content = localize("DeinterlaceOff");
 
         SettingsAspectCard.Header = localize("PreviewAspectLabel");
@@ -104,7 +107,7 @@ public sealed partial class SettingsView : UserControl
         OpenSettingsFolderButton.Content = localize("OpenSettingsFolder");
 
         // Re-select all ComboBoxes so WinUI's closed ContentPresenter refreshes immediately.
-        SyncSelections(theme, language, layout, deinterlace, aspect, matrix);
+        SyncSelections(theme, language, layout, deinterlace, deinterlaceLocked, aspect, matrix);
     }
 
     public void ShowToolchainStatus(bool ready, string statusText, string description)

@@ -20,6 +20,7 @@ public static class TestSignal
         using var session = new Session(scenario, feed, recorder, audioMonitor);
         var clock = Stopwatch.StartNew();
         var nextProgress = TimeSpan.Zero;
+        var readAudio = !recorder.ReadAudioFromUi;
         for (long index = 0; !cancellation.IsCancellationRequested; index++)
         {
             var target = TimeSpan.FromSeconds(index * (double)Mode.FrameDuration / Mode.TimeScale);
@@ -30,12 +31,12 @@ public static class TestSignal
             session.Emit(index);
             if (clock.Elapsed >= nextProgress)
             {
-                progress(new(Mode, session.Snapshot()));
+                progress(new(Mode, session.Snapshot(readAudio)));
                 nextProgress = clock.Elapsed + TimeSpan.FromMilliseconds(100);
             }
         }
 
-        return session.Snapshot();
+        return session.Snapshot(readAudio);
     }
 
     internal sealed class Session : IDisposable
@@ -79,10 +80,10 @@ public static class TestSignal
                 : 0;
             audio.Render(start, (int)(SampleAt(index + 1) - start), start - resetOffset, noInput);
             callback.AcceptManagedSamples(skipVideo ? null : video, audio);
-            feed.ConvertLatest(lumaScaleBits: 10);
+            feed.ConvertLatest(lumaScaleBits: 10, Mode.PreviewFieldInterval);
         }
 
-        internal CaptureStats Snapshot() => callback.Snapshot(publishMonitor: true);
+        internal CaptureStats Snapshot(bool readAudio = true) => callback.Snapshot(publishMonitor: true, readAudio: readAudio);
 
         public void Dispose() => recorder.Disconnect();
 

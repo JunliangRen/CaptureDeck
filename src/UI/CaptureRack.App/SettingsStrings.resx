@@ -154,7 +154,7 @@
     <value>Audio spectrum</value>
   </data>
   <data name="PreviewImage" xml:space="preserve">
-    <value>DeckLink video preview</value>
+    <value>Video preview</value>
   </data>
   <data name="WaitingPreview" xml:space="preserve">
     <value>Waiting for preview</value>
@@ -474,8 +474,35 @@
   <data name="PreviewLiveFrame" xml:space="preserve">
     <value>Live frame</value>
   </data>
+  <data name="PreviewTopFirst" xml:space="preserve">
+    <value>Interlaced (Top First)</value>
+  </data>
+  <data name="PreviewBottomFirst" xml:space="preserve">
+    <value>Interlaced (Bottom First)</value>
+  </data>
+  <data name="PreviewPsf" xml:space="preserve">
+    <value>Progressive (PsF)</value>
+  </data>
+  <data name="PreviewAudioHeading" xml:space="preserve">
+    <value>Audio</value>
+  </data>
+  <data name="PreviewAudioDetail" xml:space="preserve">
+    <value>{0} · {1} · {2} · {3} · {4} · {5}</value>
+  </data>
+  <data name="PreviewAudioBitDepth" xml:space="preserve">
+    <value>{0} bit</value>
+  </data>
+  <data name="PreviewAudioSampleRate" xml:space="preserve">
+    <value>{0} kHz</value>
+  </data>
+  <data name="PreviewAudioChannels" xml:space="preserve">
+    <value>{0} ch</value>
+  </data>
+  <data name="PreviewAudioBitRate" xml:space="preserve">
+    <value>{0} kb/s</value>
+  </data>
   <data name="PreviewFrameDetail" xml:space="preserve">
-    <value>{0} · {1} × {2} {3} · {4:N0} displayed</value>
+    <value>{0} · {1} × {2} {3} · {4} · {5:N0} displayed</value>
   </data>
   <data name="EventTimestampRegression" xml:space="preserve">
     <value>Video timestamp discontinuity.</value>
@@ -753,6 +780,63 @@
   <data name="EventsCountBadge" xml:space="preserve">
     <value>{0:N0} events</value>
   </data>
+  <data name="VancScan" xml:space="preserve">
+    <value>Scan VANC/VBI and fill in</value>
+  </data>
+  <data name="VancScanFilled" xml:space="preserve">
+    <value>Filled mapping fields with {0} / {1} / {2}.</value>
+  </data>
+  <data name="VancScanCancel" xml:space="preserve">
+    <value>Cancel scan</value>
+  </data>
+  <data name="VancScanCancelling" xml:space="preserve">
+    <value>Cancelling scan…</value>
+  </data>
+  <data name="VancScanReading" xml:space="preserve">
+    <value>Reading VANC/VBI directly…</value>
+  </data>
+  <data name="VancScanMapping" xml:space="preserve">
+    <value>Scanning mapped lines ({0}/{1})…</value>
+  </data>
+  <data name="VancScanCancelled" xml:space="preserve">
+    <value>Scan cancelled.</value>
+  </data>
+  <data name="VancScanFailed" xml:space="preserve">
+    <value>Scan failed. {0}</value>
+  </data>
+  <data name="VancScanDirectResult" xml:space="preserve">
+    <value>direct read</value>
+  </data>
+  <data name="VancScanMappedResult" xml:space="preserve">
+    <value>line mapping</value>
+  </data>
+  <data name="VancScanUnreadable" xml:space="preserve">
+    <value>{0} · The driver returned no readable VANC/VBI data.</value>
+  </data>
+  <data name="VancScanNoLines" xml:space="preserve">
+    <value>{0} · No VANC/VBI lines detected ({1}).</value>
+  </data>
+  <data name="VancScanAncLines" xml:space="preserve">
+    <value>VANC packets — {0}</value>
+  </data>
+  <data name="VancScanCaptionLines" xml:space="preserve">
+    <value>CEA-608 data — {0}</value>
+  </data>
+  <data name="VancScanWaveformLines" xml:space="preserve">
+    <value>Unidentified waveform — {0}</value>
+  </data>
+  <data name="VancScanFound" xml:space="preserve">
+    <value>{0} · Results ({1})</value>
+  </data>
+  <data name="CaptureVancInput" xml:space="preserve">
+    <value>Capture VANC input lines</value>
+  </data>
+  <data name="VancPictureLine" xml:space="preserve">
+    <value>Picture line {0}</value>
+  </data>
+  <data name="VancInputHint" xml:space="preserve">
+    <value>Enter the source line for each picture line. Use 0 to skip lines 2 or 3. Changes apply when preview starts.</value>
+  </data>
   <data name="AnalogSectionHeading" xml:space="preserve">
     <value>ANALOG INPUT LEVELS</value>
   </data>
@@ -808,7 +892,7 @@
     <value>Deinterlace (Preview only)</value>
   </data>
   <data name="PreviewDeinterlaceDesc" xml:space="preserve">
-    <value>Motion-adaptive Bob-Weave keeps static detail sharp while removing combing on motion.</value>
+    <value>Motion-adaptive Bob-Weave uses one preview frame per input frame at ×1 and one per field at ×2. Progressive input always uses the original preview.</value>
   </data>
   <data name="PreviewAspectLabel" xml:space="preserve">
     <value>Display aspect ratio (Preview only)</value>
@@ -841,13 +925,13 @@
     <value>PREVIEW &amp; MONITORING (PREVIEW ONLY)</value>
   </data>
   <data name="DeinterlaceBobWeave" xml:space="preserve">
-    <value>Bob-Weave (Adaptive)</value>
+    <value>Bob-Weave ×1 (Adaptive)</value>
   </data>
-  <data name="DeinterlaceField" xml:space="preserve">
-    <value>Single-Field Bob</value>
+  <data name="DeinterlaceBobWeave2x" xml:space="preserve">
+    <value>Bob-Weave ×2 (Adaptive)</value>
   </data>
   <data name="DeinterlaceOff" xml:space="preserve">
-    <value>Off (Raw interlaced)</value>
+    <value>Original</value>
   </data>
   <data name="AspectAuto" xml:space="preserve">
     <value>Auto (SD 4:3 / HD native)</value>
@@ -903,8 +987,53 @@
   <data name="BackendFireWireName" xml:space="preserve">
     <value>FireWire / i.LINK (MSTape)</value>
   </data>
+  <data name="FwPreviewName" xml:space="preserve">
+    <value>i.LINK preview</value>
+  </data>
+  <data name="FwPreviewStandby" xml:space="preserve">
+    <value>Start preview, then play the source on your deck.</value>
+  </data>
+  <data name="FwUnsupported" xml:space="preserve">
+    <value>i.LINK capture requires Windows x64.</value>
+  </data>
+  <data name="FwNoDevices" xml:space="preserve">
+    <value>No i.LINK tape device found.</value>
+  </data>
+  <data name="FwDeviceScanFailed" xml:space="preserve">
+    <value>Could not list i.LINK devices.</value>
+  </data>
+  <data name="FwMissingFfmpeg" xml:space="preserve">
+    <value>FFmpeg is required for preview. Native TS recording is available.</value>
+  </data>
+  <data name="FwReacquiringVideo" xml:space="preserve">
+    <value>Receiving i.LINK data. Detecting the video stream…</value>
+  </data>
+  <data name="FwWaitForData" xml:space="preserve">
+    <value>Waiting for i.LINK MPEG-TS. Start playback on the deck.</value>
+  </data>
+  <data name="FwDecodeFailed" xml:space="preserve">
+    <value>Could not decode i.LINK preview.</value>
+  </data>
+  <data name="FwCaptureStillAvailable" xml:space="preserve">
+    <value>Native TS recording is still available.</value>
+  </data>
+  <data name="FwInputStatus" xml:space="preserve">
+    <value>Received {0:N1} MiB · Decoded {1:N0} frames</value>
+  </data>
+  <data name="FwRecordingProgress" xml:space="preserve">
+    <value>Recording native TS · {0:N1} MiB written</value>
+  </data>
+  <data name="FwRecordFailed" xml:space="preserve">
+    <value>Could not save i.LINK recording.</value>
+  </data>
+  <data name="FwSavedRecording" xml:space="preserve">
+    <value>Saved {0} · {1:N0} TS packets</value>
+  </data>
+  <data name="FwCheckRecording" xml:space="preserve">
+    <value>Check TS recording…</value>
+  </data>
   <data name="BackendFireWireDesc" xml:space="preserve">
-    <value>Byte-preserving IEEE 1394 MPEG-TS, D-VHS, HDV, and DV tape capture.</value>
+    <value>Preview and record native MPEG-TS from an i.LINK tape device.</value>
   </data>
   <data name="BackendRfName" xml:space="preserve">
     <value>RF / Baseband SignalCapture</value>
@@ -1277,5 +1406,161 @@
   </data>
   <data name="DsReportOpenFailed" xml:space="preserve">
     <value>Could not open the recording report · {0}</value>
+  </data>
+  <data name="FwInfoHeading" xml:space="preserve">
+    <value>i.LINK information</value>
+  </data>
+  <data name="FwInfoDeviceSection" xml:space="preserve">
+    <value>Deck and tape</value>
+  </data>
+  <data name="FwInfoProgramSection" xml:space="preserve">
+    <value>Programs and tracks</value>
+  </data>
+  <data name="FwInfoStatsSection" xml:space="preserve">
+    <value>Live TS statistics</value>
+  </data>
+  <data name="FwInfoRawSection" xml:space="preserve">
+    <value>Raw data</value>
+  </data>
+  <data name="FwInfoCopy" xml:space="preserve">
+    <value>Copy current snapshot</value>
+  </data>
+  <data name="FwInfoMode" xml:space="preserve">
+    <value>Transport state</value>
+  </data>
+  <data name="FwInfoTransportCode" xml:space="preserve">
+    <value>AV/C transport state</value>
+  </data>
+  <data name="FwInfoCounter" xml:space="preserve">
+    <value>Tape counter</value>
+  </data>
+  <data name="FwInfoMediaPresent" xml:space="preserve">
+    <value>Tape loaded</value>
+  </data>
+  <data name="FwInfoMediaType" xml:space="preserve">
+    <value>Media type (driver code)</value>
+  </data>
+  <data name="FwInfoMediaLength" xml:space="preserve">
+    <value>Tape length (device units)</value>
+  </data>
+  <data name="FwInfoRemaining" xml:space="preserve">
+    <value>Remaining tape time</value>
+  </data>
+  <data name="FwInfoMedium" xml:space="preserve">
+    <value>AV/C medium code</value>
+  </data>
+  <data name="FwInfoPower" xml:space="preserve">
+    <value>Power</value>
+  </data>
+  <data name="FwInfoSpeed" xml:space="preserve">
+    <value>Recording speed code</value>
+  </data>
+  <data name="FwInfoRecordFormat" xml:space="preserve">
+    <value>Recording format code</value>
+  </data>
+  <data name="FwInfoPlaybackFormat" xml:space="preserve">
+    <value>Playback format code</value>
+  </data>
+  <data name="FwInfoInputMode" xml:space="preserve">
+    <value>Input signal mode code</value>
+  </data>
+  <data name="FwInfoOutputMode" xml:space="preserve">
+    <value>Output signal mode code</value>
+  </data>
+  <data name="FwInfoSmpte" xml:space="preserve">
+    <value>SMPTE timecode</value>
+  </data>
+  <data name="FwInfoAtn" xml:space="preserve">
+    <value>Absolute track number</value>
+  </data>
+  <data name="FwInfoPlaying" xml:space="preserve">
+    <value>Playing</value>
+  </data>
+  <data name="FwInfoStopped" xml:space="preserve">
+    <value>Stopped</value>
+  </data>
+  <data name="FwInfoPaused" xml:space="preserve">
+    <value>Paused</value>
+  </data>
+  <data name="FwInfoFastForward" xml:space="preserve">
+    <value>Fast-forwarding</value>
+  </data>
+  <data name="FwInfoRewind" xml:space="preserve">
+    <value>Rewinding</value>
+  </data>
+  <data name="FwInfoRecording" xml:space="preserve">
+    <value>Recording on deck</value>
+  </data>
+  <data name="FwInfoUnavailable" xml:space="preserve">
+    <value>Unavailable</value>
+  </data>
+  <data name="FwInfoUnsupported" xml:space="preserve">
+    <value>Unsupported by device</value>
+  </data>
+  <data name="FwInfoWaiting" xml:space="preserve">
+    <value>Waiting for input</value>
+  </data>
+  <data name="FwInfoNotSeen" xml:space="preserve">
+    <value>Not seen in current stream</value>
+  </data>
+  <data name="FwInfoYes" xml:space="preserve">
+    <value>Yes</value>
+  </data>
+  <data name="FwInfoNo" xml:space="preserve">
+    <value>No</value>
+  </data>
+  <data name="FwInfoProgram" xml:space="preserve">
+    <value>Program</value>
+  </data>
+  <data name="FwInfoServiceName" xml:space="preserve">
+    <value>Service name</value>
+  </data>
+  <data name="FwInfoEventName" xml:space="preserve">
+    <value>Event name</value>
+  </data>
+  <data name="FwInfoBroadcastStart" xml:space="preserve">
+    <value>Broadcast start</value>
+  </data>
+  <data name="FwInfoBroadcastClock" xml:space="preserve">
+    <value>Broadcast clock (stream)</value>
+  </data>
+  <data name="FwInfoPreviewTrack" xml:space="preserve">
+    <value>In preview</value>
+  </data>
+  <data name="FwInfoPrivateData" xml:space="preserve">
+    <value>Private data / PES</value>
+  </data>
+  <data name="FwInfoSegment" xml:space="preserve">
+    <value>Stream segment</value>
+  </data>
+  <data name="FwInfoDuration" xml:space="preserve">
+    <value>Stream elapsed</value>
+  </data>
+  <data name="FwInfoRate" xml:space="preserve">
+    <value>TS192 receive bitrate</value>
+  </data>
+  <data name="FwInfoMalformed" xml:space="preserve">
+    <value>Malformed packets</value>
+  </data>
+  <data name="FwInfoTransportErrors" xml:space="preserve">
+    <value>Transport errors (TEI)</value>
+  </data>
+  <data name="FwInfoClockJumps" xml:space="preserve">
+    <value>Clock jumps</value>
+  </data>
+  <data name="FwInfoPidColumns" xml:space="preserve">
+    <value>PID · Packets · Continuity errors · TEI</value>
+  </data>
+  <data name="FwInfoPrefix" xml:space="preserve">
+    <value>TS192 prefix sample</value>
+  </data>
+  <data name="FwInfoServicePids" xml:space="preserve">
+    <value>Service table PIDs</value>
+  </data>
+  <data name="FwInfoReadAt" xml:space="preserve">
+    <value>Last read</value>
+  </data>
+  <data name="FwInfoNetwork" xml:space="preserve">
+    <value>Broadcast network</value>
   </data>
 </root>

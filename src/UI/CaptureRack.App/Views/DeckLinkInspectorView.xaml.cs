@@ -18,6 +18,8 @@ public sealed partial class DeckLinkInspectorView : UserControl
     private CultureInfo culture = CultureInfo.InvariantCulture;
     private bool syncing;
     private bool isIdle = true;
+    private bool vancScanActive;
+    private bool showFilledVancLines;
 
     public CapturePixelFormat SelectedVideoFormat { get; private set; } = CapturePixelFormat.V210;
     public CaptureAudioFormat SelectedAudioFormat { get; private set; } = CaptureAudioFormat.Pcm16;
@@ -29,6 +31,9 @@ public sealed partial class DeckLinkInspectorView : UserControl
     public double AnalogAudioGainLeftDb { get; private set; }
     public double AnalogAudioGainRightDb { get; private set; }
     public bool AnalogAudioGainLinked { get; private set; } = true;
+    public VancInputOptions VancInput { get; private set; } = new();
+    public bool CanMapVancInput => SelectedDevice?.SupportsVancInputMapping == true &&
+        SelectedVideoSource is { } source && DeckLinkCapture.IsVancScanInput(source.Id);
 
     public CaptureDevice? SelectedDevice => DevicePicker.SelectedItem as CaptureDevice;
     public VideoInputSource? SelectedVideoSource => VideoInputPicker.SelectedItem as VideoInputSource;
@@ -50,6 +55,8 @@ public sealed partial class DeckLinkInspectorView : UserControl
     public event EventHandler? VideoFormatChanged;
     public event EventHandler? AudioFormatChanged;
     public event EventHandler? AnalogSettingsChanged;
+    public event EventHandler? VancSettingsChanged;
+    public event EventHandler? VancScanRequested;
 
     public DeckLinkInspectorView() => InitializeComponent();
 
@@ -74,6 +81,35 @@ public sealed partial class DeckLinkInspectorView : UserControl
         AnalogAudioGainRightDb = Math.Clamp(rightDb, -12, 12);
         AnalogAudioGainLinked = linked;
         SyncAnalogUiFromState();
+    }
+
+    public void FillVancInputLines(VancInputOptions filled)
+    {
+        var changed = VancInput != filled;
+        showFilledVancLines = true;
+        RestoreVancSettings(filled);
+        if (changed)
+            VancSettingsChanged?.Invoke(this, EventArgs.Empty);
+    }
+
+    public void RestoreVancSettings(VancInputOptions? options)
+    {
+        VancInput = (options ?? new()).Normalized();
+        var wasSyncing = syncing;
+        syncing = true;
+        try
+        {
+            VancInputCheckBox.IsChecked = VancInput.Enabled;
+            VancInputLine1.Value = VancInput.Line1;
+            VancInputLine2.Value = VancInput.Line2;
+            VancInputLine3.Value = VancInput.Line3;
+        }
+        finally
+        {
+            syncing = wasSyncing;
+        }
+
+        UpdateVancControlsState();
     }
 
     public void SetFormats(uint? videoFormat, uint? audioFormat)
@@ -120,6 +156,7 @@ public sealed partial class DeckLinkInspectorView : UserControl
         finally
         {
             syncing = false;
+            UpdateVancControlsState();
         }
         UpdateAnalogControlsState(isIdle);
     }
@@ -159,6 +196,13 @@ public sealed partial class DeckLinkInspectorView : UserControl
             ToolTipService.SetToolTip(VideoFormat8Button, localize("Video8"));
             ToolTipService.SetToolTip(AudioFormat16Button, localize("Audio16"));
             ToolTipService.SetToolTip(AudioFormat32Button, localize("Audio32"));
+
+            VancScanButton.Content = localize(vancScanActive ? "VancScanCancel" : "VancScan");
+            VancInputCheckBox.Content = localize("CaptureVancInput");
+            VancInputLine1.Header = string.Format(culture, localize("VancPictureLine"), 1);
+            VancInputLine2.Header = string.Format(culture, localize("VancPictureLine"), 2);
+            VancInputLine3.Header = string.Format(culture, localize("VancPictureLine"), 3);
+            VancInputHint.Text = localize("VancInputHint");
 
             AnalogSectionHeading.Text = localize("AnalogSectionHeading");
             AnalogIreLabel.Text = localize("AnalogIreLabel");
@@ -217,6 +261,7 @@ public sealed partial class DeckLinkInspectorView : UserControl
         AudioFormat32Button.IsEnabled = idle || previewAudioFormat == CaptureAudioFormat.Pcm32;
         RecordingModeHint.Visibility = SelectedMode is { Id: null } ? Visibility.Visible : Visibility.Collapsed;
         UpdateAnalogControlsState(idle);
+        UpdateVancControlsState();
     }
 
     private bool SupportsSelectedMode(CapturePixelFormat format)
@@ -406,6 +451,7 @@ public sealed partial class DeckLinkInspectorView : UserControl
             syncing = false;
         }
         UpdateAnalogControlsState(isIdle);
+        UpdateVancControlsState();
         SelectionChanged?.Invoke(this, EventArgs.Empty);
     }
 
@@ -473,6 +519,58 @@ public sealed partial class DeckLinkInspectorView : UserControl
         SelectedAudioFormat = format;
         UpdateFormatSegmentVisuals();
         AudioFormatChanged?.Invoke(this, EventArgs.Empty);
+    }
+
+    public void ShowVancScanStatus(string text, bool scanning)
+    {
+        vancScanActive = scanning;
+        VancScanButton.Content = localize(scanning ? "VancScanCancel" : "VancScan");
+        VancScanStatusText.Text = text;
+        VancScanStatusText.Visibility = text.Length == 0 ? Visibility.Collapsed : Visibility.Visible;
+        UpdateVancControlsState();
+    }
+
+    private void VancScan_Click(object sender, RoutedEventArgs e) => VancScanRequested?.Invoke(this, EventArgs.Empty);
+
+    private void UpdateVancControlsState()
+    {
+        var canScanInput = SelectedVideoSource is { } source && DeckLinkCapture.IsVancScanInput(source.Id);
+        VancScanGroup.Visibility = canScanInput ? Visibility.Visible : Visibility.Collapsed;
+        VancScanButton.IsEnabled = vancScanActive || (isIdle && canScanInput && HasCompleteSelection);
+        var supported = CanMapVancInput;
+        VancInputGroup.Visibility = supported ? Visibility.Visible : Visibility.Collapsed;
+        VancInputCheckBox.IsEnabled = isIdle && supported;
+        VancInputLines.Visibility = VancInput.Enabled || showFilledVancLines ? Visibility.Visible : Visibility.Collapsed;
+        VancInputLine1.IsEnabled = VancInputCheckBox.IsEnabled && VancInput.Enabled;
+        VancInputLine2.IsEnabled = VancInputLine1.IsEnabled;
+        VancInputLine3.IsEnabled = VancInputLine1.IsEnabled;
+    }
+
+    private void VancInput_Click(object sender, RoutedEventArgs e)
+    {
+        if (syncing || !VancInputCheckBox.IsEnabled)
+            return;
+
+        RestoreVancSettings(VancInput with { Enabled = VancInputCheckBox.IsChecked == true });
+        VancSettingsChanged?.Invoke(this, EventArgs.Empty);
+    }
+
+    private void VancLine_ValueChanged(NumberBox sender, NumberBoxValueChangedEventArgs e)
+    {
+        if (syncing || !isIdle || !VancInput.Enabled)
+            return;
+
+        var options = VancInput;
+        int ReadLine(NumberBox box, int previous) =>
+            double.IsFinite(box.Value) ? (int)Math.Round(box.Value) : previous;
+        RestoreVancSettings(options with
+        {
+            Line1 = ReadLine(VancInputLine1, options.Line1),
+            Line2 = ReadLine(VancInputLine2, options.Line2),
+            Line3 = ReadLine(VancInputLine3, options.Line3)
+        });
+        if (options != VancInput)
+            VancSettingsChanged?.Invoke(this, EventArgs.Empty);
     }
 
     private void AnalogSetting_SelectionChanged(object sender, SelectionChangedEventArgs e)

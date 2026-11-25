@@ -142,8 +142,8 @@ public sealed class WorkspaceModuleRegistry
             new TestSignalWorkspaceModule(),
             new PlannedWorkspaceModule(
                 new("windows.directshow", CaptureBackendCategory.Video,
-                    "BackendDirectShowName", "BackendDirectShowDesc", IsImplementedInUi: false,
-                    new(true, true, true, true, true, true, true, false, true),
+                    "BackendDirectShowName", "BackendDirectShowDesc", IsImplementedInUi: true,
+                    new(true, true, true, true, false, true, true, false, false),
                     IconGlyph: "\uE722",
                     CliCommandHint: "CaptureRack.Probe.exe directshow list"),
                 loc =>
@@ -154,8 +154,8 @@ public sealed class WorkspaceModuleRegistry
                 ]),
             new PlannedWorkspaceModule(
                 new("windows.firewire", CaptureBackendCategory.FireWire,
-                    "BackendFireWireName", "BackendFireWireDesc", IsImplementedInUi: false,
-                    new(false, false, false, false, true, false, false, true, false),
+                    "BackendFireWireName", "BackendFireWireDesc", IsImplementedInUi: true,
+                    new(true, true, true, true, false, true, true, false, false),
                     IconGlyph: "\uE88E",
                     CliCommandHint: "CaptureRack.Probe.exe firewire list"),
                 loc =>

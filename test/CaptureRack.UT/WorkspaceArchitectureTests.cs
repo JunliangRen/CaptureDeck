@@ -95,7 +95,7 @@ public sealed class WorkspaceArchitectureTests
         Assert.Single(catalog.ByCategory(CaptureBackendCategory.Audio));
 
         var activeSources = catalog.Sources.Where(s => s.IsImplementedInUi).ToArray();
-        Assert.Equal([DeckLinkBackend.BackendId, TestSignal.BackendId], activeSources.Select(s => s.BackendId));
+        Assert.Equal([DeckLinkBackend.BackendId, TestSignal.BackendId, "windows.directshow", "windows.firewire"], activeSources.Select(s => s.BackendId));
     }
 
     [Fact]
@@ -170,6 +170,118 @@ public sealed class WorkspaceArchitectureTests
         meter.UpdateInput(0.0, 0.0, totalLeftClips: 1, totalRightClips: 0);
         Assert.Equal(1, meter.VisibleLeftClips);
         Assert.Equal(0, meter.VisibleRightClips);
+    }
+
+    [Fact]
+    public void ScopeRasterUsesPhysicalPixelsAndResolvesAdjacentTenBitCodes()
+    {
+        var request = VideoScopeRaster.FromDisplay(600, 512, 500, 2);
+        Assert.True(request.WaveWidth >= 1200);
+        Assert.Equal(1024, request.WaveHeight);
+        Assert.True(request.VectorSize >= 1000 && request.VectorSize % 2 == 1);
+        Assert.Equal(new VideoScopeRaster(1536, 1536, 1025), VideoScopeRaster.FromDisplay(3000, 2000, 2000, 2));
+
+        var frame = new PreviewFrame { Format = CapturePixelFormat.V210 };
+        frame.Resize(6, 2, 16);
+        var words = MemoryMarshal.Cast<byte, uint>(frame.Pixels.AsSpan());
+        for (var row = 0; row < frame.Height; row++)
+        {
+            var y = 501u + (uint)row;
+            words[row * 4] = words[row * 4 + 2] = 512u | y << 10 | 512u << 20;
+            words[row * 4 + 1] = words[row * 4 + 3] = y | 512u << 10 | y << 20;
+        }
+
+        var scopes = new VideoScopes.Renderer(request).Analyze(frame, 10,
+            VideoScopeWaveformMode.Luma, PreviewColorMatrix.Auto);
+        Assert.Equal(request, scopes.Raster);
+        Assert.Equal(request.WaveWidth * request.WaveHeight * 4, scopes.LumaWaveform.Length);
+        Assert.Equal(request.VectorSize * request.VectorSize * 4, scopes.Vectorscope.Length);
+        const int x = 73;
+        byte Green(int code) => scopes.LumaWaveform[((1023 - code) * request.WaveWidth + x) * 4 + 1];
+        Assert.True(Green(501) > Green(500));
+        Assert.True(Green(502) > Green(503));
+    }
+
+    [Theory]
+    [InlineData(8, 1116, 924, 16, 32.425, 235)]
+    [InlineData(10, 1117, 925, 64, 129.7, 940)]
+    public void ScopeDrawsTheSetupGuideBetweenLegalBlackAndWhite(int bits, int guideRow, int quarterRow,
+        int black, double setup, int white)
+    {
+        Assert.Equal(black, VideoScopes.LumaCodeAtIre(bits, 0));
+        Assert.Equal(setup, VideoScopes.LumaCodeAtIre(bits, VideoScopes.SetupIre), 3);
+        Assert.Equal(white, VideoScopes.LumaCodeAtIre(bits, 100));
+        var frame = new PreviewFrame { Format = CapturePixelFormat.Uyvy };
+        frame.Resize(2, 2, 4);
+        frame.Pixels.AsSpan().Fill(128);
+        var raster = new VideoScopeRaster(512, 1280, 129);
+        var renderer = new VideoScopes.Renderer(raster);
+
+        var luma = renderer.Analyze(frame, bits, VideoScopeWaveformMode.Luma, PreviewColorMatrix.Auto);
+        var ire = renderer.Analyze(frame, bits, VideoScopeWaveformMode.Luma, PreviewColorMatrix.Auto, ireScale: true);
+        var rgb = renderer.Analyze(frame, bits, VideoScopeWaveformMode.RgbParade, PreviewColorMatrix.Auto, ireScale: true);
+        int RedAt(VideoScopes scopes, int row, int x) => scopes.LumaWaveform[(row * raster.WaveWidth + x) * 4 + 2];
+
+        Assert.True(RedAt(luma, guideRow, 25) > RedAt(luma, guideRow - 1, 25));
+        Assert.True(RedAt(luma, guideRow, 25) > RedAt(luma, guideRow, 29));
+        Assert.Equal(RedAt(luma, guideRow, 25), RedAt(ire, guideRow, 25));
+        Assert.True(RedAt(ire, quarterRow, 29) > RedAt(luma, quarterRow, 29));
+        Assert.Equal(RedAt(rgb, guideRow - 1, 25), RedAt(rgb, guideRow, 25));
+    }
+
+    [Fact]
+    public void AudioSpectrumUsesTwoDisplayWindowsFromOneThirtyFpsPacket()
+    {
+        var monitor = new StereoMonitor(CaptureAudioFormat.Pcm16, sampleRate: 48_000);
+        for (var i = 0; i < 800; i++)
+            monitor.Add(1000, -1000);
+        for (var i = 0; i < 800; i++)
+            monitor.Add(2000, -2000);
+
+        var first = Assert.IsType<StereoMonitor.AudioWindow>(monitor.ReadForDisplay());
+        var second = Assert.IsType<StereoMonitor.AudioWindow>(monitor.ReadForDisplay());
+        Assert.Equal(1000 / 32768d, first.Left[^1]);
+        Assert.Equal(2000 / 32768d, second.Left[^1]);
+        Assert.Null(monitor.ReadForDisplay());
+    }
+
+    [Theory]
+    [InlineData(0x75707072u, 220, 32)]
+    [InlineData(0x6C6F7772u, 32, 220)]
+    public void VideoScopesFollowBothFieldsInSourceOrder(uint dominance, int firstLuma, int secondLuma)
+    {
+        byte[] uyvy = [128, 220, 128, 220, 128, 32, 128, 32, 128, 220, 128, 220, 128, 32, 128, 32];
+        var handle = GCHandle.Alloc(uyvy, GCHandleType.Pinned);
+        try
+        {
+            var feed = new PreviewFeed { DeinterlaceMode = PreviewDeinterlaceMode.Off };
+            feed.Offer(handle.AddrOfPinnedObject(), 2, 4, 4, (ulong)uyvy.Length, false,
+                CapturePixelFormat.Uyvy, dominance);
+            feed.ConvertLatest(8, fieldInterval: 1);
+
+            feed.VisitScopes(field =>
+            {
+                Assert.True(field.SecondFieldDueAt > 0);
+                AssertTrace(field, firstLuma, secondLuma);
+            }, long.MinValue);
+            feed.VisitScopes(field => AssertTrace(field, secondLuma, firstLuma), long.MaxValue);
+
+            void AssertTrace(VideoScopes field, int present, int absent)
+            {
+                Assert.Equal(0d, field.LumaOutsideLegalFraction);
+                Assert.True(Green(present) > Green(absent) + 50);
+
+                byte Green(int luma)
+                {
+                    var row = ((255 - luma) * (field.Raster.WaveHeight - 1) + 127) / 255;
+                    return field.LumaWaveform[(row * field.Raster.WaveWidth + 77) * 4 + 1];
+                }
+            }
+        }
+        finally
+        {
+            handle.Free();
+        }
     }
 
     [Fact]

@@ -5,7 +5,8 @@
     xmlns:controls="using:CaptureRack.App.Controls"
     xmlns:views="using:CaptureRack.App.Views"
     Title="CaptureRack">
-    <Grid x:Name="RootShell" Background="Transparent" SizeChanged="Viewport_SizeChanged">
+    <Grid x:Name="RootShell" Background="Transparent" SizeChanged="Viewport_SizeChanged"
+          KeyboardAcceleratorPlacementMode="Hidden">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="*" />
@@ -35,7 +36,7 @@
 
             <!-- Brand + Workspace Mode Switcher + Multi-Backend Source Rack Switcher -->
             <StackPanel Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
-                <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center" Margin="0,0,4,0">
+                <StackPanel x:Name="TitleBarBrand" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center" Margin="0,0,4,0">
                     <Border Width="20" Height="20" CornerRadius="3"
                             Background="{ThemeResource StudioCardBrush}"
                             BorderBrush="{ThemeResource StudioHairlineBrush}" BorderThickness="1">
@@ -51,7 +52,7 @@
                 </StackPanel>
 
                 <!-- Primary Mode Switcher (Capture / QC Center) -->
-                <Border Background="{ThemeResource StudioSegmentTrackBrush}"
+                <Border x:Name="TitleBarModeSwitcher" Background="{ThemeResource StudioSegmentTrackBrush}"
                         BorderBrush="{ThemeResource StudioHairlineBrush}" BorderThickness="1"
                         CornerRadius="4" Padding="2">
                     <StackPanel Orientation="Horizontal" Spacing="2">
@@ -83,11 +84,17 @@
                     <StackPanel Orientation="Horizontal" Spacing="7">
                         <Rectangle x:Name="QuickSourceDot" Width="7" Height="7" RadiusX="1" RadiusY="1"
                                    Fill="{ThemeResource StudioTextMutedBrush}" VerticalAlignment="Center" />
-                        <TextBlock x:Name="ConfigurationSummary" MaxWidth="360" FontSize="13"
+                        <TextBlock x:Name="ConfigurationSummary" MaxWidth="520" FontSize="13"
                                    Foreground="{ThemeResource StudioTextPrimaryBrush}"
                                    TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
                         <FontIcon Glyph="&#xE70D;" FontSize="9" Foreground="{ThemeResource StudioTextSecondaryBrush}" />
                     </StackPanel>
+                    <ToolTipService.ToolTip>
+                        <ToolTip Placement="Bottom">
+                            <TextBlock Text="{x:Bind ConfigurationSummary.Text, Mode=OneWay}"
+                                       MaxWidth="560" TextWrapping="Wrap" />
+                        </ToolTip>
+                    </ToolTipService.ToolTip>
                     <Button.Flyout>
                         <Flyout x:Name="SourceRackFlyout" Placement="BottomEdgeAlignedLeft">
                             <StackPanel Width="336" Spacing="10">
@@ -168,7 +175,7 @@
             <Border x:Name="TitleBarDragRegion" Grid.Column="1" Background="Transparent" />
 
             <!-- Right Title Bar Actions -->
-            <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="4" VerticalAlignment="Center" Margin="0,0,8,0">
+            <StackPanel x:Name="TitleBarActions" Grid.Column="2" Orientation="Horizontal" Spacing="4" VerticalAlignment="Center" Margin="0,0,8,0">
                 <Button x:Name="ToggleInspectorButton" Style="{StaticResource StudioIconButtonStyle}"
                         Click="ToggleInspectorButton_Click" AutomationProperties.Name="Capture configuration">
                     <FontIcon x:Name="ToggleInspectorIcon" Glyph="&#xE90C;" FontSize="14" />
@@ -346,12 +353,22 @@
                                         Background="{ThemeResource StudioHudBackdropBrush}"
                                         BorderBrush="{ThemeResource StudioHudBorderBrush}" BorderThickness="1"
                                         IsHitTestVisible="False">
-                                    <StackPanel Orientation="Horizontal" Spacing="7">
+                                    <Grid ColumnSpacing="7">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="Auto" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
                                         <Rectangle x:Name="PreviewHudDot" Width="6" Height="6" RadiusX="1" RadiusY="1"
-                                                   Fill="{ThemeResource StudioSignalLockBrush}" VerticalAlignment="Center" />
-                                        <TextBlock x:Name="PreviewDetail" Style="{StaticResource StudioMonoTextStyle}"
-                                                   FontSize="11" Foreground="#F1F5F9" VerticalAlignment="Center" />
-                                    </StackPanel>
+                                                   Fill="{ThemeResource StudioSignalLockBrush}" VerticalAlignment="Top" Margin="0,5,0,0" />
+                                        <StackPanel Grid.Column="1" Spacing="2">
+                                            <TextBlock x:Name="PreviewDetail" Style="{StaticResource StudioMonoTextStyle}"
+                                                       FontSize="11" Foreground="#F1F5F9" TextWrapping="Wrap" />
+                                            <TextBlock x:Name="PreviewAudioDetail" Style="{StaticResource StudioMonoTextStyle}"
+                                                       FontSize="11" Foreground="#F1F5F9" TextWrapping="Wrap" Visibility="Collapsed" />
+                                            <TextBlock x:Name="PreviewTapeDetail" Style="{StaticResource StudioMonoTextStyle}"
+                                                       FontSize="11" Foreground="#F1F5F9" TextWrapping="Wrap" Visibility="Collapsed" />
+                                        </StackPanel>
+                                    </Grid>
                                 </Border>
 
                                 <Border x:Name="PreviewRecTally" HorizontalAlignment="Right" VerticalAlignment="Top"
@@ -494,26 +511,26 @@
                                             CornerRadius="2" Padding="6,5">
                                         <Grid ColumnSpacing="6">
                                             <Grid.ColumnDefinitions>
-                                                <ColumnDefinition Width="34" />
+                                                <ColumnDefinition x:Name="LumaAxisColumn" Width="34" />
                                                 <ColumnDefinition Width="*" />
                                             </Grid.ColumnDefinitions>
-                                            <Grid AutomationProperties.AccessibilityView="Raw">
-                                                <Grid.RowDefinitions>
-                                                    <RowDefinition Height="*" />
-                                                    <RowDefinition Height="*" />
-                                                    <RowDefinition Height="*" />
-                                                    <RowDefinition Height="*" />
-                                                </Grid.RowDefinitions>
+                                            <Grid x:Name="LumaAxis" SizeChanged="LumaAxis_SizeChanged" AutomationProperties.AccessibilityView="Raw">
                                                 <TextBlock x:Name="LumaScaleTop" Text="—" Style="{StaticResource StudioMonoTextStyle}"
-                                                           FontSize="10" Foreground="#9BA5B8" HorizontalAlignment="Right" VerticalAlignment="Top" />
-                                                <TextBlock x:Name="LumaScaleHigh" Grid.Row="1" Text="—" Style="{StaticResource StudioMonoTextStyle}"
-                                                           FontSize="10" Foreground="#9BA5B8" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,-6,0,0" />
-                                                <TextBlock x:Name="LumaScaleMid" Grid.Row="2" Text="—" Style="{StaticResource StudioMonoTextStyle}"
-                                                           FontSize="10" Foreground="#9BA5B8" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,-6,0,0" />
-                                                <TextBlock x:Name="LumaScaleLow" Grid.Row="3" Text="—" Style="{StaticResource StudioMonoTextStyle}"
-                                                           FontSize="10" Foreground="#9BA5B8" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,-6,0,0" />
-                                                <TextBlock x:Name="LumaScaleZero" Grid.Row="3" Text="0" Style="{StaticResource StudioMonoTextStyle}"
-                                                           FontSize="10" Foreground="#9BA5B8" HorizontalAlignment="Right" VerticalAlignment="Bottom" />
+                                                           FontSize="10" Height="12" Foreground="#9BA5B8" HorizontalAlignment="Right" VerticalAlignment="Top" />
+                                                <TextBlock x:Name="LumaScaleHigh" Text="—" Style="{StaticResource StudioMonoTextStyle}"
+                                                           FontSize="10" Height="12" Foreground="#9BA5B8" HorizontalAlignment="Right" VerticalAlignment="Top" />
+                                                <TextBlock x:Name="LumaScaleMid" Text="—" Style="{StaticResource StudioMonoTextStyle}"
+                                                           FontSize="10" Height="12" Foreground="#9BA5B8" HorizontalAlignment="Right" VerticalAlignment="Top" />
+                                                <TextBlock x:Name="LumaScaleLow" Text="—" Style="{StaticResource StudioMonoTextStyle}"
+                                                           FontSize="10" Height="12" Foreground="#9BA5B8" HorizontalAlignment="Right" VerticalAlignment="Top" />
+                                                <TextBlock x:Name="LumaScaleZero" Text="0" Style="{StaticResource StudioMonoTextStyle}"
+                                                           FontSize="10" Height="12" Foreground="#9BA5B8" HorizontalAlignment="Right" VerticalAlignment="Top" />
+                                                <TextBlock x:Name="LumaCodeWhite" Style="{StaticResource StudioMonoTextStyle}"
+                                                           FontSize="10" Height="12" Foreground="#E8BA67" HorizontalAlignment="Right" VerticalAlignment="Top" Visibility="Collapsed" />
+                                                <TextBlock x:Name="LumaCodeBlack" Style="{StaticResource StudioMonoTextStyle}"
+                                                           FontSize="10" Height="12" Foreground="#E8BA67" HorizontalAlignment="Right" VerticalAlignment="Top" Visibility="Collapsed" />
+                                                <TextBlock x:Name="LumaScaleSetup" Text="7.5" Style="{StaticResource StudioMonoTextStyle}"
+                                                           FontSize="10" Height="12" Foreground="#E8BA67" HorizontalAlignment="Right" VerticalAlignment="Top" Visibility="Collapsed" />
                                             </Grid>
                                             <Image x:Name="WaveformPlot" Grid.Column="1" Stretch="Fill"
                                                    AutomationProperties.Name="Luma waveform" />

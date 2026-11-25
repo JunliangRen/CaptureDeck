@@ -4,7 +4,7 @@ using System.Text;
 
 namespace CaptureRack.DeckLink;
 
-public static class DeckLinkCapture
+public static partial class DeckLinkCapture
 {
     private static readonly Guid IteratorClass = new("BA6C6F44-6DA5-4DCE-94AA-EE2D1372A676");
     private static readonly Guid ApiInformationClass = new("263CA19F-ED09-482E-9F9D-84005783A237");
@@ -13,6 +13,8 @@ public static class DeckLinkCapture
     private const uint VideoInputConnection = 0x7669636E;
     private const uint AudioInputConnection = 0x6169636E;
     private const uint VideoInputSignalLocked = 0x7669736C; // visl
+    private const uint VancSourceLine1Mapping = 0x76736C31; // vsl1, followed by vsl2 and vsl3
+    private const int VancMappingCount = 3;
     private const uint AnalogVideoInputFlags = 0x61766966; // avif
     private const uint AnalogAudioConsumerLevels = 0x6161636C; // aacl
     private const uint AnalogAudioInputScaleChannel1 = 0x61697331; // ais1
@@ -80,7 +82,7 @@ public static class DeckLinkCapture
             using var route = routing is { } selected ? new InputRoutingScope(device, selected, analogOptions) : null;
             var info = ReadDevice(index, device, input, includeSources: false, pixelFormat);
             result = RunCapture(device, input, info, requestedMode, duration, progress, cancellation, preview,
-                pixelFormat, recordingPath, audioFormat, previewRecorder, routing?.Video ?? 0, localAudioMonitor);
+                pixelFormat, recordingPath, audioFormat, previewRecorder, localAudioMonitor);
             return false;
         });
         return result ?? throw new InvalidOperationException($"DeckLink device {index} was not found.");
@@ -144,6 +146,7 @@ public static class DeckLinkCapture
         Check(device.GetDisplayName(out var name), "GetDisplayName");
         uint video = 0;
         uint audio = 0;
+        var supportsVancInputMapping = false;
         var supportsAnalogVideoFlags = false;
         var supportsConsumerAudioLevels = false;
         var supportsAnalogAudioGain = false;
@@ -155,6 +158,7 @@ public static class DeckLinkCapture
                 audio = (uint)audioValue;
             if (includeSources)
             {
+                supportsVancInputMapping = CanReadVancMappings(configuration);
                 supportsAnalogVideoFlags = configuration.GetInt(AnalogVideoInputFlags, out _) == 0;
                 supportsConsumerAudioLevels = configuration.GetFlag(AnalogAudioConsumerLevels, out _) == 0;
                 supportsAnalogAudioGain = configuration.GetFloat(AnalogAudioInputScaleChannel1, out _) == 0;
@@ -189,9 +193,21 @@ public static class DeckLinkCapture
             videoSources, audioSources, device is IDeckLinkEncoderInput)
         {
             PersistentId = persistentId,
+            SupportsVancInputMapping = supportsVancInputMapping,
             AnalogCapabilities = new AnalogInputCapabilities(
                 supportsAnalogVideoFlags, supportsConsumerAudioLevels, supportsAnalogAudioGain)
         };
+    }
+
+    private static bool CanReadVancMappings(IDeckLinkConfiguration configuration)
+    {
+        for (uint index = 0; index < VancMappingCount; index++)
+        {
+            if (configuration.GetInt(VancSourceLine1Mapping + index, out _) != 0)
+                return false;
+        }
+
+        return true;
     }
 
     private static IEnumerable<uint> Connections(long mask)
@@ -270,7 +286,7 @@ public static class DeckLinkCapture
     private static CaptureStats RunCapture(IDeckLink device, IDeckLinkInput input, CaptureDevice info,
         uint? requestedMode, TimeSpan? duration, Action<VideoMode, CaptureStats> progress, CancellationToken stop,
         PreviewFeed? preview, CapturePixelFormat format, string? recordingPath, CaptureAudioFormat audioFormat,
-        PreviewRecorder? previewRecorder, uint videoConnection, LocalAudioMonitor? localAudioMonitor)
+        PreviewRecorder? previewRecorder, LocalAudioMonitor? localAudioMonitor)
     {
         var modes = info.Modes;
         if (modes.Count == 0)
@@ -292,7 +308,7 @@ public static class DeckLinkCapture
         while (true)
         {
             var stats = Capture(input, status, mode, duration, detect, progress, stop, preview, format, recordingPath,
-                audioFormat, previewRecorder, videoConnection, automaticMode: requestedMode is null, localAudioMonitor);
+                audioFormat, previewRecorder, automaticMode: requestedMode is null, localAudioMonitor);
             if (stats.Error is not null || stats.NextMode is not { } next || stop.IsCancellationRequested)
                 return stats;
 
@@ -306,14 +322,15 @@ public static class DeckLinkCapture
     private static CaptureStats Capture(IDeckLinkInput input, IDeckLinkStatus? status, VideoMode mode, TimeSpan? duration,
         bool detect, Action<VideoMode, CaptureStats> progress, CancellationToken stop, PreviewFeed? preview,
         CapturePixelFormat format, string? recordingPath, CaptureAudioFormat audioFormat,
-        PreviewRecorder? previewRecorder, uint videoConnection, bool automaticMode, LocalAudioMonitor? localAudioMonitor)
+        PreviewRecorder? previewRecorder, bool automaticMode, LocalAudioMonitor? localAudioMonitor)
     {
         var empty = new CaptureStats();
+        var readAudio = previewRecorder?.ReadAudioFromUi != true;
         if (stop.IsCancellationRequested)
             return empty;
 
         using var recording = recordingPath is null ? null : new MovRecording(recordingPath, mode, format, audioFormat);
-        var lumaScaleBits = preview is null ? 0 : ReadMaximumVideoBits(input, videoConnection, mode.Id, format);
+        var lumaScaleBits = format == CapturePixelFormat.V210 ? 10 : 8;
         var callback = new CaptureCallback(preview, format, audioFormat, mode, recording, automaticMode, localAudioMonitor);
         Check(input.SetCallback(callback), "SetCallback");
         try
@@ -343,10 +360,11 @@ public static class DeckLinkCapture
                         var clock = Stopwatch.StartNew();
                         var nextReport = TimeSpan.Zero;
                         var nextLockPoll = TimeSpan.Zero;
+                        var fieldInterval = mode.PreviewFieldInterval;
                         while (!stop.IsCancellationRequested)
                         {
                             recording?.CheckWriter();
-                            preview?.ConvertLatest(lumaScaleBits);
+                            preview?.ConvertLatest(lumaScaleBits, fieldInterval);
                             var elapsed = clock.Elapsed;
                             if (preview is not null && status is not null && elapsed >= nextLockPoll)
                             {
@@ -357,7 +375,7 @@ public static class DeckLinkCapture
                             }
                             var report = elapsed >= nextReport;
                             var switchMode = detect && callback.TryBeginModeChange();
-                            var snapshot = callback.Snapshot(report || switchMode);
+                            var snapshot = callback.Snapshot(report || switchMode, readAudio: readAudio);
                             if (report || switchMode)
                             {
                                 progress(mode, snapshot);
@@ -366,7 +384,8 @@ public static class DeckLinkCapture
                             if (snapshot.Error is not null || switchMode)
                                 break;
 
-                            var interval = TimeSpan.FromMilliseconds(preview is null ? 250 : 16);
+                            var interval = TimeSpan.FromMilliseconds(preview is null ? 250 :
+                                mode.IsInterlaced && preview.DeinterlaceMode == PreviewDeinterlaceMode.BobWeave2x ? 4 : 16);
                             if (duration is { } limit)
                             {
                                 var remaining = limit - clock.Elapsed;
@@ -375,7 +394,10 @@ public static class DeckLinkCapture
                                 interval = remaining < interval ? remaining : interval;
                             }
 
-                            stop.WaitHandle.WaitOne(interval);
+                            if (preview is null)
+                                stop.WaitHandle.WaitOne(interval);
+                            else if (!stop.IsCancellationRequested)
+                                preview.WaitForInput(interval);
                         }
                     }
                     finally
@@ -405,30 +427,10 @@ public static class DeckLinkCapture
             Check(input.SetCallback(null), "Clear callback");
         }
 
-        var result = callback.Snapshot(publishMonitor: true);
+        var result = callback.Snapshot(publishMonitor: true, readAudio: readAudio);
         if (recording is not null)
             result.Recording = recording.Finish();
         return result;
-    }
-
-    private static int ReadMaximumVideoBits(IDeckLinkInput input, uint connection, uint mode, CapturePixelFormat activeFormat)
-    {
-        bool Supports(uint pixelFormat) =>
-            input.DoesSupportVideoMode(connection, mode, pixelFormat, NoConversion, 0, out var actual, out var supported) >= 0 &&
-            supported != 0 && actual == mode;
-
-        const uint rgb12 = 0x52313242;   // R12B
-        const uint rgb12Le = 0x5231324C; // R12L
-        const uint rgb10 = 0x72323130;   // r210
-        const uint rgb10X = 0x52313062;  // R10b
-        const uint rgb10XLe = 0x5231306C; // R10l
-        if (Supports(rgb12) || Supports(rgb12Le))
-            return 12;
-        if (activeFormat == CapturePixelFormat.V210 || Supports((uint)CapturePixelFormat.V210) ||
-            Supports(rgb10) || Supports(rgb10X) || Supports(rgb10XLe))
-            return 10;
-
-        return 8;
     }
 
     private static T Activate<T>(Guid clsid) where T : class =>
@@ -447,11 +449,67 @@ public static class DeckLinkCapture
     public static string FormatFourCc(uint value) =>
         Encoding.ASCII.GetString([(byte)(value >> 24), (byte)(value >> 16), (byte)(value >> 8), (byte)value]);
 
+    private sealed class VancMappingScope : IDisposable
+    {
+        private readonly IDeckLinkConfiguration configuration;
+        private readonly long[] original = new long[VancMappingCount];
+        private readonly long[] current = new long[VancMappingCount];
+
+        public VancMappingScope(IDeckLinkConfiguration configuration)
+        {
+            this.configuration = configuration;
+            for (var index = 0; index < VancMappingCount; index++)
+            {
+                Check(configuration.GetInt(VancSourceLine1Mapping + (uint)index, out original[index]),
+                    $"Read VANC picture line {index + 1}");
+                current[index] = original[index];
+            }
+        }
+
+        public void Apply(ReadOnlySpan<int> lines)
+        {
+            for (var index = 0; index < VancMappingCount; index++)
+            {
+                // Enable the first line before dependent lines, or disable it last.
+                var destination = DestinationIndex(index, lines[0]);
+                Check(SetLine(destination, lines[destination]), $"Set VANC picture line {destination + 1}");
+            }
+        }
+
+        public void Dispose()
+        {
+            var firstFailure = 0;
+            for (var index = 0; index < VancMappingCount; index++)
+            {
+                var destination = DestinationIndex(index, original[0]);
+                var result = SetLine(destination, original[destination]);
+                if (firstFailure == 0 && result < 0)
+                    firstFailure = result;
+            }
+
+            Check(firstFailure, "Restore previous VANC input mapping");
+        }
+
+        private int SetLine(int destination, long value)
+        {
+            if (current[destination] == value)
+                return 0;
+            var result = configuration.SetInt(VancSourceLine1Mapping + (uint)destination, value);
+            if (result >= 0)
+                current[destination] = value;
+            return result;
+        }
+
+        private static int DestinationIndex(int index, long firstLine) =>
+            firstLine == 0 ? VancMappingCount - 1 - index : index;
+    }
+
     private sealed class InputRoutingScope : IDisposable
     {
         private readonly IDeckLinkConfiguration configuration;
         private readonly long originalVideo;
         private readonly long originalAudio;
+        private VancMappingScope? vancMappings;
         private long originalAnalogFlags;
         private int originalConsumerAudio;
         private double originalGainLeft;
@@ -478,6 +536,12 @@ public static class DeckLinkCapture
 
                 if (analog is not null)
                     ApplyAnalogOptions(routing, analog);
+                if (routing.VancInput is { } vanc && (vanc.Enabled || CanReadVancMappings(configuration)))
+                {
+                    vancMappings = new(configuration);
+                    vanc = vanc.Normalized();
+                    vancMappings.Apply(vanc.Enabled ? [vanc.Line1, vanc.Line2, vanc.Line3] : [0, 0, 0]);
+                }
             }
             catch
             {
@@ -550,22 +614,29 @@ public static class DeckLinkCapture
         {
             try
             {
-                if (gainLeftChanged)
-                    configuration.SetFloat(AnalogAudioInputScaleChannel1, originalGainLeft);
-                if (gainRightChanged)
-                    configuration.SetFloat(AnalogAudioInputScaleChannel2, originalGainRight);
-                if (consumerAudioChanged)
-                    configuration.SetFlag(AnalogAudioConsumerLevels, originalConsumerAudio);
-                if (analogFlagsChanged)
-                    configuration.SetInt(AnalogVideoInputFlags, originalAnalogFlags);
-                // Video routing can affect the audio routing. Restore it first.
-                if (videoChanged)
-                    Check(configuration.SetInt(VideoInputConnection, originalVideo), "Restore previous video input");
+                vancMappings?.Dispose();
             }
             finally
             {
-                if (videoChanged || audioChanged)
-                    Check(configuration.SetInt(AudioInputConnection, originalAudio), "Restore previous audio input");
+                try
+                {
+                    if (gainLeftChanged)
+                        configuration.SetFloat(AnalogAudioInputScaleChannel1, originalGainLeft);
+                    if (gainRightChanged)
+                        configuration.SetFloat(AnalogAudioInputScaleChannel2, originalGainRight);
+                    if (consumerAudioChanged)
+                        configuration.SetFlag(AnalogAudioConsumerLevels, originalConsumerAudio);
+                    if (analogFlagsChanged)
+                        configuration.SetInt(AnalogVideoInputFlags, originalAnalogFlags);
+                    // Video routing can affect the audio routing. Restore it first.
+                    if (videoChanged)
+                        Check(configuration.SetInt(VideoInputConnection, originalVideo), "Restore previous video input");
+                }
+                finally
+                {
+                    if (videoChanged || audioChanged)
+                        Check(configuration.SetInt(AudioInputConnection, originalAudio), "Restore previous audio input");
+                }
             }
         }
     }
@@ -597,6 +668,7 @@ public sealed record CaptureDevice(int Index, string Name, string VideoInput, st
     bool HasHardwareEncoderInput)
 {
     public long? PersistentId { get; init; }
+    public bool SupportsVancInputMapping { get; init; }
     public AnalogInputCapabilities AnalogCapabilities { get; init; } = new(false, false, false);
 }
 
@@ -609,9 +681,31 @@ public sealed record VideoInputSource(uint Id, string Name, IReadOnlyList<VideoM
 
 public sealed record AudioInputSource(uint Id, string Name);
 
-public sealed record CaptureRouting(uint Video, uint Audio);
+public sealed record CaptureRouting(uint Video, uint Audio)
+{
+    public VancInputOptions? VancInput { get; init; }
+}
 
-public enum CapturePixelFormat : uint { V210 = 0x76323130, Uyvy = 0x32767579 }
+public sealed record VancInputOptions(bool Enabled = false, int Line1 = 18, int Line2 = 19, int Line3 = 20)
+{
+    private const int MaximumSourceLine = 30;
+
+    public VancInputOptions Normalized() =>
+        new(Enabled, Math.Clamp(Line1, 1, MaximumSourceLine), Math.Clamp(Line2, 0, MaximumSourceLine),
+            Math.Clamp(Line3, 0, MaximumSourceLine));
+
+    public VancInputOptions? WithDetectedLines(IReadOnlyList<VancScanLine> lines)
+    {
+        var mapped = lines.Where(line => line.Kind != VancLineKind.Waveform && line.Line is >= 1 and <= MaximumSourceLine)
+            .Select(line => line.Line).Distinct().Order().Take(3).ToArray();
+        if (mapped.Length == 0)
+            return null;
+
+        return new(Enabled, mapped[0], mapped.ElementAtOrDefault(1), mapped.ElementAtOrDefault(2));
+    }
+}
+
+public enum CapturePixelFormat : uint { V210 = 0x76323130, Uyvy = 0x32767579, Bgra = 0x42475241 }
 
 public enum CaptureAudioFormat : uint { Pcm16 = 16, Pcm32 = 32 }
 
@@ -630,6 +724,10 @@ public sealed record VideoMode(uint Id, string Name, int Width, int Height, long
     uint FieldDominance)
 {
     public double FramesPerSecond => (double)TimeScale / FrameDuration;
+    public bool IsInterlaced => PreviewFeed.IsInterlaced(FieldDominance);
+    internal long PreviewFieldInterval => TimeScale > 0 && FrameDuration > 0
+        ? (long)Math.Round(Stopwatch.Frequency * ((double)FrameDuration / TimeScale / 2))
+        : 0;
     public string Description => $"{Name}  ·  {Width} × {Height}  ·  {FramesPerSecond:0.###} fps";
 }
 

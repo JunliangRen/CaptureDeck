@@ -2,86 +2,52 @@
     x:Class="CaptureRack.App.Views.DirectShowCapabilitiesView"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
-    <ScrollView HorizontalScrollMode="Disabled" VerticalScrollMode="Enabled">
-        <StackPanel MaxWidth="900" Padding="24,16,24,24" Spacing="14">
-            <TextBlock x:Name="PageTitle" Style="{StaticResource TitleTextBlockStyle}" />
-            <TextBlock x:Name="PageDescription" TextWrapping="Wrap"
-                       Foreground="{ThemeResource StudioTextSecondaryBrush}" />
-            <Grid ColumnSpacing="12">
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*" />
-                    <ColumnDefinition Width="Auto" />
-                </Grid.ColumnDefinitions>
-                <ComboBox x:Name="DevicePicker" HorizontalAlignment="Stretch"
-                          DisplayMemberPath="Name" SelectionChanged="DeviceChanged" />
-                <Button x:Name="RefreshButton" Grid.Column="1" VerticalAlignment="Bottom"
-                        Click="RefreshClicked" />
-            </Grid>
-            <ProgressBar x:Name="BusyBar" IsIndeterminate="True" Visibility="Collapsed" />
-            <InfoBar x:Name="Notice" IsClosable="False" />
-            <StackPanel x:Name="FormatPanel" Visibility="Collapsed" Spacing="8">
-                <ComboBox x:Name="VideoStreamPicker" HorizontalAlignment="Stretch"
-                          DisplayMemberPath="Label" SelectionChanged="VideoStreamChanged" />
-                <ComboBox x:Name="VideoFormatPicker" HorizontalAlignment="Stretch"
-                          DisplayMemberPath="Label" SelectionChanged="FormatChanged" />
-                <ComboBox x:Name="AudioPicker" HorizontalAlignment="Stretch"
-                          DisplayMemberPath="Label" SelectionChanged="FormatChanged" />
-                <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,4,0,0">
-                    <Button x:Name="PreviewButton" Style="{StaticResource AccentButtonStyle}" Click="PreviewClicked" />
-                    <Button x:Name="RecordButton" Click="RecordingClicked" />
-                    <Button x:Name="NegotiateButton" Click="NegotiateClicked" />
-                    <Button x:Name="SampleButton" Click="SampleClicked" />
-                </StackPanel>
+    <StackPanel Spacing="8">
+        <Grid ColumnSpacing="12">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <ComboBox x:Name="DevicePicker" HorizontalAlignment="Stretch"
+                      DisplayMemberPath="Name" SelectionChanged="DeviceChanged" />
+            <Button x:Name="RefreshButton" Grid.Column="1" VerticalAlignment="Bottom"
+                    Click="RefreshClicked" />
+        </Grid>
+        <ProgressBar x:Name="BusyBar" IsIndeterminate="True" Visibility="Collapsed" />
+        <InfoBar x:Name="Notice" IsClosable="False" />
+        <StackPanel x:Name="FormatPanel" Visibility="Collapsed" Spacing="8">
+            <ComboBox x:Name="VideoStreamPicker" HorizontalAlignment="Stretch"
+                      DisplayMemberPath="Label" SelectionChanged="VideoStreamChanged" />
+            <ComboBox x:Name="VideoFormatPicker" HorizontalAlignment="Stretch"
+                      DisplayMemberPath="Label" SelectionChanged="FormatChanged" />
+            <ComboBox x:Name="AudioPicker" HorizontalAlignment="Stretch"
+                      DisplayMemberPath="Label" SelectionChanged="FormatChanged" />
+            <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,4,0,0">
+                <Button x:Name="NegotiateButton" Click="NegotiateClicked" />
+                <Button x:Name="SampleButton" Click="SampleClicked" />
             </StackPanel>
-            <TextBlock x:Name="RecordingHint" Visibility="Collapsed" TextWrapping="Wrap"
-                       Foreground="{ThemeResource StudioTextSecondaryBrush}" />
-            <TextBlock x:Name="RecordingStatus" TextWrapping="Wrap" IsTextSelectionEnabled="True"
-                       AutomationProperties.LiveSetting="Polite" />
-            <StackPanel x:Name="RecordingActions" Orientation="Horizontal" Spacing="8" Visibility="Collapsed">
-                <Button x:Name="OpenRecordingReportButton" Visibility="Collapsed" Click="OpenRecordingReportClicked" />
-                <Button x:Name="CheckRecordingButton" Visibility="Collapsed" Click="CheckRecordingClicked" />
-            </StackPanel>
-            <TextBlock x:Name="PreviewUnavailable" Visibility="Collapsed" TextWrapping="Wrap"
-                       Foreground="{ThemeResource StudioTextSecondaryBrush}" />
-            <StackPanel x:Name="PreviewPanel" Visibility="Collapsed" Spacing="8">
-                <Grid MinHeight="200" MaxHeight="480">
-                    <Image x:Name="PreviewPicture" HorizontalAlignment="Center" VerticalAlignment="Center"
-                           Stretch="Uniform" MaxHeight="480" AutomationProperties.Name="DirectShow" />
-                    <TextBlock x:Name="PreviewPlaceholder" HorizontalAlignment="Center" VerticalAlignment="Center"
-                               TextWrapping="Wrap" Foreground="{ThemeResource StudioTextSecondaryBrush}" />
-                </Grid>
-                <TextBlock x:Name="PreviewStatus" TextWrapping="Wrap"
-                           Foreground="{ThemeResource StudioTextSecondaryBrush}" />
-                <Grid x:Name="AudioMonitorPanel" ColumnSpacing="16">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="Auto" />
-                    </Grid.ColumnDefinitions>
-                    <StackPanel Spacing="4" VerticalAlignment="Center">
-                        <TextBlock x:Name="AudioLevelText" />
-                        <ProgressBar x:Name="PreviewLeftMeter" Minimum="-60" Maximum="0" AutomationProperties.Name="L" />
-                        <ProgressBar x:Name="PreviewRightMeter" Minimum="-60" Maximum="0" AutomationProperties.Name="R" />
-                    </StackPanel>
-                    <ToggleSwitch x:Name="MonitorToggle" Grid.Column="1" Toggled="MonitorToggled" />
-                </Grid>
-            </StackPanel>
-            <Border x:Name="ResultPanel" Visibility="Collapsed" Padding="14"
-                    Style="{StaticResource StudioInstrumentCardStyle}">
-                <StackPanel Spacing="10">
-                    <StackPanel Spacing="3">
-                        <TextBlock x:Name="AdvertisedHeading" FontWeight="SemiBold" />
-                        <TextBlock x:Name="AdvertisedText" TextWrapping="Wrap" IsTextSelectionEnabled="True" />
-                    </StackPanel>
-                    <StackPanel Spacing="3">
-                        <TextBlock x:Name="NegotiatedHeading" FontWeight="SemiBold" />
-                        <TextBlock x:Name="NegotiatedText" TextWrapping="Wrap" IsTextSelectionEnabled="True" />
-                    </StackPanel>
-                    <StackPanel Spacing="3">
-                        <TextBlock x:Name="SampleHeading" FontWeight="SemiBold" />
-                        <TextBlock x:Name="SampleText" TextWrapping="Wrap" IsTextSelectionEnabled="True" />
-                    </StackPanel>
-                </StackPanel>
-            </Border>
         </StackPanel>
-    </ScrollView>
+        <TextBlock x:Name="RecordingHint" Visibility="Collapsed" TextWrapping="Wrap"
+                   Foreground="{ThemeResource StudioTextSecondaryBrush}" />
+        <Button x:Name="OpenRecordingReportButton" Visibility="Collapsed" Click="OpenRecordingReportClicked" />
+        <TextBlock x:Name="PreviewUnavailable" Visibility="Collapsed" TextWrapping="Wrap"
+                   Foreground="{ThemeResource StudioTextSecondaryBrush}" />
+        <Border x:Name="ResultPanel" Visibility="Collapsed" Padding="14"
+                Style="{StaticResource StudioInstrumentCardStyle}">
+            <StackPanel Spacing="10">
+                <StackPanel Spacing="3">
+                    <TextBlock x:Name="AdvertisedHeading" FontWeight="SemiBold" />
+                    <TextBlock x:Name="AdvertisedText" TextWrapping="Wrap" IsTextSelectionEnabled="True" />
+                </StackPanel>
+                <StackPanel Spacing="3">
+                    <TextBlock x:Name="NegotiatedHeading" FontWeight="SemiBold" />
+                    <TextBlock x:Name="NegotiatedText" TextWrapping="Wrap" IsTextSelectionEnabled="True" />
+                </StackPanel>
+                <StackPanel Spacing="3">
+                    <TextBlock x:Name="SampleHeading" FontWeight="SemiBold" />
+                    <TextBlock x:Name="SampleText" TextWrapping="Wrap" IsTextSelectionEnabled="True" />
+                </StackPanel>
+            </StackPanel>
+        </Border>
+    </StackPanel>
 </UserControl>

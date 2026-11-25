@@ -29,14 +29,18 @@ public sealed partial class PreviewMonitorOptionsBar : UserControl
 
     public PreviewMonitorOptionsBar() => InitializeComponent();
 
-    public void ApplyCapabilities(WorkspaceCapabilities caps)
+    public void ApplyCapabilities(WorkspaceCapabilities caps, bool deinterlace, bool matrix, bool ntscGuide)
     {
         MonitorOptionsButton.Visibility = caps.SupportsPreviewDisplayOptions ? Visibility.Visible : Visibility.Collapsed;
+        DeinterlaceOptions.Visibility = deinterlace ? Visibility.Visible : Visibility.Collapsed;
+        MatrixOptions.Visibility = matrix ? Visibility.Visible : Visibility.Collapsed;
+        Ntsc480GuideCheckBox.Visibility = ntscGuide ? Visibility.Visible : Visibility.Collapsed;
         AudioMonitorControlGroup.Visibility = caps.SupportsLocalAudioMonitor ? Visibility.Visible : Visibility.Collapsed;
     }
 
     public void SyncState(
         string deinterlaceTag,
+        bool deinterlaceLocked,
         string aspectTag,
         string matrixTag,
         bool safeArea,
@@ -47,7 +51,10 @@ public sealed partial class PreviewMonitorOptionsBar : UserControl
         syncing = true;
         try
         {
-            SelectComboTag(PreviewDeinterlacePicker, deinterlaceTag, DeinterlaceBobWeaveItem);
+            PreviewDeinterlacePicker.IsEnabled = !deinterlaceLocked;
+            if (deinterlaceLocked)
+                PreviewDeinterlacePicker.IsDropDownOpen = false;
+            SelectComboTag(PreviewDeinterlacePicker, deinterlaceLocked ? "Off" : deinterlaceTag, DeinterlaceBobWeaveItem);
             SelectComboTag(PreviewAspectPicker, aspectTag, AspectAutoItem);
             SelectComboTag(PreviewMatrixPicker, matrixTag, MatrixAutoItem);
             SafeAreaCheckBox.IsChecked = safeArea;
@@ -65,7 +72,7 @@ public sealed partial class PreviewMonitorOptionsBar : UserControl
         var hasCustom = safeArea || ntsc480Guide ||
             !string.Equals(aspectTag, "Auto", StringComparison.OrdinalIgnoreCase) ||
             !string.Equals(matrixTag, "Auto", StringComparison.OrdinalIgnoreCase) ||
-            !string.Equals(deinterlaceTag, "BobWeave", StringComparison.OrdinalIgnoreCase);
+            (!deinterlaceLocked && !string.Equals(deinterlaceTag, "BobWeave", StringComparison.OrdinalIgnoreCase));
         PreviewOverrideDot.Visibility = hasCustom ? Visibility.Visible : Visibility.Collapsed;
         UpdateAudioMonitorVisuals();
     }
@@ -73,6 +80,7 @@ public sealed partial class PreviewMonitorOptionsBar : UserControl
     public void ApplyLanguage(
         Func<string, string> localizer,
         string deinterlaceTag,
+        bool deinterlaceLocked,
         string aspectTag,
         string matrixTag,
         bool safeArea,
@@ -93,7 +101,7 @@ public sealed partial class PreviewMonitorOptionsBar : UserControl
         ToolTipService.SetToolTip(AudioMonitorVolumeButton, localize("AudioMonitorTitle"));
 
         DeinterlaceBobWeaveItem.Content = localize("DeinterlaceBobWeave");
-        DeinterlaceFieldItem.Content = localize("DeinterlaceField");
+        DeinterlaceBobWeave2xItem.Content = localize("DeinterlaceBobWeave2x");
         DeinterlaceOffItem.Content = localize("DeinterlaceOff");
         AspectAutoItem.Content = localize("AspectAuto");
         Aspect4x3Item.Content = localize("Aspect4x3");
@@ -103,7 +111,7 @@ public sealed partial class PreviewMonitorOptionsBar : UserControl
         Matrix601Item.Content = localize("MatrixBt601");
         Matrix709Item.Content = localize("MatrixBt709");
 
-        SyncState(deinterlaceTag, aspectTag, matrixTag, safeArea, ntsc480Guide, audioMonitorEnabled, audioMonitorVolume);
+        SyncState(deinterlaceTag, deinterlaceLocked, aspectTag, matrixTag, safeArea, ntsc480Guide, audioMonitorEnabled, audioMonitorVolume);
     }
 
     public void RefreshTheme() => UpdateAudioMonitorVisuals();

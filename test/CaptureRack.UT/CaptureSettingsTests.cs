@@ -1,6 +1,7 @@
 using System.Text;
 using System.Text.Json;
 using CaptureRack.App;
+using CaptureRack.DeckLink;
 using CaptureRack.DeviceControl;
 using Xunit;
 
@@ -32,6 +33,67 @@ public sealed class CaptureSettingsTests
         Assert.Throws<JsonException>(() => Read(json));
 
     [Fact]
+    public void DecodedPreviewPreservesItsNativeRaster()
+    {
+        const int width = 1440, height = 12;
+        var pixels = Enumerable.Range(0, width * height * 4).Select(index => (byte)(index & 255)).ToArray();
+        var feed = new PreviewFeed { DeinterlaceMode = PreviewDeinterlaceMode.Off };
+        PreviewFrame? frame = null;
+        feed.SubmitDecodedFrame(pixels, width, height, true, 29.97, width, height, 16d / 9, "MPEG-2 / yuv420p");
+        Assert.True(feed.TryTakeLatest(ref frame));
+        Assert.Equal(width, frame!.Width);
+        Assert.Equal(height, frame.Height);
+        Assert.Equal("MPEG-2 / yuv420p", frame.SignalFormat);
+        Assert.Equal(CapturePixelFormat.Bgra, frame.Format);
+        Assert.Equal(PreviewScanMode.TopFirst, frame.SignalScanMode);
+        Assert.Equal(pixels, frame.Pixels[..pixels.Length]);
+    }
+
+    [Fact]
+    public void DecodedPreviewSharesBobWeaveCadenceAndScopes()
+    {
+        var pixels = Enumerable.Range(0, 8 * 8 * 4)
+            .Select(index => (byte)(index % 4 == 3 ? 255 : index / 32 % 2 == 0 ? 10 : 240)).ToArray();
+        var feed = new PreviewFeed { DeinterlaceMode = PreviewDeinterlaceMode.BobWeave2x };
+        PreviewFrame? frame = null;
+
+        feed.SubmitDecodedFrame(pixels, 8, 8, true, 29.97, 720, 480, 4d / 3);
+        Assert.True(feed.TryTakeLatest(ref frame, 0));
+        Assert.True(frame!.IsInterlaced);
+        Assert.Equal(720, frame.SignalWidth);
+        Assert.Equal(4d / 3, frame.DisplayAspectRatio);
+        Assert.Equal(10, frame.Pixels[32]);
+        Assert.False(feed.TryTakeLatest(ref frame, frame.SecondFieldDueAt - 1));
+        Assert.True(feed.TryTakeLatest(ref frame, frame!.SecondFieldDueAt));
+        Assert.Equal(240, frame!.Pixels[0]);
+        Assert.NotNull(feed.Scopes);
+        Assert.Null(feed.Scopes!.LumaOutsideLegalFraction);
+
+        feed.SubmitDecodedFrame(pixels, 8, 8, true, 29.97, 720, 480, 4d / 3);
+        Assert.True(feed.TryTakeLatest(ref frame, 0));
+        Assert.Equal(pixels, frame!.Pixels[..pixels.Length]);
+        Assert.True(feed.TryTakeLatest(ref frame, frame.SecondFieldDueAt));
+        Assert.Equal(pixels, frame!.Pixels[..pixels.Length]);
+
+        pixels[32] = pixels[33] = pixels[34] = 180;
+        feed.SubmitDecodedFrame(pixels, 8, 8, true, 29.97, 720, 480, 4d / 3);
+        Assert.True(feed.TryTakeLatest(ref frame, 0));
+        Assert.Equal(10, frame!.Pixels[32]);
+        Assert.True(feed.TryTakeLatest(ref frame, long.MaxValue));
+
+        feed.SubmitDecodedFrame(pixels, 8, 8, null, 29.97, 8, 8, 1, signalScanMode: PreviewScanMode.Progressive);
+        Assert.True(feed.TryTakeLatest(ref frame, 0));
+        Assert.False(frame!.IsInterlaced);
+        Assert.Equal(PreviewScanMode.Progressive, frame.SignalScanMode);
+        Assert.Equal(pixels, frame.Pixels[..pixels.Length]);
+        Assert.False(feed.TryTakeLatest(ref frame, long.MaxValue));
+
+        feed.SubmitDecodedFrame(pixels, 8, 8, false, 29.97, 8, 8, 1);
+        Assert.True(feed.TryTakeLatest(ref frame, 0));
+        Assert.Equal(PreviewScanMode.BottomFirst, frame!.SignalScanMode);
+    }
+
+    [Fact]
     public void RoundTripPreservesIndependentCaptureAndControlSelection()
     {
         var settings = new CaptureSettings
@@ -58,6 +120,7 @@ public sealed class CaptureSettingsTests
         Assert.Equal(0.63, restored.SplitPreviewRatio);
         Assert.Equal("Luma", restored.ScopeWaveformMode);
         Assert.Equal("Code", restored.ScopeLumaScale);
+        Assert.Equal(new VancInputOptions(false, 18, 19, 20), restored.DeckLink.VancInput);
     }
 
     [Fact]
@@ -87,7 +150,8 @@ public sealed class CaptureSettingsTests
                 AnalogAudioGainOverride = true,
                 AnalogAudioGainLeftDb = 3.5,
                 AnalogAudioGainRightDb = -1.5,
-                AnalogAudioGainLinked = false
+                AnalogAudioGainLinked = false,
+                VancInput = new VancInputOptions(true, 21, 0, 23)
             }
         };
 
@@ -148,6 +212,58 @@ public sealed class CaptureSettingsTests
             var row2B = output!.Pixels[2 * stride];
             var row3B = output.Pixels[3 * stride];
             Assert.InRange(Math.Abs(row3B - row2B), 0, 12);
+        }
+        finally
+        {
+            handle.Free();
+        }
+    }
+
+    [Theory]
+    [InlineData(0x75707072u, false, true)]
+    [InlineData(0x6C6F7772u, true, true)]
+    [InlineData(0x70726F67u, false, false)]
+    public void BobWeave2xPacesFieldsInSourceOrderAndBypassesProgressive(
+        uint fieldDominance, bool bottomFieldFirst, bool interlaced)
+    {
+        const int width = 2;
+        const int height = 4;
+        const int stride = width * 2;
+        var pixels = new byte[] { 128, 16, 128, 16, 128, 235, 128, 235,
+            128, 16, 128, 16, 128, 235, 128, 235 };
+        var feed = new CaptureRack.DeckLink.PreviewFeed
+        {
+            DeinterlaceMode = CaptureRack.DeckLink.PreviewDeinterlaceMode.BobWeave2x
+        };
+        var handle = System.Runtime.InteropServices.GCHandle.Alloc(
+            pixels, System.Runtime.InteropServices.GCHandleType.Pinned);
+        try
+        {
+            feed.Offer(handle.AddrOfPinnedObject(), width, height, stride, (ulong)pixels.Length,
+                noInput: false, CaptureRack.DeckLink.CapturePixelFormat.Uyvy, fieldDominance);
+            feed.ConvertLatest(8, System.Diagnostics.Stopwatch.Frequency / 60);
+            CaptureRack.DeckLink.PreviewFrame? output = null;
+            Assert.True(feed.TryTakeLatest(ref output, 0));
+            Assert.NotNull(output);
+            Assert.Equal(interlaced, output.IsInterlaced);
+            Assert.Equal(bottomFieldFirst ? (byte)255 : (byte)0, output.Pixels[0]);
+            if (interlaced)
+            {
+                Assert.Equal(output.Pixels[0], output.Pixels[output.Stride]);
+                var secondFieldDueAt = output.SecondFieldDueAt;
+                Assert.True(secondFieldDueAt > 0);
+                Assert.False(feed.TryTakeLatest(ref output, secondFieldDueAt - 1));
+                Assert.True(feed.TryTakeLatest(ref output, secondFieldDueAt));
+                Assert.Equal(bottomFieldFirst ? (byte)0 : (byte)255, output!.Pixels[0]);
+                Assert.Equal(output.Pixels[0], output.Pixels[output.Stride]);
+            }
+            else
+            {
+                Assert.Equal((byte)255, output.Pixels[output.Stride]);
+            }
+
+            Assert.False(feed.TryTakeLatest(ref output, long.MaxValue));
+            Assert.Equal(interlaced ? 2 : 1, feed.PresentedSequence);
         }
         finally
         {

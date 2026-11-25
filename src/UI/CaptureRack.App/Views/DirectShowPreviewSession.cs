@@ -9,7 +9,7 @@ using Windows.Graphics.Imaging;
 
 namespace CaptureRack.App.Views;
 
-internal sealed class DirectShowPreviewSession
+internal sealed class DirectShowPreviewSession(PreviewFeed feed)
 {
     private readonly Channel<RawFrame> frames = Channel.CreateBounded<RawFrame>(
         new BoundedChannelOptions(1) { SingleReader = true, FullMode = BoundedChannelFullMode.DropOldest },
@@ -54,29 +54,38 @@ internal sealed class DirectShowPreviewSession
     private string? encoding;
     private readonly object monitorGate = new();
     private LocalAudioMonitor? monitor;
-    private PreviewImage? latest;
+    private StereoMonitor? spectrum;
     private long received, decoded, unreadable;
-    private double leftPeak, rightPeak;
     private bool audioEnabled;
+    private double audioVolume = 0.8;
+
+    internal DirectShowFormat? NegotiatedVideo => Volatile.Read(ref videoFormat);
+    internal DirectShowFormat? NegotiatedAudio => Volatile.Read(ref audioFormat);
 
     internal long Received => Interlocked.Read(ref received);
     internal long Decoded => Interlocked.Read(ref decoded);
     internal long Unreadable => Interlocked.Read(ref unreadable);
-    internal bool HasAudio => DirectShowPreviewAudio.Supports(Volatile.Read(ref audioFormat));
-    internal (double Left, double Right) TakePeaks() =>
-        (Interlocked.Exchange(ref leftPeak, 0), Interlocked.Exchange(ref rightPeak, 0));
-
-    internal void SetAudioEnabled(bool enabled)
+    internal StereoLevels? ReadAudioLevels()
     {
-        Volatile.Write(ref audioEnabled, enabled);
+        StereoMonitor.AudioWindow? window;
         lock (monitorGate)
-        {
-            if (monitor is { } playback)
-                playback.Enabled = enabled;
-        }
+            window = spectrum?.ReadForDisplay();
+        return window?.Analyze();
     }
 
-    internal PreviewImage? TakeLatest() => Interlocked.Exchange(ref latest, null);
+    internal void SetAudioMonitor(bool enabled, double volume)
+    {
+        lock (monitorGate)
+        {
+            audioEnabled = enabled;
+            audioVolume = volume;
+            if (monitor is { } playback)
+            {
+                playback.Enabled = enabled;
+                playback.Volume = volume;
+            }
+        }
+    }
 
     internal async Task<DirectShowCaptureResult> RunAsync(DirectShowCaptureRequest request, CancellationToken stop)
     {
@@ -101,7 +110,6 @@ internal sealed class DirectShowPreviewSession
             {
                 while (frames.Reader.TryRead(out var pending))
                     pending.Dispose();
-                TakeLatest()?.Dispose();
                 lock (monitorGate)
                 {
                     monitor?.Dispose();
@@ -119,7 +127,7 @@ internal sealed class DirectShowPreviewSession
         lock (recordingGate)
         {
             Volatile.Write(ref audioFormat, audio);
-            videoFormat = video;
+            Volatile.Write(ref videoFormat, video);
         }
     }
 
@@ -150,46 +158,33 @@ internal sealed class DirectShowPreviewSession
         var audio = audioFormat;
         if (!DirectShowPreviewAudio.Supports(audio))
             return true;
-        if (monitor is null && Volatile.Read(ref audioEnabled) && audio!.SampleRate is > 0 and <= 384000)
+        if (audio?.SampleRate is not (> 0 and <= 384000) ||
+            sample.Bytes.Length / audio.BlockAlign!.Value is not (> 0 and <= 65536))
+            return true;
+        lock (monitorGate)
         {
-            lock (monitorGate)
+            spectrum ??= new StereoMonitor(CaptureAudioFormat.Pcm32, (uint)audio.SampleRate.Value,
+                (uint)(audio.ValidBitsPerSample is > 0 ? audio.ValidBitsPerSample.Value : audio.BitsPerSample!.Value));
+            var active = monitor;
+            if (audioEnabled && active is null)
+                monitor = active = new LocalAudioMonitor((uint)audio.SampleRate.Value) { Enabled = true, Volume = audioVolume };
+
+            if (active is { Enabled: true })
             {
-                monitor ??= new LocalAudioMonitor((uint)audio.SampleRate.Value);
-                monitor.Enabled = Volatile.Read(ref audioEnabled);
+                var length = sample.Bytes.Length / audio.BlockAlign.Value * 2;
+                var buffer = ArrayPool<short>.Shared.Rent(length);
+                try
+                {
+                    var stereo = buffer.AsSpan(0, length);
+                    DirectShowPreviewAudio.ReadPeaks(audio, sample.Bytes, stereo, spectrum.Add);
+                    active.SubmitPcm16(stereo);
+                }
+                finally { ArrayPool<short>.Shared.Return(buffer); }
             }
+            else
+                DirectShowPreviewAudio.ReadPeaks(audio, sample.Bytes, samples: spectrum.Add);
         }
-        if (monitor is { Enabled: true } active && sample.Bytes.Length / audio!.BlockAlign!.Value is > 0 and <= 65536)
-        {
-            var length = sample.Bytes.Length / audio.BlockAlign.Value * 2;
-            var buffer = ArrayPool<short>.Shared.Rent(length);
-            try
-            {
-                var stereo = buffer.AsSpan(0, length);
-                UpdatePeaks(DirectShowPreviewAudio.ReadPeaks(audio, sample.Bytes, stereo));
-                active.SubmitPcm16(stereo);
-            }
-            finally { ArrayPool<short>.Shared.Return(buffer); }
-        }
-        else
-            UpdatePeaks(DirectShowPreviewAudio.ReadPeaks(audio!, sample.Bytes));
         return true;
-    }
-
-    private void UpdatePeaks((double Left, double Right) peaks)
-    {
-        MaxPeak(ref leftPeak, peaks.Left);
-        MaxPeak(ref rightPeak, peaks.Right);
-    }
-
-    private static void MaxPeak(ref double peak, double value)
-    {
-        double old;
-        do
-        {
-            old = Volatile.Read(ref peak);
-            if (value <= old)
-                return;
-        } while (Interlocked.CompareExchange(ref peak, value, old) != old);
     }
 
     private async Task DecodeAsync(CancellationToken stop)
@@ -204,14 +199,31 @@ internal sealed class DirectShowPreviewSession
                         break;
                     var video = videoFormat!;
                     var (width, height) = DirectShowPreviewVideo.DisplaySize(video.Width!.Value, video.Height!.Value);
+                    var jpeg = DirectShowPreviewVideo.IsJpeg(encoding!);
+                    var scanMode = video.FieldOrder switch
+                    {
+                        "top-first" => PreviewScanMode.TopFirst,
+                        "bottom-first" => PreviewScanMode.BottomFirst,
+                        "progressive" => PreviewScanMode.Progressive,
+                        _ => PreviewScanMode.Unknown
+                    };
+                    bool? topFirst = jpeg ? null : scanMode switch
+                    {
+                        PreviewScanMode.TopFirst => true,
+                        PreviewScanMode.BottomFirst => false,
+                        _ => null
+                    };
+                    if (topFirst.HasValue && height > 1)
+                        height &= ~1;
                     try
                     {
-                        var image = DirectShowPreviewVideo.IsJpeg(encoding!)
+                        using var image = jpeg
                             ? await DecodeJpegAsync(raw, width, height).ConfigureAwait(false)
                             : DecodeRaw(raw, video, encoding!, width, height);
                         if (image is not null)
                         {
-                            Interlocked.Exchange(ref latest, image)?.Dispose();
+                            feed.SubmitDecodedFrame(image.Bytes, width, height, topFirst, video.FramesPerSecond ?? 0,
+                                video.Width.Value, video.Height.Value, video.DisplayAspectRatio ?? 0, encoding, scanMode);
                             Interlocked.Increment(ref decoded);
                         }
                         else

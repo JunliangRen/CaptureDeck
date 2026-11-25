@@ -1,6 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <Version>0.1.3</Version>
+    <Version>0.2.0</Version>
     <OutputType>WinExe</OutputType>
     <TargetFramework>net11.0-windows10.0.26100.0</TargetFramework>
     <SupportedOSPlatformVersion>10.0.19041.0</SupportedOSPlatformVersion>
@@ -32,6 +32,16 @@
         <RelativePath>$(ProjectPriFileName)</RelativePath>
         <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
       </ResolvedFileToPublish>
+    </ItemGroup>
+  </Target>
+
+  <!-- Self-contained WinUI includes native MUI files for all Windows locales. Keep the app languages and English fallback. -->
+  <Target Name="FilterWinUIMuiForPublish"
+          AfterTargets="ComputeResolvedFilesToPublishList"
+          Condition="'$(WindowsAppSDKSelfContained)' == 'true' and '$(WindowsPackageType)' == 'None'">
+    <ItemGroup>
+      <ResolvedFileToPublish Remove="@(ResolvedFileToPublish)"
+                             Condition="$([System.Text.RegularExpressions.Regex]::IsMatch('%(ResolvedFileToPublish.RelativePath)', '(?i)^[^/\\]+[/\\]Microsoft\.UI\.Xaml(\.Phone)?\.dll\.mui$')) and !$([System.Text.RegularExpressions.Regex]::IsMatch('%(ResolvedFileToPublish.RelativePath)', '(?i)^(en-US|en-GB|ja-JP|zh-CN|zh-TW)[/\\]'))" />
     </ItemGroup>
   </Target>
 </Project>

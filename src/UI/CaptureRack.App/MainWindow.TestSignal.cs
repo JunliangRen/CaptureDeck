@@ -45,7 +45,10 @@ public sealed partial class MainWindow
         var request = new DeckLinkCaptureRequest(deckLinkInspector.SelectedDevice!.Index,
             deckLinkInspector.SelectedMode!.Id, Duration: null)
         {
-            Routing = new CaptureRouting(deckLinkInspector.SelectedVideoSource!.Id, deckLinkInspector.SelectedAudioSource!.Id),
+            Routing = new CaptureRouting(deckLinkInspector.SelectedVideoSource!.Id, deckLinkInspector.SelectedAudioSource!.Id)
+            {
+                VancInput = deckLinkInspector.CanMapVancInput ? deckLinkInspector.VancInput : null
+            },
             Preview = feed,
             PixelFormat = RecordingVideoFormat,
             AudioFormat = RecordingAudioFormat,

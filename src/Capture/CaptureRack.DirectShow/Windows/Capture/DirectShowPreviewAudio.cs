@@ -9,7 +9,7 @@ public static class DirectShowPreviewAudio
         format.BlockAlign >= format.Channels * (format.BitsPerSample / 8);
 
     public static (double Left, double Right) ReadPeaks(DirectShowFormat format, ReadOnlySpan<byte> data,
-        Span<short> playback = default)
+        Span<short> playback = default, Action<int, int>? samples = null)
     {
         int bytesPerSample = format.BitsPerSample!.Value / 8;
         int block = format.BlockAlign!.Value;
@@ -20,6 +20,7 @@ public static class DirectShowPreviewAudio
         {
             int l = ReadSample(data[offset..], bytesPerSample);
             int r = ReadSample(data[(offset + rightOffset)..], bytesPerSample);
+            samples?.Invoke(l, r);
             left = Math.Max(left, l == int.MinValue ? int.MaxValue : Math.Abs(l));
             right = Math.Max(right, r == int.MinValue ? int.MaxValue : Math.Abs(r));
             if (playbackIndex < playback.Length - 1)

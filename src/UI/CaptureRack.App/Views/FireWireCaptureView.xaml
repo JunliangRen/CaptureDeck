@@ -1,0 +1,33 @@
+<UserControl
+    x:Class="CaptureRack.App.Views.FireWireCaptureView"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <StackPanel Spacing="8">
+        <Grid ColumnSpacing="10">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+            <ComboBox x:Name="DevicePicker" HorizontalAlignment="Stretch"
+                      DisplayMemberPath="Name" SelectionChanged="DeviceChanged" />
+            <Button x:Name="RefreshButton" Grid.Column="1" VerticalAlignment="Bottom" Click="RefreshClicked" />
+        </Grid>
+        <InfoBar x:Name="Notice" />
+        <TextBlock x:Name="InfoHeading" Style="{StaticResource StudioSectionHeadingStyle}" Margin="0,6,0,0" />
+        <TextBlock x:Name="InfoSummary" TextWrapping="Wrap" />
+        <Expander x:Name="DeviceSection" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
+            <TextBlock x:Name="DeviceDetails" TextWrapping="Wrap" IsTextSelectionEnabled="True" />
+        </Expander>
+        <Expander x:Name="ProgramSection" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
+            <TextBlock x:Name="ProgramDetails" TextWrapping="Wrap" IsTextSelectionEnabled="True" />
+        </Expander>
+        <Expander x:Name="StatsSection" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
+            <TextBlock x:Name="StatsDetails" TextWrapping="Wrap" IsTextSelectionEnabled="True" />
+        </Expander>
+        <Expander x:Name="RawSection" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
+            <TextBlock x:Name="RawDetails" TextWrapping="Wrap" IsTextSelectionEnabled="True"
+                       Style="{StaticResource StudioMonoTextStyle}" />
+        </Expander>
+        <Button x:Name="CopyInfoButton" Click="CopyInfoClicked" HorizontalAlignment="Left" />
+    </StackPanel>
+</UserControl>

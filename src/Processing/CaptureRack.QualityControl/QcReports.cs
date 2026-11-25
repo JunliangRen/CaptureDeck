@@ -193,7 +193,7 @@ public static class QcReports
         if (capture.InputModeChanged)
             warnings.Add("The input mode changed. Recording stopped before writing frames in the new mode.");
         if (capture.NoInputFrames > 0)
-            warnings.Add($"DeckLink marked {capture.NoInputFrames:N0} frames as no input.");
+            warnings.Add($"The capture source marked {capture.NoInputFrames:N0} frames as no input.");
         if (capture.UnreadableNoInputFrames > 0)
             warnings.Add($"{capture.UnreadableNoInputFrames:N0} no-input frames had no writable video payload.");
         if (capture.MissingVideoFrames > 0)

@@ -430,7 +430,7 @@
     <value>See the recording log for technical details.</value>
   </data>
   <data name="QcWarnNoInput" xml:space="preserve">
-    <value>DeckLink marked {0:N0} frames as no input.</value>
+    <value>The capture source marked {0:N0} frames as no input.</value>
   </data>
   <data name="QcWarnMissing" xml:space="preserve">
     <value>Video timestamps suggest {0:N0} missing frames.</value>
@@ -1082,5 +1082,26 @@
   </data>
   <data name="AudioMetricChannels" xml:space="preserve">
     <value>Channels</value>
+  </data>
+  <data name="BackendTestSignalName" xml:space="preserve">
+    <value>Test signal</value>
+  </data>
+  <data name="BackendTestSignalDesc" xml:space="preserve">
+    <value>Built-in video and stereo audio for capture and QC checks</value>
+  </data>
+  <data name="TestSignalScenario" xml:space="preserve">
+    <value>Test scenario</value>
+  </data>
+  <data name="TestSignalNormal" xml:space="preserve">
+    <value>Normal signal</value>
+  </data>
+  <data name="TestSignalFaults" xml:space="preserve">
+    <value>Timing faults</value>
+  </data>
+  <data name="TestSignalHint" xml:space="preserve">
+    <value>NTSC 4:3 · v210 · 48 kHz stereo PCM. Faults repeat every four seconds. Record at least eight seconds to capture a complete cycle.</value>
+  </data>
+  <data name="TestSignalSimulatedNoInput" xml:space="preserve">
+    <value>Showing a simulated loss of video signal.</value>
   </data>
 </root>

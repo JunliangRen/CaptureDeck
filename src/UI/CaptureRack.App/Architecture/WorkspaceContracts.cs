@@ -73,6 +73,12 @@ public sealed class DeckLinkWorkspaceModule : ICaptureWorkspaceModule
         Func<string, string> localize,
         IFormatProvider formatProvider)
     {
+        return BuildVideoTelemetry(stats, previewSkippedFrames, localize, formatProvider);
+    }
+
+    internal static IReadOnlyList<TelemetryMetric> BuildVideoTelemetry(CaptureStats? stats, long previewSkippedFrames,
+        Func<string, string> localize, IFormatProvider formatProvider)
+    {
         var valid = stats?.VideoFrames ?? 0;
         var noInput = stats?.NoInputFrames ?? 0;
         var missing = stats?.MissingVideoFrames ?? 0;
@@ -92,6 +98,18 @@ public sealed class DeckLinkWorkspaceModule : ICaptureWorkspaceModule
                 skipped > 0 ? TelemetrySeverity.Caution : TelemetrySeverity.Normal, summary)
         };
     }
+}
+
+public sealed class TestSignalWorkspaceModule : ICaptureWorkspaceModule
+{
+    public CaptureSourceDescriptor Descriptor { get; } = new(
+        TestSignal.BackendId, CaptureBackendCategory.Video, "BackendTestSignalName", "BackendTestSignalDesc",
+        IsImplementedInUi: true, DeckLinkWorkspaceModule.DeckLinkCapabilities with { SupportsTransportControl = false },
+        IconGlyph: "\uE7F4");
+
+    public IReadOnlyList<TelemetryMetric> BuildTelemetry(CaptureStats? stats, long previewSkippedFrames,
+        Func<string, string> localize, IFormatProvider formatProvider) =>
+        DeckLinkWorkspaceModule.BuildVideoTelemetry(stats, previewSkippedFrames, localize, formatProvider);
 }
 
 public sealed class PlannedWorkspaceModule(
@@ -121,6 +139,7 @@ public sealed class WorkspaceModuleRegistry
         modules =
         [
             DefaultModule,
+            new TestSignalWorkspaceModule(),
             new PlannedWorkspaceModule(
                 new("windows.directshow", CaptureBackendCategory.Video,
                     "BackendDirectShowName", "BackendDirectShowDesc", IsImplementedInUi: false,

@@ -430,7 +430,7 @@
     <value>技術詳細資料請查看錄製記錄。</value>
   </data>
   <data name="QcWarnNoInput" xml:space="preserve">
-    <value>DeckLink 將 {0:N0} 格標示為無輸入訊號。</value>
+    <value>有 {0:N0} 格被標示為無輸入訊號。</value>
   </data>
   <data name="QcWarnMissing" xml:space="preserve">
     <value>視訊時間戳記顯示疑似遺失 {0:N0} 格。</value>
@@ -1082,5 +1082,26 @@
   </data>
   <data name="AudioMetricChannels" xml:space="preserve">
     <value>聲道數</value>
+  </data>
+  <data name="BackendTestSignalName" xml:space="preserve">
+    <value>測試訊號</value>
+  </data>
+  <data name="BackendTestSignalDesc" xml:space="preserve">
+    <value>用於驗證擷取與品管的內建視訊及立體聲</value>
+  </data>
+  <data name="TestSignalScenario" xml:space="preserve">
+    <value>測試情境</value>
+  </data>
+  <data name="TestSignalNormal" xml:space="preserve">
+    <value>正常訊號</value>
+  </data>
+  <data name="TestSignalFaults" xml:space="preserve">
+    <value>時間戳記異常</value>
+  </data>
+  <data name="TestSignalHint" xml:space="preserve">
+    <value>NTSC 4:3 · v210 · 48 kHz 立體聲 PCM。異常約每四秒重複一次，錄製至少八秒可涵蓋一個完整週期。</value>
+  </data>
+  <data name="TestSignalSimulatedNoInput" xml:space="preserve">
+    <value>正在模擬視訊訊號中斷。</value>
   </data>
 </root>

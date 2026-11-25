@@ -71,7 +71,7 @@ public sealed partial class MainWindow
         RenderStatus();
         RenderPreviewCaption();
         RenderQcSummaryBadge();
-        RenderCounts(IsDeckLinkActive ? displayedStats : null);
+        RenderCounts(HasLiveCapture ? displayedStats : null);
         RefreshLocalizedMonitoring();
     }
 

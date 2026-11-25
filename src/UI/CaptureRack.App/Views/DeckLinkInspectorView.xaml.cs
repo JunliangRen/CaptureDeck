@@ -47,7 +47,8 @@ public sealed partial class DeckLinkInspectorView : UserControl
 
     public event EventHandler? RefreshDevicesRequested;
     public event EventHandler? SelectionChanged;
-    public event EventHandler? FormatChanged;
+    public event EventHandler? VideoFormatChanged;
+    public event EventHandler? AudioFormatChanged;
     public event EventHandler? AnalogSettingsChanged;
 
     public DeckLinkInspectorView() => InitializeComponent();
@@ -202,7 +203,7 @@ public sealed partial class DeckLinkInspectorView : UserControl
         UpdateAnalogControlsState(isIdle);
     }
 
-    public void UpdateEnabledState(bool idle)
+    public void UpdateEnabledState(bool idle, bool canReopenPreview, CaptureAudioFormat? previewAudioFormat)
     {
         isIdle = idle;
         RefreshButton.IsEnabled = idle;
@@ -210,12 +211,21 @@ public sealed partial class DeckLinkInspectorView : UserControl
         VideoInputPicker.IsEnabled = idle && VideoInputPicker.Items.Count != 0;
         AudioInputPicker.IsEnabled = idle && AudioInputPicker.Items.Count != 0;
         ModePicker.IsEnabled = idle && ModePicker.Items.Count != 0;
-        VideoFormat10Button.IsEnabled = idle;
-        VideoFormat8Button.IsEnabled = idle;
-        AudioFormat16Button.IsEnabled = idle;
-        AudioFormat32Button.IsEnabled = idle;
+        VideoFormat10Button.IsEnabled = idle || (canReopenPreview && SupportsSelectedMode(CapturePixelFormat.V210));
+        VideoFormat8Button.IsEnabled = idle || (canReopenPreview && SupportsSelectedMode(CapturePixelFormat.Uyvy));
+        AudioFormat16Button.IsEnabled = idle || previewAudioFormat is CaptureAudioFormat.Pcm16 or CaptureAudioFormat.Pcm32;
+        AudioFormat32Button.IsEnabled = idle || previewAudioFormat == CaptureAudioFormat.Pcm32;
         RecordingModeHint.Visibility = SelectedMode is { Id: null } ? Visibility.Visible : Visibility.Collapsed;
         UpdateAnalogControlsState(idle);
+    }
+
+    private bool SupportsSelectedMode(CapturePixelFormat format)
+    {
+        if (SelectedVideoSource is not { } source || SelectedMode is not { } mode)
+            return false;
+
+        var modes = source.ModesFor(format);
+        return mode.Id is { } id ? modes.Any(candidate => candidate.Id == id) : modes.Count > 0;
     }
 
     public void UpdateBitrateBadge(VideoMode? mode)
@@ -429,7 +439,7 @@ public sealed partial class DeckLinkInspectorView : UserControl
 
     private void VideoFormatSegment_Click(object sender, RoutedEventArgs e)
     {
-        if (!isIdle || sender is not Button { Tag: string tag })
+        if (sender is not Button { IsEnabled: true, Tag: string tag })
             return;
 
         var format = tag == "Uyvy" ? CapturePixelFormat.Uyvy : CapturePixelFormat.V210;
@@ -441,19 +451,19 @@ public sealed partial class DeckLinkInspectorView : UserControl
         syncing = true;
         try
         {
-            PopulateModeOptions(currentMode);
+            PopulateModeOptions(currentMode, selectFallback: isIdle);
         }
         finally
         {
             syncing = false;
         }
         UpdateFormatSegmentVisuals();
-        FormatChanged?.Invoke(this, EventArgs.Empty);
+        VideoFormatChanged?.Invoke(this, EventArgs.Empty);
     }
 
     private void AudioFormatSegment_Click(object sender, RoutedEventArgs e)
     {
-        if (!isIdle || sender is not Button { Tag: string tag })
+        if (sender is not Button { IsEnabled: true, Tag: string tag })
             return;
 
         var format = tag == "Pcm32" ? CaptureAudioFormat.Pcm32 : CaptureAudioFormat.Pcm16;
@@ -462,7 +472,7 @@ public sealed partial class DeckLinkInspectorView : UserControl
 
         SelectedAudioFormat = format;
         UpdateFormatSegmentVisuals();
-        FormatChanged?.Invoke(this, EventArgs.Empty);
+        AudioFormatChanged?.Invoke(this, EventArgs.Empty);
     }
 
     private void AnalogSetting_SelectionChanged(object sender, SelectionChangedEventArgs e)

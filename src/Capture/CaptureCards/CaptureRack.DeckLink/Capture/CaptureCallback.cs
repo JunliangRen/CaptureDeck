@@ -16,7 +16,7 @@ internal sealed class CaptureCallback(PreviewFeed? preview, CapturePixelFormat p
     private readonly CaptureStats stats = new();
     private readonly FrameTimeline? timeline = preview is null ? null : new(mode);
     private StereoMonitor? audioMonitor = preview is null ? null : new(audioFormat);
-    private readonly CaptureAudioFormat outputAudioFormat = audioFormat;
+    private readonly CaptureAudioFormat defaultOutputAudioFormat = audioFormat;
     private CaptureAudioFormat inputAudioFormat = audioFormat;
     private StereoLevels? lastLevels;
     private FrameTimeline? recordingTimeline;
@@ -35,12 +35,17 @@ internal sealed class CaptureCallback(PreviewFeed? preview, CapturePixelFormat p
         audioMonitor = new StereoMonitor(format);
     }
 
-    internal MovRecording AttachRecording(string path)
+    internal MovRecording AttachRecording(string path, CaptureAudioFormat? outputAudioFormat = null)
     {
+        var output = outputAudioFormat ?? defaultOutputAudioFormat;
         lock (gate)
+        {
             EnsureRecordingReady();
+            if (!CaptureAudio.SupportsRecordingFormat(inputAudioFormat, output))
+                throw new InvalidOperationException("The current preview input does not supply the selected PCM depth.");
+        }
 
-        var writer = new MovRecording(path, mode, pixelFormat, outputAudioFormat);
+        var writer = new MovRecording(path, mode, pixelFormat, output);
         try
         {
             lock (gate)
@@ -126,6 +131,7 @@ internal sealed class CaptureCallback(PreviewFeed? preview, CapturePixelFormat p
             audioWindow = publishMonitor ? audioMonitor?.Read() : null;
             snapshot = stats.Clone();
             snapshot.CanStartRecording = CanAttachRecording;
+            snapshot.InputAudioFormat = inputAudioFormat;
             snapshot.RecordingModeChanged = recordingModeChanged;
             if (publishMonitor && timeline is not null)
             {
@@ -228,6 +234,18 @@ internal sealed class CaptureCallback(PreviewFeed? preview, CapturePixelFormat p
         }
 
         return 0;
+    }
+
+    internal void AcceptManagedSamples(IDeckLinkVideoInputFrame? video, IDeckLinkAudioInputPacket audio)
+    {
+        lock (gate)
+        {
+            if (video is not null)
+                CountVideo(video);
+            CountAudio(audio);
+            GC.KeepAlive(video);
+            GC.KeepAlive(audio);
+        }
     }
 
     // Called under the callback gate. Managed frame fixtures can exercise this path without the driver.
@@ -384,6 +402,7 @@ public sealed class CaptureStats
 {
     public VideoSignal Signal { get; internal set; }
     public bool CanStartRecording { get; internal set; }
+    public CaptureAudioFormat? InputAudioFormat { get; internal set; }
     public bool RecordingModeChanged { get; internal set; }
     public long VideoFrames { get; internal set; }
     public long NoInputFrames { get; internal set; }
@@ -406,6 +425,9 @@ public sealed class CaptureStats
     public string? AudioPayload { get; internal set; }
     public string? Error { get; internal set; }
     public RecordingResult? Recording { get; internal set; }
+
+    public bool SupportsRecordingAudioFormat(CaptureAudioFormat output) =>
+        InputAudioFormat is { } input && CaptureAudio.SupportsRecordingFormat(input, output);
 
     public bool Verified => Error is null && TimestampRegressions == 0 &&
         VideoPayload is not null && AudioPayload is not null &&

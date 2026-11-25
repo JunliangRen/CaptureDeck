@@ -430,7 +430,7 @@
     <value>技术详情请查看录制日志。</value>
   </data>
   <data name="QcWarnNoInput" xml:space="preserve">
-    <value>DeckLink 将 {0:N0} 帧标为无输入信号。</value>
+    <value>有 {0:N0} 帧被标为无输入信号。</value>
   </data>
   <data name="QcWarnMissing" xml:space="preserve">
     <value>视频时间戳显示疑似丢失 {0:N0} 帧。</value>
@@ -1082,5 +1082,26 @@
   </data>
   <data name="AudioMetricChannels" xml:space="preserve">
     <value>声道数</value>
+  </data>
+  <data name="BackendTestSignalName" xml:space="preserve">
+    <value>测试信号</value>
+  </data>
+  <data name="BackendTestSignalDesc" xml:space="preserve">
+    <value>用于验证采集和质检的内置视频与立体声</value>
+  </data>
+  <data name="TestSignalScenario" xml:space="preserve">
+    <value>测试场景</value>
+  </data>
+  <data name="TestSignalNormal" xml:space="preserve">
+    <value>正常信号</value>
+  </data>
+  <data name="TestSignalFaults" xml:space="preserve">
+    <value>时间戳异常</value>
+  </data>
+  <data name="TestSignalHint" xml:space="preserve">
+    <value>NTSC 4:3 · v210 · 48 kHz 立体声 PCM。异常约每四秒重复一次，录制至少八秒可覆盖一个完整周期。</value>
+  </data>
+  <data name="TestSignalSimulatedNoInput" xml:space="preserve">
+    <value>正在模拟视频信号丢失。</value>
   </data>
 </root>

@@ -22,6 +22,7 @@
     <ProjectReference Include="../../src/CaptureRack.DeviceControl/CaptureRack.DeviceControl.csproj" />
     <Compile Include="../../src/UI/CaptureRack.App/CaptureSettings.cs" Link="CaptureSettings.cs" />
     <Compile Include="../../src/UI/CaptureRack.App/SettingsLanguage.cs" Link="SettingsLanguage.cs" />
+    <Compile Include="../../src/UI/CaptureRack.App/Architecture/CaptureQcLog.cs" Link="CaptureQcLog.cs" />
     <Compile Include="../../src/UI/CaptureRack.App/Architecture/WorkspaceContracts.cs" Link="WorkspaceContracts.cs" />
   </ItemGroup>
 </Project>

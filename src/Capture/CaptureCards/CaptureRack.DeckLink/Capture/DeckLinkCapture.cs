@@ -609,6 +609,10 @@ internal static class CaptureAudio
 {
     public const uint SampleRate = 48000;
     public const uint Channels = 2;
+    public static bool SupportsRecordingFormat(CaptureAudioFormat input, CaptureAudioFormat output) =>
+        output == CaptureAudioFormat.Pcm16 && input is CaptureAudioFormat.Pcm16 or CaptureAudioFormat.Pcm32 ||
+        output == CaptureAudioFormat.Pcm32 && input == CaptureAudioFormat.Pcm32;
+
     public static int BytesPerFrame(CaptureAudioFormat format) => (int)((uint)format / 8 * Channels);
 }
 

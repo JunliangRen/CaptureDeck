@@ -88,15 +88,14 @@ public sealed class WorkspaceArchitectureTests
     {
         var catalog = new CaptureSourceCatalog(new DeckLinkWorkspaceModule());
 
-        Assert.Equal(5, catalog.Sources.Count);
-        Assert.Equal(2, catalog.ByCategory(CaptureBackendCategory.Video).Count);
+        Assert.Equal(6, catalog.Sources.Count);
+        Assert.Equal(3, catalog.ByCategory(CaptureBackendCategory.Video).Count);
         Assert.Single(catalog.ByCategory(CaptureBackendCategory.FireWire));
         Assert.Single(catalog.ByCategory(CaptureBackendCategory.SignalCapture));
         Assert.Single(catalog.ByCategory(CaptureBackendCategory.Audio));
 
         var activeSources = catalog.Sources.Where(s => s.IsImplementedInUi).ToArray();
-        Assert.Single(activeSources);
-        Assert.Equal(DeckLinkBackend.BackendId, activeSources[0].BackendId);
+        Assert.Equal([DeckLinkBackend.BackendId, TestSignal.BackendId], activeSources.Select(s => s.BackendId));
     }
 
     [Fact]
@@ -327,7 +326,7 @@ public sealed class WorkspaceArchitectureTests
     {
         var registry = new WorkspaceModuleRegistry();
 
-        Assert.Equal(5, registry.Modules.Count);
+        Assert.Equal(6, registry.Modules.Count);
         Assert.Equal(DeckLinkBackend.BackendId, registry.DefaultModule.Descriptor.BackendId);
         Assert.Equal(DeckLinkBackend.BackendId, registry.Resolve(null).Descriptor.BackendId);
         Assert.Equal(DeckLinkBackend.BackendId, registry.Resolve("unknown.backend").Descriptor.BackendId);
@@ -335,8 +334,9 @@ public sealed class WorkspaceArchitectureTests
         Assert.Equal("windows.signalcapture", registry.Resolve("windows.signalcapture").Descriptor.BackendId);
         Assert.Equal("windows.audio", registry.Resolve("windows.audio").Descriptor.BackendId);
         Assert.Equal("windows.directshow", registry.Resolve("windows.directshow").Descriptor.BackendId);
+        Assert.IsType<TestSignalWorkspaceModule>(registry.Resolve(TestSignal.BackendId));
 
-        Assert.Equal(2, registry.ByCategory(CaptureBackendCategory.Video).Count);
+        Assert.Equal(3, registry.ByCategory(CaptureBackendCategory.Video).Count);
         Assert.Single(registry.ByCategory(CaptureBackendCategory.FireWire));
         Assert.Single(registry.ByCategory(CaptureBackendCategory.SignalCapture));
         Assert.Single(registry.ByCategory(CaptureBackendCategory.Audio));

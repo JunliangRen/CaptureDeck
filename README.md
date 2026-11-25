@@ -147,6 +147,12 @@ The native WinUI preview converts either format to BGRA. A latest-frame buffer k
 
 The monitoring tabs show a luma waveform, chroma vectorscope, stereo frequency spectrum, and recent signal and timestamp events. The spectrum shows the input sample rate in its header. The frequency axis extends to half that rate, from 0 to 24 kHz at 48 kHz. The left dBFS axis runs from 0 down to the level of one PCM count relative to full scale. Left and right meters report interval peaks in dBFS, cumulative full-scale clip counts, and phase correlation. The 32-bit clip indicator also catches the full-scale endpoint of 24-bit signals carried in a left-aligned 32-bit word. Missing video frames are estimated from SDK timestamp gaps relative to the selected mode. The footer counts no-input frames, suspected input drops, and frames skipped by the preview queue separately. Recording keeps received PCM in arrival order when audio timestamps disagree and reports the offsets and apparent gaps in QC. Video timestamps that reset or repeat are repaired using the mode’s nominal frame duration. QC flags missing tracks, suspected drops, and capture that ended early after saving the writable material. QC results provide links to the MOV and generated reports.
 
+### Test signal without capture hardware
+
+Open the source selector and choose **Test signal**. In the inspector choose **Normal signal** or **Timing faults**, set an output folder, then start preview and recording as usual. The source generates 720 × 486 interlaced NTSC 4:3 color bars with a frame counter and a 48 kHz stereo test tone. It records v210 and signed 16-bit PCM. Test filenames start with `TestSignal_` and the capture log identifies the built-in source.
+
+The faults scenario repeats a skipped video frame, a short loss of signal, and an audio timestamp reset about every four seconds. Record at least eight seconds for a full cycle. Stopping runs the same MOV QC as DeckLink. The Windows CI tests both scenarios with exact frame and sample counts and verifies the generated reports with FFmpeg.
+
 ## Uno Desktop QC prototype
 
 The standalone project in `src/UI/CaptureRack.Uno/` uses Uno Skia Desktop and the shared QC engine. Build or run it on Windows without changing the native WinUI 3 app or solution.

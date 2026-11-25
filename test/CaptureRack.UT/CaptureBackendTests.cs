@@ -239,6 +239,76 @@ public sealed class CaptureBackendTests
         }
     }
 
+    [Fact]
+    public void PreviewCanRecordSuccessiveClipsWithDifferentPcmDepths()
+    {
+        var folder = Directory.CreateTempSubdirectory("capturerack-audio-format-");
+        var callback = CreatePreviewCallback(automaticMode: false);
+        callback.UseMonitoringAudioFormat(CaptureAudioFormat.Pcm32);
+        var recorder = new PreviewRecorder();
+        recorder.Connect(callback);
+        using var audio = new AudioPacket(pcm32: true);
+        try
+        {
+            Assert.True(callback.Snapshot(false).SupportsRecordingAudioFormat(CaptureAudioFormat.Pcm32));
+            var wide = Path.Combine(folder.FullName, "wide.mov");
+            recorder.Start(wide, CaptureAudioFormat.Pcm32);
+            callback.CountAudio(audio);
+            var native = recorder.Finish().Recording!;
+            Assert.Equal(CaptureAudioFormat.Pcm32, native.AudioFormat);
+            Assert.Equal(1602, native.AudioSampleFrames);
+            AssertPcmPayload(wide, [0x78, 0x56, 0x34, 0x12]);
+
+            var narrow = Path.Combine(folder.FullName, "narrow.mov");
+            recorder.Start(narrow, CaptureAudioFormat.Pcm16);
+            callback.CountAudio(audio);
+            var converted = recorder.Finish().Recording!;
+            Assert.Equal(CaptureAudioFormat.Pcm16, converted.AudioFormat);
+            Assert.Equal(1602, converted.AudioSampleFrames);
+            AssertPcmPayload(narrow, [0x34, 0x12]);
+            Assert.Equal(CaptureAudioFormat.Pcm32, callback.Snapshot(false).InputAudioFormat);
+        }
+        finally
+        {
+            recorder.Disconnect();
+            folder.Delete(recursive: true);
+        }
+    }
+
+    [Fact]
+    public void PreviewRejectsUnsupportedPcmDepthBeforeCreatingOutput()
+    {
+        var folder = Directory.CreateTempSubdirectory("capturerack-pcm16-only-");
+        var callback = CreatePreviewCallback(automaticMode: false);
+        var recorder = new PreviewRecorder();
+        recorder.Connect(callback);
+        try
+        {
+            Assert.False(callback.Snapshot(false).SupportsRecordingAudioFormat(CaptureAudioFormat.Pcm32));
+            Assert.Throws<InvalidOperationException>(() =>
+                recorder.Start(Path.Combine(folder.FullName, "wide.mov"), CaptureAudioFormat.Pcm32));
+            Assert.Empty(folder.EnumerateFileSystemInfos());
+
+            using var audio = new AudioPacket();
+            recorder.Start(Path.Combine(folder.FullName, "narrow.mov"), CaptureAudioFormat.Pcm16);
+            callback.CountAudio(audio);
+            Assert.Equal(CaptureAudioFormat.Pcm16, recorder.Finish().Recording!.AudioFormat);
+        }
+        finally
+        {
+            recorder.Disconnect();
+            folder.Delete(recursive: true);
+        }
+    }
+
+    private static void AssertPcmPayload(string path, byte[] expected)
+    {
+        var file = File.ReadAllBytes(path);
+        var media = file.AsSpan().IndexOf("mdat"u8);
+        Assert.True(media >= 0);
+        Assert.Equal(expected, file.AsSpan(media + 12, expected.Length).ToArray());
+    }
+
     private static CaptureCallback CreatePreviewCallback(bool automaticMode) =>
         new(new PreviewFeed(), CapturePixelFormat.V210, CaptureAudioFormat.Pcm16, Ntsc, null, automaticMode);
 
@@ -269,9 +339,10 @@ public sealed class CaptureBackendTests
         public void Dispose() => data.Free();
     }
 
-    private sealed class AudioPacket : IDeckLinkAudioInputPacket, IDisposable
+    private sealed class AudioPacket(bool pcm32 = false) : IDeckLinkAudioInputPacket, IDisposable
     {
-        private GCHandle data = GCHandle.Alloc(new short[3204], GCHandleType.Pinned);
+        private GCHandle data = GCHandle.Alloc(pcm32 ? (Array)Enumerable.Repeat(0x12345678, 3204).ToArray() : new short[3204],
+            GCHandleType.Pinned);
         public int GetSampleFrameCount() => 1602;
         public int GetBytes(out IntPtr bytes) { bytes = data.AddrOfPinnedObject(); return 0; }
         public int GetPacketTime(out long time, long scale) { time = 0; return 0; }

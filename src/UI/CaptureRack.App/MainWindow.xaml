@@ -747,6 +747,19 @@
 
                                 <!-- Pluggable Slot: Active Backend Configuration Cards (DeckLink / Planned Backends) -->
                                 <ContentPresenter x:Name="InspectorSlot" />
+                                <Border x:Name="TestSignalInspector" Style="{StaticResource StudioInspectorCardStyle}"
+                                        Visibility="Collapsed">
+                                    <StackPanel Spacing="8">
+                                        <TextBlock x:Name="TestSignalHeading" Style="{StaticResource StudioSectionHeadingStyle}" />
+                                        <ComboBox x:Name="TestSignalScenarioPicker" SelectedIndex="0" HorizontalAlignment="Stretch"
+                                                  SelectionChanged="TestSignalScenario_SelectionChanged">
+                                            <ComboBoxItem x:Name="TestSignalNormalItem" />
+                                            <ComboBoxItem x:Name="TestSignalFaultsItem" />
+                                        </ComboBox>
+                                        <TextBlock x:Name="TestSignalHint" TextWrapping="Wrap"
+                                                   Foreground="{ThemeResource StudioTextSecondaryBrush}" />
+                                    </StackPanel>
+                                </Border>
 
                                 <!-- Shared Output, Tape Label & Storage Capacity Card -->
                                 <Border Style="{StaticResource StudioInspectorCardStyle}">

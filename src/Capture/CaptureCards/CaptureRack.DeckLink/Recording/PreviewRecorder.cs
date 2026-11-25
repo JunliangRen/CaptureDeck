@@ -38,7 +38,7 @@ public sealed class PreviewRecorder
         }
     }
 
-    public DateTimeOffset Start(string path)
+    public DateTimeOffset Start(string path, CaptureAudioFormat? outputAudioFormat = null)
     {
         lock (gate)
         {
@@ -46,7 +46,7 @@ public sealed class PreviewRecorder
             if (recording is not null || savedOnDisconnect is not null || finishError is not null)
                 throw new InvalidOperationException("A recording is already running.");
 
-            recording = input.AttachRecording(path);
+            recording = input.AttachRecording(path, outputAudioFormat);
             return DateTimeOffset.UtcNow;
         }
     }

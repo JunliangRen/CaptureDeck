@@ -38,7 +38,13 @@ public sealed partial class MainWindow : Window
     private readonly Views.PlannedBackendStageView plannedStageView = new();
     private readonly Views.PlannedBackendInspectorView plannedInspectorView = new();
     private readonly QcSessionHistory qcHistory = new();
+    private bool deckLinkScanned;
+    private (string Device, string Driver, string Video, string Audio) recordingInput;
     private bool IsDeckLinkActive => activeModule.Descriptor.BackendId == DeckLinkBackend.BackendId;
+    private bool IsTestSignalActive => activeModule.Descriptor.BackendId == TestSignal.BackendId;
+    private bool HasLiveCapture => IsDeckLinkActive || IsTestSignalActive;
+    private CapturePixelFormat RecordingVideoFormat => IsTestSignalActive ? TestSignal.PixelFormat : deckLinkInspector.SelectedVideoFormat;
+    private CaptureAudioFormat RecordingAudioFormat => IsTestSignalActive ? TestSignal.AudioFormat : deckLinkInspector.SelectedAudioFormat;
 
     private CancellationTokenSource? captureStop;
     private CancellationTokenSource? qcStop;
@@ -70,6 +76,7 @@ public sealed partial class MainWindow : Window
     private bool closeAfterQc;
     private bool recordingSession;
     private bool recordingTransition;
+    private bool restartPreviewRequested;
     private bool previewReady;
     private PreviewRecorder? previewRecorder;
     private DateTimeOffset recordingStarted;
@@ -165,14 +172,17 @@ public sealed partial class MainWindow : Window
             if (!loading && captureTask is null && IsDeckLinkActive)
                 ShowInputSelectionStatus();
         };
-        deckLinkInspector.FormatChanged += (_, _) =>
+        deckLinkInspector.VideoFormatChanged += (_, _) =>
         {
-            UpdateRecordingFilenamePreview();
-            UpdateControls();
-            SettingsChanged();
-            if (!loading && captureTask is null && IsDeckLinkActive)
-                ShowInputSelectionStatus();
+            if (IsDeckLinkActive && captureStop is { IsCancellationRequested: false } stop)
+            {
+                restartPreviewRequested = true;
+                SetStatus("StoppingPreview", "ReleasingInput");
+                stop.Cancel();
+            }
+            UpdateRecordingFormat();
         };
+        deckLinkInspector.AudioFormatChanged += (_, _) => UpdateRecordingFormat();
         deckLinkInspector.AnalogSettingsChanged += (_, _) => SettingsChanged();
 
         monitorOptionsBar.DeinterlaceChanged += (_, tag) => SetPreviewDeinterlace(tag);
@@ -265,7 +275,7 @@ public sealed partial class MainWindow : Window
         ApplySafeAreaOverlay();
         RenderSourceRackList();
         RenderCaptureActions();
-        RenderCounts(IsDeckLinkActive ? displayedStats : null);
+        RenderCounts(HasLiveCapture ? displayedStats : null);
         RenderCompactStatus();
         RenderQcSummaryBadge();
         UpdateQcNavBadge();
@@ -279,9 +289,10 @@ public sealed partial class MainWindow : Window
 
     private void MountActiveModuleSlots()
     {
-        if (IsDeckLinkActive)
+        TestSignalInspector.Visibility = IsTestSignalActive ? Visibility.Visible : Visibility.Collapsed;
+        if (HasLiveCapture)
         {
-            InspectorSlot.Content = deckLinkInspector;
+            InspectorSlot.Content = IsDeckLinkActive ? deckLinkInspector : null;
             MonitorBarSlot.Content = monitorOptionsBar;
             MonitorBarSlot.Visibility = Visibility.Visible;
             MonitorViewport.Visibility = Visibility.Visible;
@@ -303,27 +314,37 @@ public sealed partial class MainWindow : Window
 
     private void SelectBackendModule(string backendId, bool persist)
     {
-        if (!WorkspaceModuleRegistry.CanSwitchBackend(captureTask is not null, recordingSession, recordingTransition, qcStop is not null))
+        if (!WorkspaceModuleRegistry.CanSwitchBackend(captureTask is not null || restartPreviewRequested,
+            recordingSession, recordingTransition, qcStop is not null))
             return;
 
         var target = moduleRegistry.Resolve(backendId);
         var changed = target.Descriptor.BackendId != activeModule.Descriptor.BackendId;
         activeModule = target;
+        if (changed)
+        {
+            previewSelection = default;
+            displayedStats = null;
+            observedPreviewMode = null;
+            observedPreviewModeIsFallback = false;
+            ResetPreview(null);
+            ResetMonitoring();
+        }
 
         MountActiveModuleSlots();
         ApplyModuleCapabilities();
         RenderSourceRackList();
-        RenderCounts(IsDeckLinkActive ? displayedStats : null);
+        RenderCounts(HasLiveCapture ? displayedStats : null);
         UpdateControls();
         UpdateConfigurationStatus();
 
-        if (!IsDeckLinkActive)
-            SetStatus("BackendPlannedStatus", "PlannedBackendStageNotice", InfoBarSeverity.Informational);
-        else if (changed && !loading && captureTask is null)
+        if (changed && !loading && captureTask is null)
             ShowInputSelectionStatus();
 
         if (persist && changed)
             SettingsChanged();
+        if (changed && IsDeckLinkActive && !deckLinkScanned)
+            _ = RefreshDevicesAsync();
     }
 
     private void SourceRackItem_Click(object sender, RoutedEventArgs e)
@@ -340,7 +361,7 @@ public sealed partial class MainWindow : Window
     private void ApplyModuleCapabilities()
     {
         var caps = activeModule.Descriptor.Capabilities;
-        var liveStage = IsDeckLinkActive;
+        var liveStage = HasLiveCapture;
         LayoutSegmentTrack.Visibility = liveStage ? Visibility.Visible : Visibility.Collapsed;
         StageSignalBadge.Visibility = liveStage ? Visibility.Visible : Visibility.Collapsed;
         LayoutFocusBtn.Visibility = liveStage && caps.SupportsVideoPreview ? Visibility.Visible : Visibility.Collapsed;
@@ -357,7 +378,7 @@ public sealed partial class MainWindow : Window
     private void RenderSourceRackList()
     {
         var canSwitch = WorkspaceModuleRegistry.CanSwitchBackend(
-            captureTask is not null, recordingSession, recordingTransition, qcStop is not null);
+            captureTask is not null || restartPreviewRequested, recordingSession, recordingTransition, qcStop is not null);
         SourceRackLockNotice.Text = L("SourceRackLockedNotice");
         SourceRackLockNotice.Visibility = canSwitch ? Visibility.Collapsed : Visibility.Visible;
 
@@ -414,7 +435,7 @@ public sealed partial class MainWindow : Window
         TelemetryStrip.HorizontalAlignment = compact ? HorizontalAlignment.Left : HorizontalAlignment.Center;
         FooterStorageButton.Visibility = narrow ? Visibility.Collapsed : Visibility.Visible;
         QuickSourceButton.Visibility = width < 820 ? Visibility.Collapsed : Visibility.Visible;
-        StereoMeter.Visibility = !previewFullscreen && IsDeckLinkActive && activeModule.Descriptor.Capabilities.SupportsAudioMeters && width >= 680
+        StereoMeter.Visibility = !previewFullscreen && HasLiveCapture && activeModule.Descriptor.Capabilities.SupportsAudioMeters && width >= 680
             ? Visibility.Visible : Visibility.Collapsed;
     }
 
@@ -802,7 +823,14 @@ public sealed partial class MainWindow : Window
 
     private void UpdatePreviewForSelection()
     {
-        if (captureTask is not null || loading || !settingsReady || !IsDeckLinkActive)
+        if (captureTask is not null || loading || !settingsReady)
+            return;
+        if (IsTestSignalActive)
+        {
+            UpdatePreviewAspectRatio(TestSignal.Mode.Width, TestSignal.Mode.Height);
+            return;
+        }
+        if (!IsDeckLinkActive)
             return;
 
         var device = deckLinkInspector.SelectedDevice;
@@ -866,11 +894,15 @@ public sealed partial class MainWindow : Window
         UpdateScopeModeButtons();
         RenderSourceRackList();
         RefreshToolchainDiagnostics();
-        await RefreshDevicesAsync();
+        if (IsDeckLinkActive)
+            await RefreshDevicesAsync();
+        else
+        {
+            UpdateControls();
+            ShowInputSelectionStatus();
+        }
         if (closing)
             return;
-        if (!IsDeckLinkActive)
-            SetStatus("BackendPlannedStatus", "PlannedBackendStageNotice", InfoBarSeverity.Informational);
         storageTimer.Start();
         detectedModeTimer.Start();
         await RefreshStorageAsync();
@@ -889,6 +921,7 @@ public sealed partial class MainWindow : Window
         try
         {
             var result = await Task.Run(() => DeckLink.ScanDevices(includeCapabilities: true));
+            deckLinkScanned = true;
             if (closing)
                 return;
 
@@ -955,17 +988,26 @@ public sealed partial class MainWindow : Window
         SettingsChanged();
     }
 
+    private void UpdateRecordingFormat()
+    {
+        UpdateRecordingFilenamePreview();
+        UpdateControls();
+        SettingsChanged();
+        if (!loading && captureTask is null && IsDeckLinkActive)
+            ShowInputSelectionStatus();
+    }
+
     private void UpdateRecordingFilenamePreview()
     {
-        var sanitized = RecordingFileNaming.SanitizeLabel(RecordingLabelBox.Text);
+        var sanitized = RecordingFileNaming.SanitizeLabel(GetRecordingLabel());
         var samplePrefix = sanitized.Length == 0 ? "CaptureRack_YYYYMMDD_HHmmss" : $"{sanitized}_CaptureRack_YYYYMMDD_HHmmss";
-        if (!IsDeckLinkActive)
+        if (!HasLiveCapture)
         {
             RecordingFilenamePreview.Text = samplePrefix;
             return;
         }
-        var videoTag = deckLinkInspector.SelectedVideoFormat == CapturePixelFormat.Uyvy ? "8bit-Uncompressed" : "10bit-Uncompressed";
-        var audioTag = deckLinkInspector.SelectedAudioFormat == CaptureAudioFormat.Pcm32 ? "32bit-PCM" : "16bit-PCM";
+        var videoTag = RecordingVideoFormat == CapturePixelFormat.Uyvy ? "8bit-Uncompressed" : "10bit-Uncompressed";
+        var audioTag = RecordingAudioFormat == CaptureAudioFormat.Pcm32 ? "32bit-PCM" : "16bit-PCM";
         RecordingFilenamePreview.Text = $"{samplePrefix}_{videoTag}_{audioTag}.mov";
     }
 
@@ -998,6 +1040,12 @@ public sealed partial class MainWindow : Window
 
     private void ShowInputSelectionStatus()
     {
+        if (IsTestSignalActive)
+        {
+            SetStatus("Idle", "PreviewBeforeRecording");
+            return;
+        }
+
         if (!IsDeckLinkActive)
         {
             SetStatus("BackendPlannedStatus", "PlannedBackendStageNotice", InfoBarSeverity.Informational);
@@ -1114,7 +1162,8 @@ public sealed partial class MainWindow : Window
 
     private async Task BeginRecordingAsync()
     {
-        if (!previewReady || displayedStats?.CanStartRecording != true ||
+        if (!previewReady || displayedStats?.CanStartRecording != true || !CanRecordSelectedAudio ||
+            captureStop is not { IsCancellationRequested: false } ||
             previewRecorder is not { } recorder || recordingTransition)
             return;
 
@@ -1134,18 +1183,24 @@ public sealed partial class MainWindow : Window
         UpdateControls();
         try
         {
-            var videoTag = deckLinkInspector.SelectedVideoFormat == CapturePixelFormat.Uyvy ? "8bit-Uncompressed" : "10bit-Uncompressed";
-            var audioTag = deckLinkInspector.SelectedAudioFormat == CaptureAudioFormat.Pcm32 ? "32bit-PCM" : "16bit-PCM";
-            var label = RecordingLabelBox.Text;
+            var videoTag = RecordingVideoFormat == CapturePixelFormat.Uyvy ? "8bit-Uncompressed" : "10bit-Uncompressed";
+            var audioFormat = RecordingAudioFormat;
+            var audioTag = audioFormat == CaptureAudioFormat.Pcm32 ? "32bit-PCM" : "16bit-PCM";
+            var label = GetRecordingLabel();
+            var source = IsTestSignalActive
+                ? ("CaptureRack test signal", "Built-in", SelectedTestScenario.ToString(), "Stereo test tone")
+                : (deckLinkInspector.SelectedDevice!.Name, $"Blackmagic DeckLink API {sdkVersion}",
+                    deckLinkInspector.SelectedVideoSource!.Name, deckLinkInspector.SelectedAudioSource!.Name);
             var now = DateTime.Now;
             var opened = await Task.Run(() =>
             {
                 var path = RecordingFileNaming.BuildMovPath(directory, label, now, videoTag, audioTag);
-                return (Path: path, Started: recorder.Start(path));
+                return (Path: path, Started: recorder.Start(path, audioFormat));
             });
             if (captureTask is null)
                 throw new InvalidOperationException(L("PreviewStoppedOpening"));
             recordingStarted = opened.Started;
+            recordingInput = source;
             statusFilePath = opened.Path;
             recordingSession = true;
             displayedRecordingSeconds = 0;
@@ -1169,10 +1224,7 @@ public sealed partial class MainWindow : Window
 
     private async Task FinishRecordingAsync(string? captureError = null)
     {
-        if (!recordingSession || recordingTransition || previewRecorder is not { } recorder ||
-            deckLinkInspector.SelectedDevice is not { } device ||
-            deckLinkInspector.SelectedVideoSource is not { } video ||
-            deckLinkInspector.SelectedAudioSource is not { } audio)
+        if (!recordingSession || recordingTransition || previewRecorder is not { } recorder)
             return;
 
         recordingTransition = true;
@@ -1183,28 +1235,9 @@ public sealed partial class MainWindow : Window
         try
         {
             var stats = await Task.Run(recorder.Finish);
-            var saved = stats.Recording!;
-            var modeField = DeckLinkCapture.FormatFourCc(saved.Mode.FieldDominance) switch
-            {
-                "uppr" => "tb",
-                "lowr" => "bt",
-                _ => "progressive"
-            };
-            var expected = new QcExpectedMedia(saved.VideoFrames, saved.AudioSampleFrames, modeField,
-                (int)saved.AudioFormat, DeckLinkCapture.FormatFourCc((uint)saved.VideoFormat),
-                saved.Mode.Width, saved.Mode.Height);
-            var log = new QcCaptureLog(device.Name, $"Blackmagic DeckLink API {sdkVersion}", video.Name, audio.Name, saved.Mode.Description,
-                recordingStarted, stopped, expected, stats.VideoFrames, stats.NoInputFrames,
-                saved.Timing?.SuspectedMissingVideoFrames ?? stats.MissingVideoFrames, stats.TimestampRegressions, stats.AudioPackets,
-                stats.AudioLevels?.LeftClips, stats.AudioLevels?.RightClips,
-                stats.Events.Select(item => new QcEvent(item.Elapsed, item.Description)).ToArray())
-            {
-                InputModeChanged = stats.RecordingModeChanged,
-                Timing = saved.Timing,
-                CaptureError = captureError ?? stats.Error,
-                UnreadableNoInputFrames = stats.UnreadableNoInputFrames
-            };
-            if (!await RunMovQcAsync(saved.Path, log))
+            var log = CaptureQcLog.Create(stats, recordingStarted, stopped, recordingInput.Device,
+                recordingInput.Driver, recordingInput.Video, recordingInput.Audio, captureError);
+            if (!await RunMovQcAsync(stats.Recording!.Path, log))
                 closeAfterQc = false;
         }
         catch (Exception ex) when (IsSessionError(ex))
@@ -1233,11 +1266,18 @@ public sealed partial class MainWindow : Window
 
     private async Task RunPreviewAsync()
     {
-        if (closing || pickingOutput || captureTask is not null || !IsDeckLinkActive ||
-            deckLinkInspector.SelectedDevice is not { } device ||
-            deckLinkInspector.SelectedVideoSource is not { } video ||
-            deckLinkInspector.SelectedAudioSource is not { } audio ||
-            deckLinkInspector.SelectedMode is not { } mode)
+        do
+        {
+            restartPreviewRequested = false;
+            await RunPreviewSessionAsync();
+        }
+        while (restartPreviewRequested && !closing);
+    }
+
+    private async Task RunPreviewSessionAsync()
+    {
+        if (closing || pickingOutput || captureTask is not null || !HasLiveCapture ||
+            (IsDeckLinkActive && !deckLinkInspector.HasCompleteSelection))
             return;
 
         using var stop = new CancellationTokenSource();
@@ -1265,25 +1305,14 @@ public sealed partial class MainWindow : Window
         ShowCounts(new CaptureStats());
         SetStatus("StartingPreview", "OpeningInput");
         var dispatcher = DispatcherQueue;
-        var request = new DeckLinkCaptureRequest(device.Index, mode.Id, Duration: null)
+        void Publish(DeckLinkProgress update) => dispatcher.TryEnqueue(() =>
         {
-            Routing = new CaptureRouting(video.Id, audio.Id),
-            Preview = feed,
-            PixelFormat = deckLinkInspector.SelectedVideoFormat,
-            AudioFormat = deckLinkInspector.SelectedAudioFormat,
-            PreviewRecorder = recorder,
-            AnalogOptions = deckLinkInspector.BuildAnalogInputOptions(),
-            LocalAudioMonitor = audioMonitor
-        };
-        var task = Task.Factory.StartNew(() => DeckLink.Run(request,
-            update =>
-            {
-                dispatcher.TryEnqueue(() =>
-                {
-                    if (!closing && ReferenceEquals(captureStop, stop) && !stop.IsCancellationRequested)
-                        ShowCapture(update.Mode, update.Stats);
-                });
-            }, stop.Token),
+            if (!closing && ReferenceEquals(captureStop, stop) && !stop.IsCancellationRequested)
+                ShowCapture(update.Mode, update.Stats);
+        });
+
+        var run = CreatePreviewRunner(feed, recorder, audioMonitor, Publish, stop.Token);
+        var task = Task.Factory.StartNew(run,
             CancellationToken.None, TaskCreationOptions.LongRunning, TaskScheduler.Default);
         captureTask = task;
         UpdateControls();
@@ -1298,12 +1327,16 @@ public sealed partial class MainWindow : Window
             if (recordingSession)
                 await FinishRecordingAsync();
             else if (stats.Error is { } error)
+            {
+                restartPreviewRequested = false;
                 SetStatus("PreviewFailed", () => error, InfoBarSeverity.Error);
-            else
+            }
+            else if (!restartPreviewRequested)
                 SetStatus("PreviewStopped", "LastCounters");
         }
         catch (Exception ex) when (IsSessionError(ex))
         {
+            restartPreviewRequested = false;
             if (!closing && !recordingTransition)
             {
                 if (recordingSession)
@@ -1664,8 +1697,9 @@ public sealed partial class MainWindow : Window
 
     private void ShowCapture(VideoMode mode, CaptureStats stats)
     {
-        var autoMode = deckLinkInspector.SelectedMode is { Id: null };
-        var recordingAvailabilityChanged = displayedStats?.CanStartRecording != stats.CanStartRecording;
+        var autoMode = IsDeckLinkActive && deckLinkInspector.SelectedMode is { Id: null };
+        var recordingAvailabilityChanged = displayedStats?.CanStartRecording != stats.CanStartRecording ||
+            displayedStats?.InputAudioFormat != stats.InputAudioFormat;
         var recordingInCurrentMode = recordingClock.IsRunning && !stats.RecordingModeChanged;
         var activeMode = !autoMode || stats.CanStartRecording || recordingInCurrentMode ? mode : null;
         UpdateObservedPreviewMode(activeMode, autoMode && activeMode is not null && stats.Signal != VideoSignal.Present);
@@ -1696,7 +1730,8 @@ public sealed partial class MainWindow : Window
         switch (liveSignal)
         {
             case VideoSignal.NoInput:
-                SetStatus("NoInputSignal", deckLinkInspector.SelectedMode is { Id: null }
+                SetStatus("NoInputSignal", IsTestSignalActive ? "TestSignalSimulatedNoInput" :
+                    deckLinkInspector.SelectedMode is { Id: null }
                     ? displayedStats?.CanStartRecording == true ? "AutoNoInputRecordable" : "AutoRecordingHint"
                     : "PreviewingNoInput", InfoBarSeverity.Warning);
                 break;
@@ -1935,15 +1970,25 @@ public sealed partial class MainWindow : Window
         ShowMonitoring(stats);
     }
 
+    private bool CanRecordSelectedAudio => displayedStats?.SupportsRecordingAudioFormat(RecordingAudioFormat) == true;
+
     private void UpdateControls()
     {
         var active = captureTask is not null;
-        var idle = settingsReady && !closing && !loading && !pickingOutput && !active && qcStop is null;
+        var idle = settingsReady && !closing && !loading && !pickingOutput && !active &&
+            !restartPreviewRequested && !recordingTransition && !recordingSession && qcStop is null;
+        var canChangePreviewFormat = IsDeckLinkActive && active && previewReady && !closing && !loading &&
+            !pickingOutput && !recordingSession && !recordingTransition && qcStop is null &&
+            captureStop is { IsCancellationRequested: false };
         QcCenterPage.CanCheckFile = idle && !recordingTransition;
-        deckLinkInspector.UpdateEnabledState(idle && IsDeckLinkActive);
-        var canStart = IsDeckLinkActive && idle && !recordingTransition && deckLinkInspector.HasCompleteSelection;
+        deckLinkInspector.UpdateEnabledState(idle && IsDeckLinkActive, canChangePreviewFormat,
+            canChangePreviewFormat ? displayedStats?.InputAudioFormat : null);
+        TestSignalScenarioPicker.IsEnabled = idle && !recordingTransition;
+        var canStart = HasLiveCapture && idle && !recordingTransition &&
+            (IsTestSignalActive || deckLinkInspector.HasCompleteSelection);
         var changingRecording = recordingSession || recordingTransition;
-        var canChooseOutput = settingsReady && !closing && !loading && !pickingOutput && !changingRecording;
+        var canChooseOutput = settingsReady && !closing && !loading && !pickingOutput &&
+            !changingRecording && !restartPreviewRequested;
         OutputPath.IsEnabled = canChooseOutput;
         RecordingLabelBox.IsEnabled = canChooseOutput;
         BrowseButton.IsEnabled = canChooseOutput;
@@ -1952,9 +1997,10 @@ public sealed partial class MainWindow : Window
         RenderCaptureActions();
         StartButton.IsEnabled = active ? previewCanStop : canStart;
         PlaceholderStartButton.IsEnabled = canStart;
-        PlaceholderStartButton.Visibility = IsDeckLinkActive && !active && canStart ? Visibility.Visible : Visibility.Collapsed;
-        var recordEnabled = IsDeckLinkActive && qcStop is null && !closing && active && !recordingTransition && (recordingSession ||
-            (previewReady && displayedStats?.CanStartRecording == true && previewRecorder is not null && !pickingOutput &&
+        PlaceholderStartButton.Visibility = HasLiveCapture && !active && canStart ? Visibility.Visible : Visibility.Collapsed;
+        var recordEnabled = HasLiveCapture && qcStop is null && !closing && active && !recordingTransition && (recordingSession ||
+            (previewReady && displayedStats?.CanStartRecording == true && CanRecordSelectedAudio &&
+                previewRecorder is not null && !pickingOutput &&
                 captureStop is { IsCancellationRequested: false } && !string.IsNullOrWhiteSpace(OutputPath.Text)));
         RecordButton.IsEnabled = recordEnabled;
         FullscreenRecordButton.IsEnabled = recordEnabled;

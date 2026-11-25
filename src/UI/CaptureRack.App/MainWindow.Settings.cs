@@ -298,7 +298,8 @@ public sealed partial class MainWindow
         deckLinkInspector.ApplyLanguage(L, settingsCulture, preserveActiveRouting);
         UpdateRecordingFilenamePreview();
 
-        if (!IsDeckLinkActive)
+        ApplyTestSignalLanguage();
+        if (!HasLiveCapture)
         {
             plannedStageView.Bind(activeModule.Descriptor, L);
             plannedInspectorView.Bind(activeModule.Descriptor, L);
@@ -346,7 +347,10 @@ public sealed partial class MainWindow
         if (!IsDeckLinkActive)
         {
             var backendName = L(activeModule.Descriptor.DisplayNameKey);
-            var text = $"{backendName} · {L("SourceStatusPlanned")}";
+            var text = IsTestSignalActive
+                ? $"{backendName} · {L(TestSignalScenarioKey)} · {TestSignal.Mode.Description} · " +
+                    $"{LocalFormat("ShortVideoFormat", "v210", 10)} / {LocalFormat("ShortPcmFormat", (uint)TestSignal.AudioFormat)}"
+                : $"{backendName} · {L("SourceStatusPlanned")}";
             ConfigurationSummary.Text = text;
             AutomationProperties.SetName(QuickSourceButton, $"{L("Capture")} · {text}");
             ToolTipService.SetToolTip(QuickSourceButton, text);
@@ -365,7 +369,7 @@ public sealed partial class MainWindow
                 settingsError?.Message ?? "",
                 InfoBarSeverity.Warning,
                 settingsError is not null);
-            ShowStorageStatus(null, null);
+            ShowStorageStatus(IsTestSignalActive ? TestSignal.Mode : null, null);
             return;
         }
 
@@ -472,14 +476,14 @@ public sealed partial class MainWindow
         else
         {
             var free = LocalFormat("StorageCapacity", (space.AvailableBytes / (double)(1L << 30)).ToString("N1", settingsCulture));
-            var estimate = !IsDeckLinkActive
+            var estimate = !HasLiveCapture
                 ? free
                 : selectedMode is null
                     ? L(mode is { Id: null } ? "StorageWaitingForAutoMode" : "StorageNeedsMode")
                     : LocalFormat("StorageDuration", FormatRecordingTime(space.AvailableBytes /
-                        DeckLinkCapture.EstimateRecordingBytesPerSecond(selectedMode, deckLinkInspector.SelectedVideoFormat, deckLinkInspector.SelectedAudioFormat)));
-            InspectorStorageStatus.Text = IsDeckLinkActive ? $"{free} · {estimate}" : free;
-            StorageStatus.Text = IsDeckLinkActive && selectedMode is not null ? estimate : free;
+                        DeckLinkCapture.EstimateRecordingBytesPerSecond(selectedMode, RecordingVideoFormat, RecordingAudioFormat)));
+            InspectorStorageStatus.Text = HasLiveCapture ? $"{free} · {estimate}" : free;
+            StorageStatus.Text = HasLiveCapture && selectedMode is not null ? estimate : free;
 
             if (space.TotalBytes > 0)
             {

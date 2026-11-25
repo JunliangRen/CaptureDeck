@@ -430,7 +430,7 @@
     <value>技術的な詳細は録画ログを参照してください。</value>
   </data>
   <data name="QcWarnNoInput" xml:space="preserve">
-    <value>DeckLink が {0:N0} フレームを入力なしと判定しました。</value>
+    <value>入力なしとして記録されたフレームは {0:N0} 件です。</value>
   </data>
   <data name="QcWarnMissing" xml:space="preserve">
     <value>映像タイムスタンプから {0:N0} フレームの欠落が疑われます。</value>
@@ -1082,5 +1082,26 @@
   </data>
   <data name="AudioMetricChannels" xml:space="preserve">
     <value>チャンネル</value>
+  </data>
+  <data name="BackendTestSignalName" xml:space="preserve">
+    <value>テスト信号</value>
+  </data>
+  <data name="BackendTestSignalDesc" xml:space="preserve">
+    <value>収録と QC を検証する内蔵映像・ステレオ音声</value>
+  </data>
+  <data name="TestSignalScenario" xml:space="preserve">
+    <value>テストシナリオ</value>
+  </data>
+  <data name="TestSignalNormal" xml:space="preserve">
+    <value>正常な信号</value>
+  </data>
+  <data name="TestSignalFaults" xml:space="preserve">
+    <value>タイムスタンプ異常</value>
+  </data>
+  <data name="TestSignalHint" xml:space="preserve">
+    <value>NTSC 4:3・v210・48 kHz ステレオ PCM。異常は約 4 秒ごとに繰り返します。1 周期分を確認するには 8 秒以上収録してください。</value>
+  </data>
+  <data name="TestSignalSimulatedNoInput" xml:space="preserve">
+    <value>映像信号の途切れを再現しています。</value>
   </data>
 </root>

@@ -3,6 +3,7 @@ using CaptureRack.DirectShow.Windows.Capture;
 using Xunit;
 using CaptureRack.QualityControl;
 using System.Text.Json;
+using CaptureRack.Recording;
 
 namespace CaptureRack.UT;
 
@@ -61,6 +62,92 @@ public sealed class DirectShowRecordingTests
             Assert.NotNull(report.RootElement.GetProperty("error").GetString());
         }
         finally { Cleanup(path); }
+    }
+
+    [Fact]
+    [Trait("Category", "FFmpegIntegration")]
+    public async Task DirectShowUsesTheSharedLiveEncoder()
+    {
+        var tools = QcReports.FindTools();
+        if (tools is not (string, string))
+            return;
+        var folder = Directory.CreateTempSubdirectory("capturerack-directshow-encoded-");
+        try
+        {
+            var path = Path.Combine(folder.FullName, "encoded.mkv");
+            var video = new byte[128 * 96 * 2];
+            var audio = new byte[1920 * 6];
+            var recording = DirectShowRecording.Start(path, Video(128, 96) with { FrameInterval100ns = 400000 },
+                Audio(), tools, encoding: new(RecordingOutput.Ffv1));
+            for (var i = 0; i < 25; i++)
+            {
+                var time = TimeSpan.FromMilliseconds(i * 40);
+                recording.Accept(true, new(video, false, time));
+                recording.Accept(false, new(audio, false, time));
+            }
+            recording.Complete();
+            Assert.Equal(path, await recording.Completion);
+            var result = await QcReports.RunAsync(path);
+            Assert.True(result.Status == QcStatus.Passed, result.Summary);
+            Assert.Equal(25, result.DecodedVideoFrames);
+            Assert.Equal(48000, result.DecodedAudioSampleFrames);
+        }
+        finally { folder.Delete(recursive: true); }
+    }
+
+    [Fact]
+    [Trait("Category", "FFmpegIntegration")]
+    public async Task SoftwareQueueOverrunRejectsFurtherSamplesAndKeepsThePrefix()
+    {
+        var tools = QcReports.FindTools();
+        if (tools is not (string, string))
+            return;
+        var folder = Directory.CreateTempSubdirectory("capturerack-directshow-overrun-");
+        try
+        {
+            var path = Path.Combine(folder.FullName, "capture.mkv");
+            var recording = DirectShowRecording.Start(path, Video(128, 96) with { FrameInterval100ns = 400000 },
+                null, tools, encoding: new(RecordingOutput.Ffv1));
+            var bytes = new byte[128 * 96 * 2];
+            for (var frame = 0; frame < 35; frame++)
+                recording.Accept(true, new(bytes, false, TimeSpan.FromMilliseconds(frame * 40)));
+            recording.Accept(true, new(new byte[128 * 1024 * 1024 + 1], false));
+            recording.Accept(true, new(bytes, false, TimeSpan.FromMilliseconds(1440)));
+            var failure = await Assert.ThrowsAsync<IOException>(() => recording.Completion);
+            Assert.Contains("did not keep up", failure.Message);
+            Assert.False(File.Exists(path));
+            using var checkpoint = JsonDocument.Parse(await File.ReadAllTextAsync(recording.PartialPath + ".checkpoint.json"));
+            Assert.Equal(35, checkpoint.RootElement.GetProperty("videoPacketsToEncoder").GetInt64());
+            Assert.Contains("did not keep up", checkpoint.RootElement.GetProperty("error").GetString());
+            var recovered = Path.Combine(folder.FullName, "recovered.mkv");
+            Assert.True(await LiveMatroskaRecovery.RecoverAsync(recording.PartialPath, recovered) > 0);
+            var qc = await QcReports.RunAsync(recovered);
+            Assert.True(qc.Status == QcStatus.Passed, qc.Summary);
+            Assert.Equal(35, qc.DecodedVideoFrames);
+        }
+        finally { folder.Delete(recursive: true); }
+    }
+
+    [Fact]
+    [Trait("Category", "FFmpegIntegration")]
+    public async Task AnExitedEncoderCompletesTheSessionEvenWhenInputStops()
+    {
+        var tools = QcReports.FindTools();
+        if (tools.FfmpegPath is null)
+            return;
+        var folder = Directory.CreateTempSubdirectory("capturerack-directshow-encoder-exit-");
+        try
+        {
+            var path = Path.Combine(folder.FullName, "capture.mkv");
+            var recording = DirectShowRecording.Start(path, Video(128, 96) with { FrameInterval100ns = 400000 },
+                null, tools, encoding: new(RecordingOutput.H264, 500, "9.9"));
+            var bytes = new byte[128 * 96 * 2];
+            for (var frame = 0; frame < 35; frame++)
+                recording.Accept(true, new(bytes, false, TimeSpan.FromMilliseconds(frame * 40)));
+            await Assert.ThrowsAsync<IOException>(() => recording.Completion.WaitAsync(TimeSpan.FromSeconds(10)));
+            Assert.False(File.Exists(path));
+        }
+        finally { folder.Delete(recursive: true); }
     }
 
     [Fact]

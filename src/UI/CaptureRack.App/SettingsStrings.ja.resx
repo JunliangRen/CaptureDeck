@@ -1779,4 +1779,15 @@
   <data name="TestSignalSectionHeading" xml:space="preserve">
     <value>テスト信号ジェネレーター</value>
   </data>
+  <data name="EncodingOutputLabel" xml:space="preserve"><value>収録出力</value></data>
+  <data name="EncodingBitrateLabel" xml:space="preserve"><value>目標ビットレート（kb/s）</value></data>
+  <data name="EncodingLevelLabel" xml:space="preserve"><value>コーデックレベル</value></data>
+  <data name="EncodingAuto" xml:space="preserve"><value>自動</value></data>
+  <data name="EncodingNative" xml:space="preserve"><value>デバイス出力 · 直接保存</value></data>
+  <data name="EncodingNativeHint" xml:space="preserve"><value>デバイスが出力する映像形式を保持します。</value></data>
+  <data name="EncodingLive" xml:space="preserve"><value>収録中にソフトウェアでエンコードし、MKV に保存します。</value></data>
+  <data name="EncodingProgressiveHint" xml:space="preserve"><value>H.265 と AV1 にはプログレッシブ入力またはソフトウェアでのインターレース解除が必要です。</value></data>
+  <data name="EncodingDeinterlace" xml:space="preserve"><value>ソフトウェアでインターレース解除</value></data>
+  <data name="EncodingBadBitrate" xml:space="preserve"><value>1〜1,000,000 kb/s のビットレートを入力してください。</value></data>
+  <data name="EncodingSoftware" xml:space="preserve"><value>ソフトウェア圧縮</value></data>
 </root>

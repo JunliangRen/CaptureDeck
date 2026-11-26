@@ -2,6 +2,7 @@ using CaptureRack.DirectShow.Windows.Capture;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using CaptureRack.QualityControl;
+using CaptureRack.Recording;
 using Windows.Storage;
 using Windows.System;
 
@@ -11,6 +12,8 @@ public sealed partial class DirectShowCapabilitiesView
 {
     private Func<string> outputDirectory = () => "";
     private Func<string> recordingLabel = () => "";
+    private Func<RecordingEncoding> recordingEncoding = () => new();
+    private Func<RecordingOutput> recordingOutput = () => RecordingOutput.Native;
     private DirectShowRecording? recording;
     private bool finalizingRecording;
     private string? savedMediaPath, savedReportPath;
@@ -26,10 +29,13 @@ public sealed partial class DirectShowCapabilitiesView
     public string? RecordingReportPath => savedReportPath;
     public string? RecordingDetail => recordingDetail;
 
-    internal void SetRecordingTarget(Func<string> directory, Func<string> label)
+    internal void SetRecordingTarget(Func<string> directory, Func<string> label,
+        Func<RecordingEncoding> encoding, Func<RecordingOutput> output)
     {
         outputDirectory = directory;
         recordingLabel = label;
+        recordingEncoding = encoding;
+        recordingOutput = output;
         UpdateRecordingControls();
     }
 
@@ -106,12 +112,13 @@ public sealed partial class DirectShowCapabilitiesView
             var prefix = RecordingFileNaming.BuildPrefix(recordingLabel(), DateTime.Now);
             var videoTag = video.IsMpeg2Video ? "MPEG2" : DirectShowPreviewVideo.Encoding(video) ?? "Video";
             var audioTag = audio is null ? "" : $"_{audio.BitsPerSample}bit-PCM";
-            var filename = $"{prefix}_DirectShow_{videoTag}{audioTag}";
-            var extensions = DirectShowRecording.OutputExtensions(video);
+            var encoding = recordingEncoding();
+            var filename = encoding.IsSoftware ? $"{prefix}_DirectShow_{encoding.FileTag}" : $"{prefix}_DirectShow_{videoTag}{audioTag}";
+            var extensions = encoding.IsSoftware ? [".mkv"] : DirectShowRecording.OutputExtensions(video);
             var stem = Path.Combine(folder, filename);
             var unique = stem;
             for (var suffix = 2; extensions.Any(ext => File.Exists(unique + ext)) ||
-                File.Exists(unique + ".mkv.partial"); suffix++)
+                File.Exists(unique + ".mkv.partial") || File.Exists(unique + ".mkv.partial.mkv"); suffix++)
                 unique = $"{stem}_{suffix}";
             var path = unique + ".mkv";
 
@@ -136,14 +143,14 @@ public sealed partial class DirectShowCapabilitiesView
                             StateChanged?.Invoke(this, EventArgs.Empty);
                         }
                     });
-            });
+            }, encoding);
             recording = active;
             recordingDetail = string.Format(L("DsRecordActive"), unique,
                 string.Join(" → ", extensions.Select(ext => ext[1..].ToUpperInvariant())));
             UpdateRecordingControls();
             RenderEvidence();
             savedMediaPath = await active.Completion;
-            var reportPath = NativeCaptureReport.PathFor(savedMediaPath);
+            var reportPath = encoding.IsSoftware ? savedMediaPath + ".encoding.json" : NativeCaptureReport.PathFor(savedMediaPath);
             savedReportPath = active.ReportError is null && File.Exists(reportPath) ? reportPath : null;
             recordingDetail = active.ReportError is { } reportError
                 ? string.Format(L("DsReportWriteFailed"), savedMediaPath, reportError)
@@ -151,8 +158,9 @@ public sealed partial class DirectShowCapabilitiesView
         }
         catch (Exception error)
         {
-            if (recording is { ReportError: null } failed && File.Exists(NativeCaptureReport.PathFor(failed.PartialPath)))
-                savedReportPath = NativeCaptureReport.PathFor(failed.PartialPath);
+            if (recording is { ReportError: null } failed)
+                savedReportPath = new[] { failed.PartialPath + ".checkpoint.json", NativeCaptureReport.PathFor(failed.PartialPath) }
+                    .FirstOrDefault(File.Exists);
             recordingDetail = recording is { } active && File.Exists(active.PartialPath)
                 ? string.Format(L("DsRecordPartial"), active.PartialPath, error.Message)
                 : string.Format(L("DsRecordError"), error.Message);

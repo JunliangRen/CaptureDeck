@@ -10,15 +10,17 @@ internal sealed class NativeMatroskaWriter
     private const long TicksPerTimestamp = 1000; // 100 microseconds
     private const ulong TimestampScale = TicksPerTimestamp * 100; // nanoseconds
     private readonly Stream output;
+    private readonly bool streaming;
     private readonly long durationPosition;
     private long clusterTime = -1, clusterSizePosition, duration;
     private readonly long segmentStart;
     private readonly List<(long Time, long Position)> cues = [];
     private bool clusterHasVideo;
 
-    internal NativeMatroskaWriter(Stream output, NativeVideoTrack video, NativePcmTrack? audio)
+    internal NativeMatroskaWriter(Stream output, NativeVideoTrack video, NativePcmTrack? audio, bool streaming = false)
     {
         this.output = output;
+        this.streaming = streaming;
         Master(output, 0x1A45DFA3, e =>
         {
             UInt(e, 0x4286, 1); // EBMLVersion
@@ -31,15 +33,18 @@ internal sealed class NativeMatroskaWriter
         });
         Id(output, 0x18538067); // Segment with unknown size, playable while being written.
         output.Write([0x01, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF]);
-        segmentStart = output.Position;
+        if (!streaming)
+            segmentStart = output.Position;
         Master(output, 0x1549A966, e =>
         {
             UInt(e, 0x2AD7B1, TimestampScale);
             String(e, 0x4D80, "CaptureRack");
             String(e, 0x5741, "CaptureRack");
-            Float(e, 0x4489, 0); // Duration is the last 8 bytes of Info.
+            if (!streaming)
+                Float(e, 0x4489, 0); // Duration is the last 8 bytes of Info.
         });
-        durationPosition = output.Position - 8;
+        if (!streaming)
+            durationPosition = output.Position - 8;
         Master(output, 0x1654AE6B, e =>
         {
             Master(e, 0xAE, t =>
@@ -82,13 +87,14 @@ internal sealed class NativeMatroskaWriter
         {
             FinishCluster();
             Id(output, 0x1F43B675);
-            clusterSizePosition = output.Position;
+            if (!streaming)
+                clusterSizePosition = output.Position;
             output.Write([0x01, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF]);
             clusterTime = timestamp;
             clusterHasVideo = false;
             UInt(output, 0xE7, (ulong)timestamp);
         }
-        if (video && keyframe && !clusterHasVideo)
+        if (!streaming && video && keyframe && !clusterHasVideo)
         {
             cues.Add((timestamp, clusterSizePosition - 4 - segmentStart));
             clusterHasVideo = true;
@@ -104,6 +110,8 @@ internal sealed class NativeMatroskaWriter
 
     internal void Finish()
     {
+        if (streaming)
+            return;
         FinishCluster();
         // Reserve a fixed-width Cues size and patch it to avoid buffering the whole index.
         Id(output, 0x1C53BB6B);
@@ -126,9 +134,25 @@ internal sealed class NativeMatroskaWriter
         output.Position = end;
     }
 
+    internal static void WriteCueIndex(Stream output, IEnumerable<(long Time, long Cluster, long Block)> points) =>
+        Master(output, 0x1C53BB6B, index =>
+        {
+            foreach (var (time, cluster, block) in points)
+                Master(index, 0xBB, point =>
+                {
+                    UInt(point, 0xB3, (ulong)time);
+                    Master(point, 0xB7, track =>
+                    {
+                        UInt(track, 0xF7, 1);
+                        UInt(track, 0xF1, (ulong)cluster);
+                        UInt(track, 0xF0, (ulong)block);
+                    });
+                });
+        });
+
     private void FinishCluster()
     {
-        if (clusterTime >= 0)
+        if (!streaming && clusterTime >= 0)
             PatchSize(clusterSizePosition);
     }
 

@@ -1,4 +1,5 @@
 using System.Runtime.ExceptionServices;
+using CaptureRack.Recording;
 
 namespace CaptureRack.DeckLink;
 
@@ -25,9 +26,7 @@ public sealed class PreviewRecorder
             {
                 try
                 {
-                    var saved = FinishAttachedRecording();
-                    saved.Error ??= "The capture stream disconnected before recording was stopped.";
-                    savedOnDisconnect = saved;
+                    savedOnDisconnect = FinishAttachedRecording("The capture stream disconnected before recording was stopped.");
                 }
                 catch (Exception ex) when (ex is IOException or InvalidOperationException or UnauthorizedAccessException or OverflowException)
                 {
@@ -48,7 +47,7 @@ public sealed class PreviewRecorder
         return current?.ReadAudioLevels();
     }
 
-    public DateTimeOffset Start(string path, CaptureAudioFormat? outputAudioFormat = null)
+    public DateTimeOffset Start(string path, CaptureAudioFormat? outputAudioFormat = null, RecordingEncoding? encoding = null)
     {
         lock (gate)
         {
@@ -56,12 +55,12 @@ public sealed class PreviewRecorder
             if (recording is not null || savedOnDisconnect is not null || finishError is not null)
                 throw new InvalidOperationException("A recording is already running.");
 
-            recording = input.AttachRecording(path, outputAudioFormat);
+            recording = input.AttachRecording(path, outputAudioFormat, encoding);
             return DateTimeOffset.UtcNow;
         }
     }
 
-    public CaptureStats Finish()
+    public CaptureStats Finish(string? captureError = null)
     {
         lock (gate)
         {
@@ -75,16 +74,17 @@ public sealed class PreviewRecorder
                 finishError = null;
                 failure.Throw();
             }
-            return FinishAttachedRecording();
+            return FinishAttachedRecording(captureError);
         }
     }
 
-    private CaptureStats FinishAttachedRecording()
+    private CaptureStats FinishAttachedRecording(string? captureError)
     {
         using var active = recording ?? throw new InvalidOperationException("The recording is no longer active.");
         recording = null;
         var stats = callback!.DetachRecording();
-        stats.Recording = active.Finish();
+        stats.Error ??= captureError;
+        stats.Recording = active.Finish(stats.Error);
         return stats;
     }
 }

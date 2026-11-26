@@ -5,6 +5,7 @@ using CaptureRack.Core;
 using CaptureRack.DeckLink;
 using CaptureRack.DirectShow.Windows.Capture;
 using CaptureRack.QualityControl;
+using CaptureRack.Recording;
 using Windows.Graphics.Imaging;
 
 namespace CaptureRack.App.Views;
@@ -23,13 +24,13 @@ internal sealed class DirectShowPreviewSession(PreviewFeed feed)
     private string stage = "Open device";
 
     internal DirectShowRecording StartRecording(string path, string? device = null,
-        Action<NativeContainerAttempt>? progress = null)
+        Action<NativeContainerAttempt>? progress = null, RecordingEncoding? encoding = null)
     {
         lock (recordingGate)
         {
             if (ended || videoFormat is null || recording is not null)
                 throw new InvalidOperationException("The DirectShow recording cannot start in the current preview state.");
-            recording = DirectShowRecording.Start(path, videoFormat, audioFormat, QcReports.FindTools(), device, progress);
+            recording = DirectShowRecording.Start(path, videoFormat, audioFormat, QcReports.FindTools(), device, progress, encoding);
             return recording;
         }
     }

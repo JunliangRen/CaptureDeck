@@ -6,7 +6,7 @@ CaptureRack is a .NET 11 video capture and preservation tool. The Windows deskto
 
 | Platform | Build | Features |
 | --- | --- | --- |
-| Windows x64 | [Native WinUI 3](../../actions/workflows/windows.yml?query=branch%3Amain+is%3Asuccess) | DeckLink and FireWire preview and recording, plus offline QC. |
+| Windows x64 | [Native WinUI 3](../../actions/workflows/windows.yml?query=branch%3Amain+is%3Asuccess) | DeckLink, DirectShow and FireWire capture, real-time software recording, and offline QC. |
 | Windows ARM64 | [Native WinUI 3](../../actions/workflows/windows.yml?query=branch%3Amain+is%3Asuccess) | Offline QC. DeckLink capture is unavailable. |
 | macOS ARM64 | [Uno Desktop prototype](../../actions/workflows/uno-macos.yml?query=branch%3Amain+is%3Asuccess) | Offline MOV and TS QC, report viewing, and TS JSON export |
 
@@ -32,7 +32,7 @@ CaptureRack/
 |   |   |-- CaptureRack.SignalCapture    # Sampled-signal capture devices and diagnostics
 |   |   `-- CaptureRack.Audio            # Reserved for standalone audio capture
 |   |-- Processing/
-|   |   |-- CaptureRack.Recording       # Shared transport-stream recording
+|   |   |-- CaptureRack.Recording       # Shared recording, live encoding, and MKV recovery
 |   |   `-- CaptureRack.QualityControl  # Capture validation and reports
 |   |-- CaptureRack.Probe               # Command-line device probe and QC
 |   `-- CaptureRack.DeviceControl       # Independent tape-transport contracts
@@ -61,7 +61,7 @@ Under **Format details**, **Copy device diagnostics** copies a JSON report with 
 
 Capture backends discover devices, negotiate formats, and receive samples. Downstream processing is organized by media format so multiple backends can use the same writer or analyzer. MSTape negotiates its supported packet layout and passes the original bytes to `Processing/CaptureRack.Recording/TransportStream/`. The writer handles buffering, byte-preserving output, and file finalization. It has no dependency on DirectShow or MSTape. `CaptureRack.QualityControl` provides the TS parser for both recording-time validation and offline file checks. Tape transport controls belong to `CaptureRack.DeviceControl`.
 
-The shared recording project currently contains the Windows TS writer. Future sources that deliver TS can use it with their own packet layout. DV handling, shared frame and PCM processing, and CVBS/RF preview decoding can be added as separate paths when their sources are connected.
+The shared recording project writes native TS and DV and provides real-time software encoding for video sources that supply frames or supported compressed video samples. The FireWire TS writer can be reused by future sources that deliver a compatible packet layout. CVBS/RF preview decoding is planned separately.
 
 Capture and recording share the `CaptureSampleHandler` callback in `CaptureRack.Core`. DirectShow delivers bytes in the format negotiated at session start, with an optional stream timestamp and a discontinuity flag. Sample bytes are borrowed for the duration of the callback. A consumer that queues data copies it into its own buffer. The TS writer uses this callback for both MSTape and file replay in tests and retains its bounded queue and byte-preserving output. Other backends can adopt the contract with their own format negotiation.
 
@@ -142,6 +142,24 @@ Run these commands from the native probe package. Device names are prefixed with
 The probe enumerates video-input filters and their advertised output-pin formats, including audio pins on those filters. MSTape stays in the FireWire command group. The first reference device is Blackmagic WDM Capture on a DeckLink Studio 4K. These commands use DirectShow throughout. They leave hardware input routing as configured.
 
 Negotiate connects the selected pins directly to managed sinks, reads the negotiated media types, and leaves the graph stopped. Capture starts the graph for a bounded interval and reports sample sizes, timestamps, discontinuities, and a driver drop count when available. It diagnoses sample delivery without creating media files. Exit code 2 means at least one requested stream delivered no samples. Exit code 124 means a driver call exceeded the command deadline. Use a matching live input signal for capture. Unknown field order is kept as unknown when the media header does not supply it.
+
+## Real-time software recording output
+
+Under **Output → Recording output**, choose how to save DeckLink, DirectShow or the built-in test signal. **Device original · direct copy** is the default for new installations and older settings without a saved choice. DeckLink saves uncompressed video to MOV, and DirectShow can change the container while preserving the captured video payload. An explicit software choice is remembered. Software output encodes during capture and saves MKV with `Encoded_` and the codec in the filename. FireWire uses its native DV or TS writer.
+
+- **FFV1 + FLAC 8** stores video in FFV1 v3 with slice CRC and encodes PCM as FLAC compression level 8. It retains the captured video bit depth and scan order on the tested 10-bit 4:2:2 path. 8-bit PCM expands to 16-bit FLAC. 32-bit FLAC requires an FFmpeg build with support for the encoder’s 32-bit mode.
+- **H.264, H.265, AV1 and MPEG-2** offer target video bitrate and codec level plus explicit software deinterlacing. They produce 8-bit 4:2:0 video with PCM audio. For interlaced sources, enable software deinterlacing before recording H.265 or AV1.
+- Software output requires a local FFmpeg build with the selected encoder. H.264, H.265 and AV1 use `libx264`, `libx265` and `libsvtav1`, respectively. Encoding and disk writing run independently from preview. Real-time throughput depends on the input, CPU and disk.
+
+On a clean stop, CaptureRack drains the queue, writes the seek index, and publishes the MKV and its `.encoding.json` report. If the queue fills or the software encoder exits early, the recording stops and preview can continue. CaptureRack keeps the `.partial.mkv` and records the failure reason in its checkpoint when available.
+
+To recover an interrupted CaptureRack software recording, choose a new destination:
+
+```powershell
+.\Probe\CaptureRack.Probe.exe recover-mkv '.\capture.mkv.partial.mkv' '.\capture-recovered.mkv'
+```
+
+Recovery checks MKV element boundaries and available CRCs, copies the intact prefix up to the first damaged or incomplete cluster, and rebuilds seek entries from the available keyframes. It preserves the original file and does not re-encode the recovered media.
 
 ## Windows x64 FireWire / i.LINK
 

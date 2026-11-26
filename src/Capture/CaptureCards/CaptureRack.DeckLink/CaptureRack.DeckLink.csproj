@@ -7,6 +7,7 @@
   </PropertyGroup>
   <ItemGroup>
     <ProjectReference Include="../../CaptureRack.Core/CaptureRack.Core.csproj" />
+    <ProjectReference Include="../../../Processing/CaptureRack.Recording/CaptureRack.Recording.csproj" />
     <InternalsVisibleTo Include="CaptureRack.UT" />
   </ItemGroup>
 </Project>

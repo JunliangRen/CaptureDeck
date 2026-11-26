@@ -2,6 +2,7 @@ using System.Runtime.InteropServices;
 using System.Text.Json;
 using CaptureRack.DeckLink;
 using CaptureRack.DeviceControl;
+using CaptureRack.Recording;
 
 namespace CaptureRack.App;
 
@@ -15,6 +16,7 @@ internal sealed record CaptureSettings
     public ControlDeviceAddress? ControlDevice { get; init; }
     public string OutputFolder { get; init; } = "";
     public string RecordingLabel { get; init; } = "";
+    public RecordingEncoding RecordingEncoding { get; init; } = new();
     public string? LanguageOverride { get; init; }
     public string Theme { get; init; } = "System";
     public string WorkspaceLayout { get; init; } = "Split";
@@ -102,7 +104,9 @@ internal static class CaptureSettingsStore
             deckLink.ValueKind != JsonValueKind.Object)
             throw new JsonException("Missing or invalid DeckLink settings.");
 
-        return root.Deserialize<CaptureSettings>() ?? throw new JsonException("Empty settings.");
+        var settings = root.Deserialize<CaptureSettings>() ?? throw new JsonException("Empty settings.");
+        return settings.RecordingEncoding is { } encoding && Enum.IsDefined(encoding.Output)
+            ? settings : settings with { RecordingEncoding = new() };
     }
 
     internal static string Serialize(CaptureSettings settings) =>

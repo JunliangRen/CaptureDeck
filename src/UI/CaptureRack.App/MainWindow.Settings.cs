@@ -92,6 +92,7 @@ public sealed partial class MainWindow
         testSignalInspector.RestoreScenario(settings.TestSignalScenario);
 
         ApplySettingsLanguage(language, settings.DeckLink.VideoFormat, settings.DeckLink.AudioFormat);
+        RestoreRecordingEncoding(settings.RecordingEncoding);
         OutputPath.Text = settings.OutputFolder ?? "";
         RecordingLabelBox.Text = settings.RecordingLabel ?? "";
         UpdateRecordingFilenamePreview();
@@ -199,6 +200,7 @@ public sealed partial class MainWindow
             TestSignalScenario = testSignalInspector.SelectedScenarioTag,
             OutputFolder = OutputPath.Text.Trim(),
             RecordingLabel = RecordingLabelBox.Text.Trim(),
+            RecordingEncoding = ReadRecordingEncoding(validate: false),
             LanguageOverride = settingsCulture.Name,
             Theme = activeTheme,
             WorkspaceLayout = savedLayout,
@@ -290,6 +292,7 @@ public sealed partial class MainWindow
     private void ApplySettingsLanguage(string language, uint? videoFormat, uint? audioFormat, bool preserveActiveRouting = false)
     {
         settingsCulture = CultureInfo.GetCultureInfo(language);
+        BindRecordingOutput();
         AutomationProperties.SetName(OpenSettingsButton, L("Settings"));
         ToolTipService.SetToolTip(OpenSettingsButton, L("Settings"));
 

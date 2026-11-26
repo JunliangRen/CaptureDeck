@@ -52,6 +52,12 @@ public sealed partial class DirectShowCapabilitiesView
     {
         if (ActiveVideo is not { } video)
             return null;
+        if (recordingOutput() is var output && output != CaptureRack.Recording.RecordingOutput.Native)
+        {
+            var sanitized = RecordingFileNaming.SanitizeLabel(label);
+            var prefix = sanitized.Length == 0 ? "CaptureRack" : sanitized + "_CaptureRack";
+            return $"{prefix}_YYYYMMDD_HHmmss_DirectShow_{new CaptureRack.Recording.RecordingEncoding(output).FileTag}.mkv";
+        }
         var videoTag = video.IsMpeg2Video ? "MPEG2" : DirectShowPreviewVideo.Encoding(video) ?? "Video";
         var extensions = DirectShowRecording.OutputExtensions(video);
         return RecordingFileNaming.BuildDirectShowPreviewName(label, videoTag, ActiveAudio?.BitsPerSample, extensions);

@@ -9,6 +9,7 @@
     <ProjectReference Include="../../Capture/CaptureRack.Core/CaptureRack.Core.csproj" />
     <ProjectReference Include="../CaptureRack.QualityControl/CaptureRack.QualityControl.csproj" />
     <InternalsVisibleTo Include="CaptureRack.DirectShow" />
+    <InternalsVisibleTo Include="CaptureRack.DeckLink" />
     <InternalsVisibleTo Include="CaptureRack.UT" />
   </ItemGroup>
 </Project>

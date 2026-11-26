@@ -1779,4 +1779,15 @@
   <data name="TestSignalSectionHeading" xml:space="preserve">
     <value>TEST SIGNAL GENERATOR</value>
   </data>
+  <data name="EncodingOutputLabel" xml:space="preserve"><value>Recording output</value></data>
+  <data name="EncodingBitrateLabel" xml:space="preserve"><value>Target bitrate (kb/s)</value></data>
+  <data name="EncodingLevelLabel" xml:space="preserve"><value>Codec level</value></data>
+  <data name="EncodingAuto" xml:space="preserve"><value>Automatic</value></data>
+  <data name="EncodingNative" xml:space="preserve"><value>Device original · direct copy</value></data>
+  <data name="EncodingNativeHint" xml:space="preserve"><value>Keeps the video format delivered by the device.</value></data>
+  <data name="EncodingLive" xml:space="preserve"><value>Encoding while recording. The output is saved as MKV.</value></data>
+  <data name="EncodingProgressiveHint" xml:space="preserve"><value>H.265 and AV1 require progressive input or software deinterlacing.</value></data>
+  <data name="EncodingDeinterlace" xml:space="preserve"><value>Software deinterlacing</value></data>
+  <data name="EncodingBadBitrate" xml:space="preserve"><value>Enter a bitrate from 1 to 1,000,000 kb/s.</value></data>
+  <data name="EncodingSoftware" xml:space="preserve"><value>Software encoding</value></data>
 </root>

@@ -791,6 +791,18 @@
                                         <TextBox x:Name="OutputPath" IsSpellCheckEnabled="False" IsTextPredictionEnabled="False"
                                                  CornerRadius="3" FontSize="13" TextChanged="OutputPath_TextChanged" />
 
+                                        <StackPanel x:Name="RecordingEncodingPanel" Spacing="6" Visibility="Collapsed">
+                                            <ComboBox x:Name="RecordingOutputPicker" HorizontalAlignment="Stretch"
+                                                      DisplayMemberPath="Label" SelectionChanged="RecordingOutputChanged" />
+                                            <StackPanel x:Name="RecordingEncoderParameters" Spacing="6" Visibility="Collapsed">
+                                                <TextBox x:Name="RecordingBitrateBox" MaxLength="7" TextChanged="RecordingOutputChanged" />
+                                                <TextBox x:Name="RecordingLevelBox" MaxLength="8" TextChanged="RecordingOutputChanged" />
+                                                <CheckBox x:Name="RecordingDeinterlaceBox" Checked="RecordingOutputChanged" Unchecked="RecordingOutputChanged" />
+                                            </StackPanel>
+                                            <TextBlock x:Name="RecordingEncodingHint" TextWrapping="Wrap" FontSize="12"
+                                                       Foreground="{ThemeResource StudioTextSecondaryBrush}" />
+                                        </StackPanel>
+
                                         <StackPanel>
                                             <TextBlock x:Name="RecordingLabelHeading" Style="{StaticResource StudioFieldLabelStyle}" />
                                             <TextBox x:Name="RecordingLabelBox" IsSpellCheckEnabled="False"

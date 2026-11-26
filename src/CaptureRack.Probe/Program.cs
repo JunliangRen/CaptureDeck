@@ -3,6 +3,7 @@ using System.Runtime.InteropServices;
 using CaptureRack.Core;
 using CaptureRack.DeckLink;
 using CaptureRack.QualityControl;
+using CaptureRack.Recording;
 
 namespace CaptureRack.Probe;
 
@@ -29,6 +30,20 @@ internal static class Program
         }
         if (args is ["qc", var path])
             return CheckMov(path);
+        if (args is ["recover-mkv", var interrupted, var recovered])
+        {
+            try
+            {
+                var bytes = LiveMatroskaRecovery.RecoverAsync(interrupted, recovered).GetAwaiter().GetResult();
+                Console.WriteLine($"Recovered {bytes} bytes to {recovered}.");
+                return 0;
+            }
+            catch (Exception ex) when (ex is IOException or InvalidDataException or ArgumentException or UnauthorizedAccessException)
+            {
+                Console.Error.WriteLine(ex.Message);
+                return 1;
+            }
+        }
 
         if (args is not ["list"] &&
             (args.Length is < 3 or > 4 || args[0] != "capture" ||
@@ -89,6 +104,7 @@ internal static class Program
         Console.WriteLine("CaptureRack.Probe list");
         Console.WriteLine("CaptureRack.Probe capture <device-index> <seconds:1-3600> [mode-fourcc]");
         Console.WriteLine("CaptureRack.Probe qc <mov-or-mkv-path>");
+        Console.WriteLine("CaptureRack.Probe recover-mkv <interrupted-mkv> <new-output-mkv>");
         Console.WriteLine("CaptureRack.Probe directshow --help");
         Console.WriteLine("CaptureRack.Probe firewire --help");
         Console.WriteLine("CaptureRack.Probe rf --help");

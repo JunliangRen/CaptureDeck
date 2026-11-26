@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 using CaptureRack.Core;
+using CaptureRack.Recording;
 
 namespace CaptureRack.DeckLink;
 
@@ -29,6 +30,7 @@ internal sealed class CaptureCallback(PreviewFeed? preview, CapturePixelFormat p
     private CaptureStats? recordingBaseline;
     private (long Left, long Right) recordingClips;
     private bool recordingModeChanged;
+    private string? recordingError;
     private bool hasRecordableFrame;
     private long? recordingAudioTime;
     private long? recordingVideoTime;
@@ -41,7 +43,7 @@ internal sealed class CaptureCallback(PreviewFeed? preview, CapturePixelFormat p
         audioMonitor = new StereoMonitor(format);
     }
 
-    internal MovRecording AttachRecording(string path, CaptureAudioFormat? outputAudioFormat = null)
+    internal MovRecording AttachRecording(string path, CaptureAudioFormat? outputAudioFormat = null, RecordingEncoding? encoding = null)
     {
         var output = outputAudioFormat ?? defaultOutputAudioFormat;
         lock (gate)
@@ -51,7 +53,7 @@ internal sealed class CaptureCallback(PreviewFeed? preview, CapturePixelFormat p
                 throw new InvalidOperationException("The current preview input does not supply the selected PCM depth.");
         }
 
-        var writer = new MovRecording(path, mode, pixelFormat, output);
+        var writer = new MovRecording(path, mode, pixelFormat, output, encoding);
         try
         {
             lock (gate)
@@ -59,6 +61,7 @@ internal sealed class CaptureCallback(PreviewFeed? preview, CapturePixelFormat p
                 EnsureRecordingReady();
                 recordingBaseline = stats.Clone();
                 recordingModeChanged = false;
+                recordingError = null;
                 recordingTimeline = new FrameTimeline(mode, keepSignalHistory: true);
                 recordingStart = Elapsed;
                 if (stats.Signal != VideoSignal.Unknown)
@@ -125,11 +128,12 @@ internal sealed class CaptureCallback(PreviewFeed? preview, CapturePixelFormat p
                 AudioLevels = new StereoLevels(0, 0, clips.Left - recordingClips.Left,
                     clips.Right - recordingClips.Right, null, null),
                 RecordingModeChanged = recordingModeChanged,
-                Error = stats.Error
+                Error = stats.Error ?? recordingError
             };
             recordingBaseline = null;
             recordingTimeline = null;
             recordingModeChanged = false;
+            recordingError = null;
             return result;
         }
     }
@@ -156,6 +160,12 @@ internal sealed class CaptureCallback(PreviewFeed? preview, CapturePixelFormat p
             snapshot.CanStartRecording = CanAttachRecording;
             snapshot.InputAudioFormat = inputAudioFormat;
             snapshot.RecordingModeChanged = recordingModeChanged;
+            if (recording is { IsSoftware: true } active && recordingError is null)
+            {
+                try { active.CheckWriter(); }
+                catch (Exception error) when (IsRecordingIoError(error)) { recordingError = error.Message; }
+            }
+            snapshot.RecordingError = recordingError;
             if (publishMonitor && timeline is not null)
             {
                 snapshot.Events = timeline.Events();
@@ -369,13 +379,17 @@ internal sealed class CaptureCallback(PreviewFeed? preview, CapturePixelFormat p
                 rowBytes >= MovRecording.StoredRowBytes(mode.Width, pixelFormat);
             if (noInput && recording is not null && !hasRecordableFrame)
                 throw new InvalidOperationException("No-input frame has no writable buffer for this mode.");
-            if (recording is not null)
+            if (recording is { } active && recordingError is null)
             {
-                DeckLinkCapture.Check(video.GetStreamTime(out var time, out var duration, recording.VideoTimeScale),
-                    "Get recording video stream time");
-                recording.SubmitVideo(bytes, width, height, rowBytes, time, duration, stats.Signal);
-                recordingTimeline?.Observe(time, noInput, lastVideoObservation - recordingStart);
-                ObserveRecordingTimestamp(ref recordingVideoTime, time);
+                try
+                {
+                    DeckLinkCapture.Check(video.GetStreamTime(out var time, out var duration, active.VideoTimeScale),
+                        "Get recording video stream time");
+                    active.SubmitVideo(bytes, width, height, rowBytes, time, duration, stats.Signal);
+                    recordingTimeline?.Observe(time, noInput, lastVideoObservation - recordingStart);
+                    ObserveRecordingTimestamp(ref recordingVideoTime, time);
+                }
+                catch (Exception error) when (active.IsSoftware && IsRecordingIoError(error)) { recordingError = error.Message; }
             }
             preview?.Offer(bytes, width, height, rowBytes, length, noInput, pixelFormat, mode.FieldDominance);
             if (!describe)
@@ -410,10 +424,14 @@ internal sealed class CaptureCallback(PreviewFeed? preview, CapturePixelFormat p
         if (bytes == IntPtr.Zero)
             throw new InvalidOperationException("Invalid audio buffer.");
 
-        if (recording is not null)
+        if (recording is { } active && recordingError is null)
         {
-            recording.SubmitAudio(bytes, sampleFrames, time, inputAudioFormat, stats.Signal);
-            ObserveRecordingTimestamp(ref recordingAudioTime, time);
+            try
+            {
+                active.SubmitAudio(bytes, sampleFrames, time, inputAudioFormat, stats.Signal);
+                ObserveRecordingTimestamp(ref recordingAudioTime, time);
+            }
+            catch (Exception error) when (active.IsSoftware && IsRecordingIoError(error)) { recordingError = error.Message; }
         }
         var sampleCount = checked(sampleFrames * (int)CaptureAudio.Channels);
         if (inputAudioFormat == CaptureAudioFormat.Pcm32)
@@ -449,6 +467,9 @@ internal sealed class CaptureCallback(PreviewFeed? preview, CapturePixelFormat p
             audioMonitor?.Add(left, right);
         }
     }
+
+    private static bool IsRecordingIoError(Exception error) =>
+        error is IOException or InvalidOperationException or UnauthorizedAccessException or InvalidDataException;
 }
 
 public sealed class CaptureStats
@@ -461,6 +482,7 @@ public sealed class CaptureStats
             (long)CaptureAudio.BytesPerFrame(format) * CaptureAudio.SampleRate * 8)
         : null;
     public bool RecordingModeChanged { get; internal set; }
+    public string? RecordingError { get; internal set; }
     public long VideoFrames { get; internal set; }
     public long NoInputFrames { get; internal set; }
     public long UnreadableNoInputFrames { get; internal set; }

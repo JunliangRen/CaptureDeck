@@ -6,6 +6,7 @@ using System.Runtime.InteropServices.WindowsRuntime;
 using CaptureRack.Core;
 using CaptureRack.DeckLink;
 using CaptureRack.QualityControl;
+using CaptureRack.Recording;
 using Microsoft.UI;
 using Microsoft.UI.Composition;
 using Microsoft.UI.Composition.SystemBackdrops;
@@ -363,7 +364,8 @@ public sealed partial class MainWindow : Window
 
         if (IsDirectShowActive)
         {
-            directShowCapabilitiesView.SetRecordingTarget(() => OutputPath.Text.Trim(), GetRecordingLabel);
+            directShowCapabilitiesView.SetRecordingTarget(() => OutputPath.Text.Trim(), GetRecordingLabel,
+                () => ReadRecordingEncoding(), () => SelectedRecordingOutput);
             directShowCapabilitiesView.Bind(L);
             directShowCapabilitiesView.RefreshTheme();
         }
@@ -1206,6 +1208,7 @@ public sealed partial class MainWindow : Window
     private void UpdateRecordingFilenamePreview()
     {
         var label = GetRecordingLabel();
+        UpdateRecordingEncodingControls();
         if (LiveMediaSource is { } media)
         {
             RecordingFilenamePreview.Text = media.BuildFilenamePreview(label)
@@ -1217,6 +1220,11 @@ public sealed partial class MainWindow : Window
 
         var sanitized = RecordingFileNaming.SanitizeLabel(label);
         var samplePrefix = sanitized.Length == 0 ? "CaptureRack_YYYYMMDD_HHmmss" : $"{sanitized}_CaptureRack_YYYYMMDD_HHmmss";
+        if (SupportsSoftwareOutput && SelectedRecordingOutput != RecordingOutput.Native)
+        {
+            RecordingFilenamePreview.Text = $"{samplePrefix}_{new RecordingEncoding(SelectedRecordingOutput).FileTag}.mkv";
+            return;
+        }
         if (!HasLiveCapture)
         {
             RecordingFilenamePreview.Text = samplePrefix;
@@ -1453,10 +1461,11 @@ public sealed partial class MainWindow : Window
         }
 
         recordingTransition = true;
-        SetStatus("StartingRecording", "OpeningMov");
+        SetStatus("StartingRecording", SelectedRecordingOutput == RecordingOutput.Native ? "OpeningMov" : "EncodingLive");
         UpdateControls();
         try
         {
+            var encoding = ReadRecordingEncoding();
             var videoTag = RecordingVideoFormat == CapturePixelFormat.Uyvy ? "8bit-Uncompressed" : "10bit-Uncompressed";
             var audioFormat = RecordingAudioFormat;
             var audioTag = audioFormat == CaptureAudioFormat.Pcm32 ? "32bit-PCM" : "16bit-PCM";
@@ -1468,8 +1477,10 @@ public sealed partial class MainWindow : Window
             var now = DateTime.Now;
             var opened = await Task.Run(() =>
             {
-                var path = RecordingFileNaming.BuildMovPath(directory, label, now, videoTag, audioTag);
-                return (Path: path, Started: recorder.Start(path, audioFormat));
+                var path = encoding.IsSoftware
+                    ? Path.Combine(directory, $"{RecordingFileNaming.BuildPrefix(label, now)}_{encoding.FileTag}.mkv")
+                    : RecordingFileNaming.BuildMovPath(directory, label, now, videoTag, audioTag);
+                return (Path: path, Started: recorder.Start(path, audioFormat, encoding));
             });
             if (captureTask is null)
                 throw new InvalidOperationException(L("PreviewStoppedOpening"));
@@ -1481,7 +1492,7 @@ public sealed partial class MainWindow : Window
             RecordingElapsed.Text = FullscreenClockText.Text = "00:00:00";
             recordingClock.Restart();
             UpdateRecordingIndicator(active: true);
-            SetStatus("RecordingActive", "WritingMov");
+            SetStatus("RecordingActive", encoding.IsSoftware ? "EncodingLive" : "WritingMov");
         }
         catch (Exception ex) when (IsSessionError(ex))
         {
@@ -1504,11 +1515,14 @@ public sealed partial class MainWindow : Window
         recordingTransition = true;
         StopRecordingClock();
         var stopped = DateTimeOffset.UtcNow;
-        SetStatus("FinalizingMov", "WritingIndex");
+        if (Path.GetExtension(statusFilePath) == ".mkv")
+            SetStatus("StopRecording", "QcFinishing");
+        else
+            SetStatus("FinalizingMov", "WritingIndex");
         UpdateControls();
         try
         {
-            var stats = await Task.Run(recorder.Finish);
+            var stats = await Task.Run(() => recorder.Finish(captureError));
             var log = CaptureQcLog.Create(stats, recordingStarted, stopped, recordingInput.Device,
                 recordingInput.Driver, recordingInput.Video, recordingInput.Audio, captureError);
             if (!await RunMovQcAsync(stats.Recording!.Path, log))
@@ -1517,6 +1531,9 @@ public sealed partial class MainWindow : Window
         catch (Exception ex) when (IsSessionError(ex))
         {
             closeAfterQc = false;
+            if (statusFilePath is { } target && Path.GetExtension(target) == ".mkv" &&
+                !File.Exists(target) && File.Exists(target + ".partial.mkv"))
+                statusFilePath = target + ".partial.mkv";
             SetStatus("RecordingFailed", () => ex.Message, InfoBarSeverity.Error);
         }
         finally
@@ -2027,9 +2044,9 @@ public sealed partial class MainWindow : Window
             UpdateControls();
         }
 
-        if (recordingSession && !recordingTransition && stats.RecordingModeChanged)
+        if (recordingSession && !recordingTransition && (stats.RecordingModeChanged || stats.RecordingError is not null))
         {
-            _ = FinishRecordingAsync();
+            _ = FinishRecordingAsync(stats.RecordingError);
             return;
         }
 
@@ -2298,6 +2315,7 @@ public sealed partial class MainWindow : Window
 
     private void UpdateControls()
     {
+        UpdateRecordingEncodingControls();
         var media = LiveMediaSource;
         var active = IsCaptureInputActive;
         var idle = settingsReady && !closing && !loading && !pickingOutput && !active && vancScanTask is null &&
@@ -2426,5 +2444,5 @@ public sealed partial class MainWindow : Window
 
     private static bool IsSessionError(Exception ex) =>
         ex is COMException or InvalidOperationException or InvalidCastException or IOException or
-            UnauthorizedAccessException or ArgumentException or OverflowException;
+            UnauthorizedAccessException or ArgumentException or OverflowException or NotSupportedException or System.ComponentModel.Win32Exception;
 }

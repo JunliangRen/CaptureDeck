@@ -9,7 +9,7 @@ internal static class CaptureQcLog
         string device, string driver, string videoSource, string audioSource, string? captureError = null)
     {
         var saved = stats.Recording ?? throw new InvalidOperationException("Recording statistics are unavailable.");
-        var field = DeckLinkCapture.FormatFourCc(saved.Mode.FieldDominance) switch
+        var field = saved.Deinterlaced ? "progressive" : DeckLinkCapture.FormatFourCc(saved.Mode.FieldDominance) switch
         {
             "uppr" => "tb",
             "lowr" => "bt",

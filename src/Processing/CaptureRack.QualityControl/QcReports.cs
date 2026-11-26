@@ -116,7 +116,7 @@ public static class QcReports
 
                 var metadata = await InspectAsync(ffprobe, path, cancellation);
                 media = ReadMediaFacts(metadata, isMov, capture is not null);
-                CheckMedia(media, capture?.Expected, problems);
+                CheckMedia(media, capture?.Expected, isMov, problems);
                 if (native is not null)
                     CheckNativeMedia(media, native, problems);
                 if (capture is null && native is null)
@@ -280,13 +280,14 @@ public static class QcReports
         var v = video.SingleOrDefault();
         var a = audio.SingleOrDefault();
         var audioCodec = a is null ? "" : Text(a, "codec_name");
-        var audioBits = (int)(a is null ? 0 : Number(a, "bits_per_sample") ?? 0);
+        var audioBits = (int)(a is null ? 0 : Number(a, audioCodec == "flac" ? "bits_per_raw_sample" : "bits_per_sample") ?? 0);
         var sampleRate = (int)(Number(a, "sample_rate") ?? 0);
         var channels = (int)(Number(a, "channels") ?? 0);
         if (a is not null && ((audioCodec, audioBits) is not
             (("pcm_u8", 8) or ("pcm_s16le", 16) or ("pcm_s24le", 24) or ("pcm_s32le", 32))
+            && (isMov || audioCodec != "flac" || audioBits is not (8 or 16 or 24 or 32))
             || sampleRate <= 0 || channels <= 0))
-            throw new InvalidOperationException("The audio track must contain 8-, 16-, 24-, or 32-bit PCM.");
+            throw new InvalidOperationException("QC expects supported PCM or FLAC audio.");
         if (deckLink && a is not null && (audioBits is not (16 or 32) || sampleRate != 48000 || channels != 2))
             throw new InvalidOperationException("DeckLink QC expects 48 kHz, 16- or 32-bit signed stereo PCM.");
 
@@ -297,11 +298,11 @@ public static class QcReports
             channels, v is null ? "" : Text(v, "r_frame_rate"), Text(v, "codec_name"), Text(v, "pix_fmt"));
     }
 
-    private static void CheckMedia(MediaFacts media, QcExpectedMedia? expected, List<string> problems)
+    private static void CheckMedia(MediaFacts media, QcExpectedMedia? expected, bool isMov, List<string> problems)
     {
         if (expected is null)
             return;
-        if (media.HasVideo)
+        if (isMov && media.HasVideo)
         {
             if (media.VideoTag is not ("v210" or "2vuy"))
                 problems.Add($"Unexpected video format '{media.VideoTag}' for a CaptureRack MOV.");
@@ -310,23 +311,35 @@ public static class QcReports
             if (media.VideoFrames is null)
                 problems.Add("The MOV video sample count is unavailable.");
         }
-        if (media.HasAudio && media.AudioSampleFrames is null)
+        if (isMov && media.HasAudio && media.AudioSampleFrames is null)
             problems.Add("The MOV audio sample count is unavailable.");
 
-        Compare("MOV index video frames", media.VideoFrames, expected.VideoFrames, problems);
-        Compare("MOV index PCM sample frames", media.AudioSampleFrames, expected.AudioSampleFrames, problems);
+        if (isMov)
+        {
+            Compare("MOV index video frames", media.VideoFrames, expected.VideoFrames, problems);
+            Compare("MOV index PCM sample frames", media.AudioSampleFrames, expected.AudioSampleFrames, problems);
+        }
+        else if (!media.HasVideo || expected.AudioSampleFrames > 0 && !media.HasAudio)
+            problems.Add("A track recorded by the capture source is missing from the encoded file.");
         if (media.HasAudio)
             Compare("Audio bit depth", media.AudioBits, expected.AudioBits, problems);
         if (media.HasVideo)
         {
             Compare("Video width", media.Width, expected.Width, problems);
             Compare("Video height", media.Height, expected.Height, problems);
-            if (media.VideoTag != expected.VideoTag)
+            if (isMov && media.VideoTag != expected.VideoTag)
                 problems.Add($"Video format '{media.VideoTag}' differs from the recorded setting '{expected.VideoTag}'.");
-            if (media.FieldOrder != expected.FieldOrder)
+            if (isMov ? media.FieldOrder != expected.FieldOrder : NormalizeFieldOrder(media.FieldOrder) != NormalizeFieldOrder(expected.FieldOrder))
                 problems.Add($"Field order '{media.FieldOrder}' differs from the recorded setting '{expected.FieldOrder}'.");
         }
     }
+
+    private static string NormalizeFieldOrder(string value) => value switch
+    {
+        "tt" or "tb" => "top-first",
+        "bb" or "bt" => "bottom-first",
+        _ => value
+    };
 
     private static void CheckNativeMedia(MediaFacts media, NativeCaptureReport recording, List<string> problems)
     {
@@ -394,7 +407,8 @@ public static class QcReports
         string[] timeBase = useDemuxTimeBase ? ["-enc_time_base:v", "demux"] : [];
         string[] videoArgs = media.HasVideo
             ? ["-map", "0:v:0", "-c:v", "rawvideo", "-threads:v", "1", "-fps_mode", "passthrough", .. timeBase] : [];
-        string[] audioArgs = media.HasAudio ? ["-map", "0:a:0", "-c:a", media.AudioCodec] : [];
+        var pcmCodec = media.AudioCodec == "flac" ? media.AudioBits == 8 ? "pcm_u8" : $"pcm_s{media.AudioBits}le" : media.AudioCodec;
+        string[] audioArgs = media.HasAudio ? ["-map", "0:a:0", "-c:a", pcmCodec] : [];
         var audioStream = media.HasVideo ? "1" : "0";
         return RunProcessAsync(executable, Path.GetDirectoryName(path)!,
             ["-v", "error", "-nostdin", "-xerror", "-err_detect", "explode", "-apply_cropping", "none", "-i", path,

@@ -30,13 +30,16 @@ public sealed class DirectShowRecording
     private bool completed;
     private bool startedVideo;
     private readonly bool compressed;
+    private readonly bool software;
     private readonly (string? FfmpegPath, string? FfprobePath) tools;
 
-    private DirectShowRecording(string path, FileStream file, NativeVideoTrack video, NativePcmTrack? audio,
+    private DirectShowRecording(string path, FileStream? file, LiveEncodedRecording? live, NativeVideoTrack video, NativePcmTrack? audio,
         DirectShowFormat inputVideo, DirectShowFormat? inputAudio, (string?, string?) tools,
         string? device, Action<NativeContainerAttempt>? reportProgress)
     {
         Path = path;
+        PartialPath = path + (live is null ? ".partial" : ".partial.mkv");
+        software = live is not null;
         this.video = video;
         this.audio = audio;
         compressed = IsCompressed(inputVideo);
@@ -45,13 +48,28 @@ public sealed class DirectShowRecording
         this.device = device;
         this.reportProgress = reportProgress;
         this.tools = tools;
-        Completion = Task.Run(() => WriteAsync(file));
+        Completion = Task.Run(() => WriteAsync(file, live));
+        if (live is not null)
+            _ = WatchEncoderAsync(live);
     }
 
     public string Path { get; }
-    public string PartialPath => Path + ".partial";
+    public string PartialPath { get; }
     public Task<string> Completion { get; }
     public string? ReportError { get; private set; }
+
+    private async Task WatchEncoderAsync(LiveEncodedRecording live)
+    {
+        try { await live.OutputEnded.ConfigureAwait(false); }
+        catch (Exception) { /* CheckHealth reports the completed output failure below. */ }
+        lock (gate)
+        {
+            if (completed)
+                return;
+            try { live.CheckHealth(); }
+            catch (IOException error) { Complete(error); }
+        }
+    }
 
     private static NativeCaptureFormat Describe(DirectShowFormat format) =>
         new(format.PinName, format.IsMpeg2Video ? "MPEG2" : DirectShowPreviewVideo.Encoding(format)
@@ -73,7 +91,7 @@ public sealed class DirectShowRecording
 
     public static DirectShowRecording Start(string path, DirectShowFormat video, DirectShowFormat? audio,
         (string? FfmpegPath, string? FfprobePath) tools = default,
-        string? device = null, Action<NativeContainerAttempt>? reportProgress = null)
+        string? device = null, Action<NativeContainerAttempt>? reportProgress = null, RecordingEncoding? encoding = null)
     {
         if (!Supports(video, audio) || video.BitmapHeaderBase64 is not { } metadata)
             throw new NotSupportedException("The negotiated DirectShow format has no native recording mapping.");
@@ -95,9 +113,12 @@ public sealed class DirectShowRecording
             video.FrameInterval100ns!.Value, order, colourSpace, video.IsMpeg2Video);
         var audioTrack = audio is null ? null : new NativePcmTrack(audio.SampleRate!.Value,
             audio.Channels!.Value, audio.BitsPerSample!.Value, audio.BlockAlign!.Value);
+        if (encoding?.IsSoftware == true)
+            return new DirectShowRecording(path, null, new LiveEncodedRecording(path, encoding, videoTrack, audioTrack, tools.FfmpegPath),
+                videoTrack, audioTrack, video, audio, tools, device, reportProgress);
         var file = new FileStream(path + ".partial", FileMode.CreateNew, FileAccess.Write,
             FileShare.Read, 256 * 1024);
-        return new DirectShowRecording(path, file, videoTrack, audioTrack, video, audio, tools, device, reportProgress);
+        return new DirectShowRecording(path, file, null, videoTrack, audioTrack, video, audio, tools, device, reportProgress);
     }
 
     public void Accept(bool isVideo, CaptureSample sample)
@@ -119,7 +140,9 @@ public sealed class DirectShowRecording
             }
             if (length > QueueBudget - Volatile.Read(ref queuedBytes))
             {
-                Complete(new IOException("The DirectShow recording queue filled before samples could be written."));
+                Complete(new IOException(software
+                    ? "The software recording queue filled. The encoder or storage did not keep up with capture."
+                    : "The DirectShow recording queue filled before samples could be written."));
                 return;
             }
             if (!isVideo && length % audio!.BlockAlign != 0)
@@ -154,15 +177,16 @@ public sealed class DirectShowRecording
         return offset >= 0 && bytes.Length - offset >= 6 && (bytes[offset + 5] >> 3 & 7) == 1;
     }
 
-    private async Task<string> WriteAsync(FileStream file)
+    private async Task<string> WriteAsync(FileStream? file, LiveEncodedRecording? live)
     {
+        using var encoder = live;
         string? savedPath = null;
         string? failure = null;
         try
         {
             using (file)
             {
-                var writer = new NativeMatroskaWriter(file, video, audio);
+                var writer = file is null ? null : new NativeMatroskaWriter(file, video, audio);
                 var videoClock = new TrackClock();
                 var audioClock = new TrackClock();
                 long? nativeOrigin = null;
@@ -180,7 +204,11 @@ public sealed class DirectShowRecording
                             var mpeg2 = packet.IsVideo && video.Mpeg2;
                             var (time, end) = clock.Advance(packet, nativeOrigin, nominal, mpeg2);
                             var bytes = packet.Buffer.AsSpan(0, packet.Length);
-                            writer.Write(packet.IsVideo, time, end, bytes, !mpeg2 || IsMpeg2Keyframe(bytes));
+                            var keyframe = !mpeg2 || IsMpeg2Keyframe(bytes);
+                            if (live is not null)
+                                live.Write(packet.IsVideo, time, end, bytes, keyframe);
+                            else
+                                writer!.Write(packet.IsVideo, time, end, bytes, keyframe);
                             (packet.IsVideo ? videoEvidence : audioEvidence).Written(packet.Length);
                         }
                         finally { Release(packet); }
@@ -188,13 +216,19 @@ public sealed class DirectShowRecording
                 }
                 finally
                 {
-                    writer.Finish();
-                    file.Flush(flushToDisk: true);
+                    writer?.Finish();
+                    file?.Flush(flushToDisk: true);
                 }
                 if (!videoClock.Seen)
                     throw new IOException("The DirectShow recording received no video frames.");
                 if (audio is not null && !audioClock.Seen)
                     throw new IOException("The selected DirectShow audio stream delivered no samples.");
+                if (live is not null)
+                {
+                    live.Finish();
+                    savedPath = Path;
+                    return savedPath;
+                }
             }
             savedPath = await NativeRecordingContainer.FinalizeAsync(PartialPath, Path, compressed, tools, attempt =>
             {
@@ -206,6 +240,7 @@ public sealed class DirectShowRecording
         catch (Exception ex)
         {
             failure = ex.Message;
+            live?.RecordInterruption(failure);
             throw;
         }
         finally
@@ -217,7 +252,7 @@ public sealed class DirectShowRecording
             try
             {
                 var media = new FileInfo(reportMedia);
-                if (media.Exists)
+                if (media.Exists && live is null)
                     await new NativeCaptureReport(media.Name, media.Length, device, beganUtc, endedUtc!.Value,
                         videoFormat, audioFormat, videoEvidence.Snapshot(), audio is null ? null : audioEvidence.Snapshot(),
                         video.Mpeg2 ? null : videoEvidence.WrittenPackets,

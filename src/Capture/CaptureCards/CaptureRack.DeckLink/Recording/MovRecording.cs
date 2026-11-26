@@ -1,7 +1,10 @@
 using System.Buffers;
+using System.Buffers.Binary;
 using System.Collections.Concurrent;
 using System.Runtime.InteropServices;
 using CaptureRack.Core;
+using CaptureRack.Recording;
+using CaptureRack.Recording.Matroska;
 
 namespace CaptureRack.DeckLink;
 
@@ -9,6 +12,7 @@ public sealed record RecordingResult(string Path, int VideoFrames, long AudioSam
     VideoMode Mode, CapturePixelFormat VideoFormat, CaptureAudioFormat AudioFormat)
 {
     public RecordingTiming? Timing { get; init; }
+    public bool Deinterlaced { get; init; }
 }
 
 internal sealed class MovRecording : IDisposable
@@ -21,15 +25,22 @@ internal sealed class MovRecording : IDisposable
     private readonly CaptureAudioFormat audioFormat;
     private readonly BlockingCollection<Packet> packets = new(16);
     private readonly Task<RecordingResult> writer;
+    private readonly bool software;
+    private readonly LiveEncodedRecording? liveEncoder;
+    private string? interruption;
     private bool finalized;
 
     public long VideoTimeScale => mode.TimeScale;
+    internal bool IsSoftware => software;
 
-    public MovRecording(string outputPath, VideoMode mode, CapturePixelFormat format, CaptureAudioFormat audioFormat)
+    public MovRecording(string outputPath, VideoMode mode, CapturePixelFormat format, CaptureAudioFormat audioFormat,
+        RecordingEncoding? encoding = null)
     {
         path = Path.GetFullPath(outputPath);
-        if (!Path.GetExtension(path).Equals(".mov", StringComparison.OrdinalIgnoreCase))
-            throw new InvalidOperationException("Recording output must end in .mov.");
+        software = encoding?.IsSoftware == true;
+        var extension = software ? ".mkv" : ".mov";
+        if (!Path.GetExtension(path).Equals(extension, StringComparison.OrdinalIgnoreCase))
+            throw new InvalidOperationException($"Recording output must end in {extension}.");
         if (File.Exists(path))
             throw new IOException("The output MOV already exists. Pick a new file name.");
         if (mode.Width % 2 != 0)
@@ -43,6 +54,14 @@ internal sealed class MovRecording : IDisposable
 
         try
         {
+            if (software)
+            {
+                var video = EncodedInput(mode, format, rowBytes);
+                var audio = new NativePcmTrack(48000, 2, (int)audioFormat, audioFrameBytes);
+                liveEncoder = new LiveEncodedRecording(path, encoding!, video, audio);
+                writer = Task.Run(() => WriteEncoded(liveEncoder, format));
+                return;
+            }
             // Reserve the file before asking the SDK to start sending frames.
             var stream = new FileStream(stagingPath, FileMode.CreateNew, FileAccess.Write, FileShare.Read,
                 1024 * 1024, FileOptions.SequentialScan);
@@ -119,20 +138,35 @@ internal sealed class MovRecording : IDisposable
     {
         CheckWriter();
         if (!packets.TryAdd(packet))
-            throw new IOException("Storage did not keep up with the uncompressed capture. Recording stopped.");
+        {
+            var message = software
+                ? "The software recording queue filled. The encoder or storage did not keep up with capture."
+                : "Storage did not keep up with the uncompressed capture. Recording stopped.";
+            if (software)
+            {
+                Interlocked.CompareExchange(ref interruption, message, null);
+                packets.CompleteAdding();
+            }
+            throw new IOException(message);
+        }
     }
 
     public void CheckWriter()
     {
         if (writer.IsFaulted)
             writer.GetAwaiter().GetResult();
+        liveEncoder?.CheckHealth();
     }
 
-    public RecordingResult Finish()
+    public RecordingResult Finish(string? captureError = null)
     {
+        if (software && captureError is not null)
+            Interlocked.CompareExchange(ref interruption, captureError, null);
         packets.CompleteAdding();
         var result = writer.GetAwaiter().GetResult();
         finalized = true;
+        if (software)
+            return result;
         try
         {
             File.Move(stagingPath, path);
@@ -143,6 +177,77 @@ internal sealed class MovRecording : IDisposable
                 $"Publishing to '{path}' failed: {ex.Message}", ex);
         }
         return result;
+    }
+
+    private static NativeVideoTrack EncodedInput(VideoMode mode, CapturePixelFormat format, int pitch)
+    {
+        var bitmap = new byte[40];
+        BinaryPrimitives.WriteInt32LittleEndian(bitmap, bitmap.Length);
+        BinaryPrimitives.WriteInt32LittleEndian(bitmap.AsSpan(4), mode.Width);
+        BinaryPrimitives.WriteInt32LittleEndian(bitmap.AsSpan(8), mode.Height);
+        BinaryPrimitives.WriteInt16LittleEndian(bitmap.AsSpan(12), 1);
+        BinaryPrimitives.WriteInt16LittleEndian(bitmap.AsSpan(14), format == CapturePixelFormat.V210 ? (short)20 : (short)16);
+        BinaryPrimitives.WriteUInt32BigEndian(bitmap.AsSpan(16), (uint)format);
+        BinaryPrimitives.WriteInt32LittleEndian(bitmap.AsSpan(20), checked(pitch * mode.Height));
+        uint? order = mode.FieldDominance switch
+        {
+            0x75707072 => 1, // 'uppr'
+            0x6c6f7772 => 6, // 'lowr'
+            0x70726f67 => 0, // 'prog'
+            _ => null
+        };
+        var frameTicks = (long)Math.Round(mode.FrameDuration * (double)TimeSpan.TicksPerSecond / mode.TimeScale);
+        return new(bitmap, mode.Width, mode.Height, frameTicks, order, null);
+    }
+
+    private RecordingResult WriteEncoded(LiveEncodedRecording live, CapturePixelFormat format)
+    {
+        using (live)
+        {
+            long? origin = null;
+            long audioSamples = 0;
+            int videoFrames = 0;
+            long previousVideo = -1, previousAudio = -1;
+            long videoEnd = 0, audioEnd = 0;
+            long videoOffset = 0, audioOffset = 0;
+            foreach (var packet in packets.GetConsumingEnumerable())
+            {
+                try
+                {
+                    var isVideo = packet.AudioSamples == 0;
+                    var scale = isVideo ? mode.TimeScale : 48000;
+                    var timestamp = (long)((decimal)packet.Time * TimeSpan.TicksPerSecond / scale);
+                    var duration = (long)((decimal)(isVideo ? packet.Duration : packet.AudioSamples) * TimeSpan.TicksPerSecond / scale);
+                    origin ??= timestamp;
+                    ref var previous = ref (isVideo ? ref previousVideo : ref previousAudio);
+                    ref var end = ref (isVideo ? ref videoEnd : ref audioEnd);
+                    ref var offset = ref (isVideo ? ref videoOffset : ref audioOffset);
+                    var start = Math.Max(0, timestamp - origin.Value + offset);
+                    if (start <= previous)
+                    {
+                        offset += end - start;
+                        start = end;
+                    }
+                    previous = start;
+                    end = start + duration;
+                    live.Write(isVideo, start, end, packet.Bytes.AsSpan(0, packet.Length));
+                    if (isVideo) videoFrames++;
+                    else audioSamples += packet.AudioSamples;
+                }
+                finally { ArrayPool<byte>.Shared.Return(packet.Bytes); }
+            }
+            if (videoFrames == 0)
+                throw new IOException("The recording received no video frames.");
+            var error = Volatile.Read(ref interruption);
+            if (error is not null)
+            {
+                live.RecordInterruption(error);
+                live.Finish(publish: false);
+                throw new IOException($"{error} Recording prefix: {live.PartialPath}.");
+            }
+            live.Finish();
+            return new(path, videoFrames, audioSamples, mode, format, audioFormat) { Deinterlaced = live.Deinterlaced };
+        }
     }
 
     private RecordingResult WriteMovie(FileStream stream, CapturePixelFormat format, CaptureAudioFormat audioFormat)
@@ -178,6 +283,8 @@ internal sealed class MovRecording : IDisposable
     {
         if (!finalized)
         {
+            if (software)
+                Interlocked.CompareExchange(ref interruption, "Recording disposed before a clean stop.", null);
             packets.CompleteAdding();
             try
             {

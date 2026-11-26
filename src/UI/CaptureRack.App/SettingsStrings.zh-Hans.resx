@@ -1779,4 +1779,15 @@
   <data name="TestSignalSectionHeading" xml:space="preserve">
     <value>测试信号源</value>
   </data>
+  <data name="EncodingOutputLabel" xml:space="preserve"><value>录制输出</value></data>
+  <data name="EncodingBitrateLabel" xml:space="preserve"><value>目标码率（kb/s）</value></data>
+  <data name="EncodingLevelLabel" xml:space="preserve"><value>编码级别（Level）</value></data>
+  <data name="EncodingAuto" xml:space="preserve"><value>自动</value></data>
+  <data name="EncodingNative" xml:space="preserve"><value>设备原样 · 直接保存</value></data>
+  <data name="EncodingNativeHint" xml:space="preserve"><value>保留设备交付的视频格式。</value></data>
+  <data name="EncodingLive" xml:space="preserve"><value>采集时实时软件压制，保存为 MKV。</value></data>
+  <data name="EncodingProgressiveHint" xml:space="preserve"><value>H.265 和 AV1 需要逐行输入，也可启用软件去隔行。</value></data>
+  <data name="EncodingDeinterlace" xml:space="preserve"><value>软件去隔行</value></data>
+  <data name="EncodingBadBitrate" xml:space="preserve"><value>请输入 1 至 1,000,000 kb/s 的码率。</value></data>
+  <data name="EncodingSoftware" xml:space="preserve"><value>软件压制</value></data>
 </root>

@@ -19,6 +19,7 @@ public sealed partial class DeckLinkInspectorView : UserControl
     private bool syncing;
     private bool isIdle = true;
     private bool vancScanActive;
+    private TelemetrySeverity vancScanSeverity = TelemetrySeverity.Normal;
     private bool showFilledVancLines;
 
     public CapturePixelFormat SelectedVideoFormat { get; private set; } = CapturePixelFormat.V210;
@@ -58,7 +59,12 @@ public sealed partial class DeckLinkInspectorView : UserControl
     public event EventHandler? VancSettingsChanged;
     public event EventHandler? VancScanRequested;
 
-    public DeckLinkInspectorView() => InitializeComponent();
+    public DeckLinkInspectorView()
+    {
+        InitializeComponent();
+        ActualThemeChanged += (_, _) => RefreshTheme();
+        Loaded += (_, _) => RefreshTheme();
+    }
 
     public AnalogInputOptions BuildAnalogInputOptions() =>
         AnalogInputOptionsBuilder.Build(
@@ -197,7 +203,9 @@ public sealed partial class DeckLinkInspectorView : UserControl
             ToolTipService.SetToolTip(AudioFormat16Button, localize("Audio16"));
             ToolTipService.SetToolTip(AudioFormat32Button, localize("Audio32"));
 
-            VancScanButton.Content = localize(vancScanActive ? "VancScanCancel" : "VancScan");
+            VancSectionHeading.Text = localize("VancSectionHeading");
+            VancScanButtonLabel.Text = localize(vancScanActive ? "VancScanCancel" : "VancScan");
+            AutomationProperties.SetName(VancScanButton, VancScanButtonLabel.Text);
             VancInputCheckBox.Content = localize("CaptureVancInput");
             VancInputLine1.Header = string.Format(culture, localize("VancPictureLine"), 1);
             VancInputLine2.Header = string.Format(culture, localize("VancPictureLine"), 2);
@@ -291,6 +299,8 @@ public sealed partial class DeckLinkInspectorView : UserControl
     {
         UpdateFormatSegmentVisuals();
         UpdateAnalogControlsState(isIdle);
+        if (VancScanStatusBanner.Visibility == Visibility.Visible)
+            ApplyVancScanStatusTheme();
     }
 
     private void PopulateDeviceInputs(CaptureDevice? device)
@@ -521,13 +531,36 @@ public sealed partial class DeckLinkInspectorView : UserControl
         AudioFormatChanged?.Invoke(this, EventArgs.Empty);
     }
 
-    public void ShowVancScanStatus(string text, bool scanning)
+    public void ShowVancScanStatus(string text, bool scanning, TelemetrySeverity severity = TelemetrySeverity.Normal)
     {
         vancScanActive = scanning;
-        VancScanButton.Content = localize(scanning ? "VancScanCancel" : "VancScan");
+        vancScanSeverity = severity;
+        VancScanButtonLabel.Text = localize(scanning ? "VancScanCancel" : "VancScan");
+        AutomationProperties.SetName(VancScanButton, VancScanButtonLabel.Text);
+        VancScanIcon.Visibility = scanning ? Visibility.Collapsed : Visibility.Visible;
+        VancScanRing.IsActive = scanning;
+        VancScanRing.Visibility = scanning ? Visibility.Visible : Visibility.Collapsed;
         VancScanStatusText.Text = text;
-        VancScanStatusText.Visibility = text.Length == 0 ? Visibility.Collapsed : Visibility.Visible;
+        VancScanStatusBanner.Visibility = text.Length == 0 ? Visibility.Collapsed : Visibility.Visible;
+        if (text.Length > 0)
+            ApplyVancScanStatusTheme();
         UpdateVancControlsState();
+    }
+
+    private void ApplyVancScanStatusTheme()
+    {
+        var (bgKey, borderKey, fgKey) = vancScanActive
+            ? ("StudioInfoSoftBrush", "StudioInfoBrush", "StudioTextPrimaryBrush")
+            : vancScanSeverity switch
+            {
+                TelemetrySeverity.Danger => ("StudioDangerSoftBrush", "StudioDangerBrush", "StudioTextPrimaryBrush"),
+                TelemetrySeverity.Caution => ("StudioCautionSoftBrush", "StudioCautionBrush", "StudioTextPrimaryBrush"),
+                TelemetrySeverity.Info => ("StudioSignalLockSoftBrush", "StudioSignalLockBrush", "StudioTextPrimaryBrush"),
+                _ => ("StudioPanelSecondaryBrush", "StudioHairlineBrush", "StudioTextSecondaryBrush")
+            };
+        VancScanStatusBanner.Background = StudioBrushes.Resolve(this, bgKey);
+        VancScanStatusBanner.BorderBrush = StudioBrushes.Resolve(this, borderKey);
+        VancScanStatusText.Foreground = StudioBrushes.Resolve(this, fgKey);
     }
 
     private void VancScan_Click(object sender, RoutedEventArgs e) => VancScanRequested?.Invoke(this, EventArgs.Empty);
@@ -535,9 +568,10 @@ public sealed partial class DeckLinkInspectorView : UserControl
     private void UpdateVancControlsState()
     {
         var canScanInput = SelectedVideoSource is { } source && DeckLinkCapture.IsVancScanInput(source.Id);
+        var supported = CanMapVancInput;
+        VancCard.Visibility = canScanInput || supported ? Visibility.Visible : Visibility.Collapsed;
         VancScanGroup.Visibility = canScanInput ? Visibility.Visible : Visibility.Collapsed;
         VancScanButton.IsEnabled = vancScanActive || (isIdle && canScanInput && HasCompleteSelection);
-        var supported = CanMapVancInput;
         VancInputGroup.Visibility = supported ? Visibility.Visible : Visibility.Collapsed;
         VancInputCheckBox.IsEnabled = isIdle && supported;
         VancInputLines.Visibility = VancInput.Enabled || showFilledVancLines ? Visibility.Visible : Visibility.Collapsed;

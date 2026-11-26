@@ -106,7 +106,9 @@ public sealed partial class MainWindow
     private bool AnyDropdownOpen() =>
         deckLinkInspector.HasOpenDropdown ||
         monitorOptionsBar.HasOpenDropdown ||
-        SettingsPage.HasOpenDropdown;
+        SettingsPage.HasOpenDropdown ||
+        testSignalInspector.HasOpenDropdown ||
+        LiveMediaSource?.HasOpenDropdown == true;
 
     private ScrollView? ResolveScrollTargetAt(WindowPoint point)
     {

@@ -101,6 +101,7 @@ public sealed partial class SettingsView : UserControl
         ShortcutFullscreenLabel.Text = localize("PreviewFullScreen");
         ShortcutInspectorLabel.Text = localize("ShortcutInspector");
         ShortcutLayoutsLabel.Text = localize("ShortcutLayouts");
+        ShortcutAudioMuteLabel.Text = localize("ShortcutAudioMute");
         ShortcutBackLabel.Text = localize("Back");
 
         AboutHeading.Text = localize("About");

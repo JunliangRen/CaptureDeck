@@ -1722,4 +1722,61 @@
   <data name="FwInfoNetwork" xml:space="preserve">
     <value>廣播網路</value>
   </data>
+  <data name="CopiedFeedback" xml:space="preserve">
+    <value>已複製</value>
+  </data>
+  <data name="VancSectionHeading" xml:space="preserve">
+    <value>VANC / VBI</value>
+  </data>
+  <data name="DsDeviceSectionHeading" xml:space="preserve">
+    <value>DIRECTSHOW 訊號源</value>
+  </data>
+  <data name="DsCameraResetDefault" xml:space="preserve">
+    <value>預設</value>
+  </data>
+  <data name="DsCameraValueNoDefault" xml:space="preserve">
+    <value>數值 {0:0}</value>
+  </data>
+  <data name="DsCameraPendingChanges" xml:space="preserve">
+    <value>未套用</value>
+  </data>
+  <data name="DsMetricUnreadable" xml:space="preserve">
+    <value>無法解碼</value>
+  </data>
+  <data name="FwDeviceSectionHeading" xml:space="preserve">
+    <value>i.LINK / FIREWIRE</value>
+  </data>
+  <data name="FwBitrateShort" xml:space="preserve">
+    <value>位元率</value>
+  </data>
+  <data name="OpenRecordedMkv" xml:space="preserve">
+    <value>開啟 MKV</value>
+  </data>
+  <data name="OpenRecordedTs" xml:space="preserve">
+    <value>開啟 TS</value>
+  </data>
+  <data name="OpenRecordedDv" xml:space="preserve">
+    <value>開啟 DV</value>
+  </data>
+  <data name="SaveDvJson" xml:space="preserve">
+    <value>儲存 DV JSON</value>
+  </data>
+  <data name="QcClearHistory" xml:space="preserve">
+    <value>清除</value>
+  </data>
+  <data name="QcDropReleaseHint" xml:space="preserve">
+    <value>放開檔案以開始質檢</value>
+  </data>
+  <data name="QcStreamAnalyzing" xml:space="preserve">
+    <value>正在分析串流結構…</value>
+  </data>
+  <data name="NavigationLockedRecording" xml:space="preserve">
+    <value>請先停止錄製再離開擷取工作區。</value>
+  </data>
+  <data name="ShortcutAudioMute" xml:space="preserve">
+    <value>切換本機音訊監聽</value>
+  </data>
+  <data name="TestSignalSectionHeading" xml:space="preserve">
+    <value>測試訊號源</value>
+  </data>
 </root>

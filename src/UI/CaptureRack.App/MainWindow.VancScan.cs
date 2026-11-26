@@ -55,18 +55,21 @@ public sealed partial class MainWindow
                     deckLinkInspector.FillVancInputLines(filled);
                     status += "\n" + LocalFormat("VancScanFilled", filled.Line1, filled.Line2, filled.Line3);
                 }
-                deckLinkInspector.ShowVancScanStatus(status, scanning: false);
+                var severity = result.Readable && result.Lines.Count > 0
+                    ? TelemetrySeverity.Info
+                    : TelemetrySeverity.Caution;
+                deckLinkInspector.ShowVancScanStatus(status, scanning: false, severity);
             }
         }
         catch (OperationCanceledException) when (stop.IsCancellationRequested)
         {
             if (!closing)
-                deckLinkInspector.ShowVancScanStatus(L("VancScanCancelled"), scanning: false);
+                deckLinkInspector.ShowVancScanStatus(L("VancScanCancelled"), scanning: false, TelemetrySeverity.Caution);
         }
         catch (Exception ex) when (IsSessionError(ex))
         {
             if (!closing)
-                deckLinkInspector.ShowVancScanStatus(LocalFormat("VancScanFailed", ex.Message), scanning: false);
+                deckLinkInspector.ShowVancScanStatus(LocalFormat("VancScanFailed", ex.Message), scanning: false, TelemetrySeverity.Danger);
         }
         finally
         {

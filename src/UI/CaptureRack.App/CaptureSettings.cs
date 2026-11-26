@@ -9,6 +9,9 @@ internal sealed record CaptureSettings
 {
     public string CaptureBackendId { get; init; } = DeckLinkBackend.BackendId;
     public DeckLinkSettings DeckLink { get; init; } = new();
+    public DirectShowSettings DirectShow { get; init; } = new();
+    public FireWireSettings FireWire { get; init; } = new();
+    public string TestSignalScenario { get; init; } = "Normal";
     public ControlDeviceAddress? ControlDevice { get; init; }
     public string OutputFolder { get; init; } = "";
     public string RecordingLabel { get; init; } = "";
@@ -26,6 +29,24 @@ internal sealed record CaptureSettings
     public string ScopeLumaScale { get; init; } = "Code";
     public bool AudioMonitorEnabled { get; init; }
     public double AudioMonitorVolume { get; init; } = 0.8;
+}
+
+internal sealed record DirectShowSettings
+{
+    public string? DeviceId { get; init; }
+    public string? PinId { get; init; }
+    public bool? IsInfrared { get; init; }
+    public int? Width { get; init; }
+    public int? Height { get; init; }
+    public double? FramesPerSecond { get; init; }
+    public string? Encoding { get; init; }
+    public int? VideoFormatIndex { get; init; }
+    public int? AudioFormatIndex { get; init; }
+}
+
+internal sealed record FireWireSettings
+{
+    public string? DeviceId { get; init; }
 }
 
 internal sealed record DeckLinkSettings

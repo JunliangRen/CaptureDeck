@@ -138,6 +138,7 @@
                                 <RowDefinition Height="Auto" />
                                 <RowDefinition Height="Auto" />
                                 <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
                             </Grid.RowDefinitions>
                             <Grid>
                                 <TextBlock x:Name="ShortcutPreviewLabel" FontSize="12" Foreground="{ThemeResource StudioTextSecondaryBrush}" VerticalAlignment="Center" />
@@ -171,10 +172,17 @@
                                 <TextBlock x:Name="ShortcutLayoutsLabel" FontSize="12" Foreground="{ThemeResource StudioTextSecondaryBrush}" VerticalAlignment="Center" />
                                 <Border HorizontalAlignment="Right" Background="{ThemeResource StudioPanelSecondaryBrush}"
                                         BorderBrush="{ThemeResource StudioHairlineBrush}" BorderThickness="1" CornerRadius="2" Padding="6,2">
-                                    <TextBlock Text="Ctrl + 1 / 2 / 3" Style="{StaticResource StudioMonoTextStyle}" FontSize="11" />
+                                    <TextBlock Text="Ctrl + 1–5" Style="{StaticResource StudioMonoTextStyle}" FontSize="11" />
                                 </Border>
                             </Grid>
                             <Grid Grid.Row="2" Grid.Column="1">
+                                <TextBlock x:Name="ShortcutAudioMuteLabel" FontSize="12" Foreground="{ThemeResource StudioTextSecondaryBrush}" VerticalAlignment="Center" />
+                                <Border HorizontalAlignment="Right" Background="{ThemeResource StudioPanelSecondaryBrush}"
+                                        BorderBrush="{ThemeResource StudioHairlineBrush}" BorderThickness="1" CornerRadius="2" Padding="6,2">
+                                    <TextBlock Text="M" Style="{StaticResource StudioMonoTextStyle}" FontSize="11" />
+                                </Border>
+                            </Grid>
+                            <Grid Grid.Row="3">
                                 <TextBlock x:Name="ShortcutBackLabel" FontSize="12" Foreground="{ThemeResource StudioTextSecondaryBrush}" VerticalAlignment="Center" />
                                 <Border HorizontalAlignment="Right" Background="{ThemeResource StudioPanelSecondaryBrush}"
                                         BorderBrush="{ThemeResource StudioHairlineBrush}" BorderThickness="1" CornerRadius="2" Padding="6,2">

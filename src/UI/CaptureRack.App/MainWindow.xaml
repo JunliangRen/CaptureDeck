@@ -20,7 +20,10 @@
             <KeyboardAccelerator Key="Number1" Modifiers="Control" Invoked="LayoutFocus_Invoked" />
             <KeyboardAccelerator Key="Number2" Modifiers="Control" Invoked="LayoutSplit_Invoked" />
             <KeyboardAccelerator Key="Number3" Modifiers="Control" Invoked="LayoutScopes_Invoked" />
+            <KeyboardAccelerator Key="Number4" Modifiers="Control" Invoked="LayoutSpectrum_Invoked" />
+            <KeyboardAccelerator Key="Number5" Modifiers="Control" Invoked="LayoutEvents_Invoked" />
             <KeyboardAccelerator Key="I" Modifiers="Control" Invoked="ToggleInspector_Invoked" />
+            <KeyboardAccelerator Key="M" Invoked="ToggleAudioMonitor_Invoked" />
         </Grid.KeyboardAccelerators>
 
         <!-- Custom Studio Title Bar -->
@@ -84,6 +87,8 @@
                     <StackPanel Orientation="Horizontal" Spacing="7">
                         <Rectangle x:Name="QuickSourceDot" Width="7" Height="7" RadiusX="1" RadiusY="1"
                                    Fill="{ThemeResource StudioTextMutedBrush}" VerticalAlignment="Center" />
+                        <FontIcon x:Name="QuickSourceIcon" Glyph="&#xE714;" FontSize="12"
+                                  Foreground="{ThemeResource StudioTextSecondaryBrush}" VerticalAlignment="Center" />
                         <TextBlock x:Name="ConfigurationSummary" MaxWidth="520" FontSize="13"
                                    Foreground="{ThemeResource StudioTextPrimaryBrush}"
                                    TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
@@ -96,7 +101,8 @@
                         </ToolTip>
                     </ToolTipService.ToolTip>
                     <Button.Flyout>
-                        <Flyout x:Name="SourceRackFlyout" Placement="BottomEdgeAlignedLeft">
+                        <Flyout x:Name="SourceRackFlyout" Placement="BottomEdgeAlignedLeft"
+                                Opening="SourceRackFlyout_Opening">
                             <StackPanel Width="336" Spacing="10">
                                 <TextBlock x:Name="SourceRackHeading" Style="{StaticResource StudioSectionHeadingStyle}" />
                                 <TextBlock x:Name="SourceRackLockNotice" FontSize="11" TextWrapping="Wrap"
@@ -323,7 +329,11 @@
                                                     VerticalAlignment="Center" Spacing="12" Margin="20">
                                             <Border Width="44" Height="44" CornerRadius="4" HorizontalAlignment="Center"
                                                     Background="#16FFFFFF" BorderBrush="#2AFFFFFF" BorderThickness="1">
-                                                <FontIcon Glyph="&#xE714;" FontSize="20" Foreground="#CBD5E1" />
+                                                <Grid>
+                                                    <FontIcon x:Name="PreviewPlaceholderIcon" Glyph="&#xE714;" FontSize="20" Foreground="#CBD5E1" />
+                                                    <ProgressRing x:Name="PreviewPlaceholderSpinner" Width="20" Height="20"
+                                                                  IsActive="False" Visibility="Collapsed" />
+                                                </Grid>
                                             </Border>
                                             <StackPanel Spacing="4">
                                                 <TextBlock x:Name="PreviewPlaceholderText" Text="Waiting for preview"
@@ -590,7 +600,7 @@
                                             <Button x:Name="CopyEventsButton" Width="24" Height="24" Padding="0"
                                                     CornerRadius="3" Style="{StaticResource SubtleButtonStyle}"
                                                     Click="CopyEvents_Click">
-                                                <FontIcon Glyph="&#xE8C8;" FontSize="11" />
+                                                <FontIcon x:Name="CopyEventsIcon" Glyph="&#xE8C8;" FontSize="11" />
                                             </Button>
                                         </StackPanel>
                                     </Grid>
@@ -759,21 +769,8 @@
                                     </StackPanel>
                                 </Border>
 
-                                <!-- Pluggable Slot: Active Backend Configuration Cards (DeckLink / Planned Backends) -->
+                                <!-- Pluggable Slot: Active Backend Configuration Cards (DeckLink / DirectShow / FireWire / TestSignal / Planned) -->
                                 <ContentPresenter x:Name="InspectorSlot" />
-                                <Border x:Name="TestSignalInspector" Style="{StaticResource StudioInspectorCardStyle}"
-                                        Visibility="Collapsed">
-                                    <StackPanel Spacing="8">
-                                        <TextBlock x:Name="TestSignalHeading" Style="{StaticResource StudioSectionHeadingStyle}" />
-                                        <ComboBox x:Name="TestSignalScenarioPicker" SelectedIndex="0" HorizontalAlignment="Stretch"
-                                                  SelectionChanged="TestSignalScenario_SelectionChanged">
-                                            <ComboBoxItem x:Name="TestSignalNormalItem" />
-                                            <ComboBoxItem x:Name="TestSignalFaultsItem" />
-                                        </ComboBox>
-                                        <TextBlock x:Name="TestSignalHint" TextWrapping="Wrap"
-                                                   Foreground="{ThemeResource StudioTextSecondaryBrush}" />
-                                    </StackPanel>
-                                </Border>
 
                                 <!-- Shared Output, Tape Label & Storage Capacity Card -->
                                 <Border Style="{StaticResource StudioInspectorCardStyle}">
@@ -868,9 +865,23 @@
                                      Fill="{ThemeResource StudioRecBrush}" VerticalAlignment="Center" />
                             <FontIcon x:Name="RecordActionStopIcon" Glyph="&#xE71A;" FontSize="12"
                                       Visibility="Collapsed" VerticalAlignment="Center" />
+                            <ProgressRing x:Name="RecordActionSpinner" Width="13" Height="13"
+                                          IsActive="False" Visibility="Collapsed" VerticalAlignment="Center" />
                             <TextBlock x:Name="RecordActionLabel" FontSize="13" VerticalAlignment="Center" />
                         </StackPanel>
                     </Button>
+
+                    <Border x:Name="FooterFinalizingPill" Visibility="Collapsed" CornerRadius="4" Padding="9,5"
+                            Background="{ThemeResource StudioInfoSoftBrush}"
+                            BorderBrush="{ThemeResource StudioInfoBrush}" BorderThickness="1"
+                            VerticalAlignment="Center">
+                        <StackPanel Orientation="Horizontal" Spacing="7" VerticalAlignment="Center">
+                            <ProgressRing x:Name="FooterFinalizingSpinner" Width="12" Height="12" IsActive="False" />
+                            <TextBlock x:Name="FooterFinalizingText" FontSize="12" FontWeight="SemiBold"
+                                       MaxWidth="210" TextTrimming="CharacterEllipsis"
+                                       Foreground="{ThemeResource StudioTextPrimaryBrush}" VerticalAlignment="Center" />
+                        </StackPanel>
+                    </Border>
 
                     <Border x:Name="RecordingClock" Visibility="Collapsed" CornerRadius="4" Padding="10,5"
                             Background="{ThemeResource StudioRecSoftBrush}"

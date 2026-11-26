@@ -2,16 +2,22 @@
     x:Class="CaptureRack.App.Views.QcCenterView"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-    AllowDrop="True" DragOver="QcDropZone_DragOver" Drop="QcDropZone_Drop">
+    xmlns:controls="using:CaptureRack.App.Controls"
+    AllowDrop="True" DragOver="QcDropZone_DragOver" DragLeave="QcDropZone_DragLeave" Drop="QcDropZone_Drop">
     <ScrollView x:Name="QcCenterScroller" Background="Transparent"
                 ContentOrientation="Vertical" VerticalScrollMode="Enabled" VerticalScrollBarVisibility="Auto"
                 HorizontalScrollMode="Disabled" HorizontalScrollBarVisibility="Hidden"
                 HorizontalContentAlignment="Stretch">
-        <Grid MaxWidth="1040" Padding="24,18,24,28" ColumnSpacing="16">
+        <Grid x:Name="QcRootGrid" MaxWidth="1040" Padding="24,18,24,28" ColumnSpacing="16" RowSpacing="14"
+              SizeChanged="QcRootGrid_SizeChanged">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*" />
                 <ColumnDefinition x:Name="HistoryColumn" Width="0" />
             </Grid.ColumnDefinitions>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
 
             <!-- Main QC Report Area -->
             <StackPanel Spacing="14">
@@ -67,7 +73,7 @@
                     </Grid>
                 </Border>
 
-                <!-- 3-Stage MOV QC Pipeline Progress -->
+                <!-- 3-Stage MOV / MKV QC Pipeline Progress -->
                 <Border x:Name="QcPipelineCard" Style="{StaticResource StudioInspectorCardStyle}"
                         Padding="14" Visibility="Collapsed">
                     <StackPanel Spacing="10">
@@ -106,6 +112,19 @@
                             </Border>
                         </Grid>
                         <ProgressBar x:Name="QcProgressBar" IsIndeterminate="True" Visibility="Collapsed" />
+                    </StackPanel>
+                </Border>
+
+                <!-- Stream (TS / DV) QC Progress Card -->
+                <Border x:Name="QcStreamProgressCard" Style="{StaticResource StudioInspectorCardStyle}"
+                        Padding="14" Visibility="Collapsed">
+                    <StackPanel Spacing="8">
+                        <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                            <ProgressRing x:Name="QcStreamProgressRing" Width="15" Height="15" IsActive="False" />
+                            <TextBlock x:Name="QcStreamProgressLabel" FontSize="13" FontWeight="SemiBold"
+                                       Foreground="{ThemeResource StudioTextPrimaryBrush}" VerticalAlignment="Center" />
+                        </StackPanel>
+                        <ProgressBar IsIndeterminate="True" />
                     </StackPanel>
                 </Border>
 
@@ -183,18 +202,20 @@
                     <Border Style="{StaticResource StudioInspectorCardStyle}" Padding="14">
                         <StackPanel Spacing="10">
                             <TextBlock x:Name="QcArtifactsHeading" Style="{StaticResource StudioSectionHeadingStyle}" />
-                            <StackPanel Orientation="Horizontal" Spacing="8">
+                            <controls:StudioWrapPanel HorizontalSpacing="8" VerticalSpacing="8">
                                 <Button x:Name="QcFolderButton" Tag="folder" Click="ArtifactButton_Click"
                                         Style="{StaticResource StudioTransportPrimaryButtonStyle}" />
                                 <Button x:Name="QcVideoButton" Tag="video" Click="ArtifactButton_Click"
                                         Style="{StaticResource StudioTransportPrimaryButtonStyle}" />
                                 <Button x:Name="QcLogButton" Tag="log" Click="ArtifactButton_Click"
                                         Style="{StaticResource StudioTransportPrimaryButtonStyle}" />
+                                <Button x:Name="QcRecordingReportButton" Tag="recording-report" Click="ArtifactButton_Click"
+                                        Style="{StaticResource StudioTransportPrimaryButtonStyle}" Visibility="Collapsed" />
                                 <Button x:Name="QcHashButton" Tag="hash" Click="ArtifactButton_Click"
                                         Style="{StaticResource StudioTransportPrimaryButtonStyle}" />
                                 <Button x:Name="QcReportButton" Tag="report" Click="ArtifactButton_Click"
                                         Style="{StaticResource StudioTransportPrimaryButtonStyle}" />
-                            </StackPanel>
+                            </controls:StudioWrapPanel>
                             <StackPanel Orientation="Horizontal" Spacing="8">
                                 <Button x:Name="QcToggleInlineLogButton" Style="{StaticResource SubtleButtonStyle}"
                                         CornerRadius="3" Click="ToggleInlineLog_Click" Visibility="Collapsed">
@@ -207,22 +228,28 @@
                             <TextBox x:Name="QcInlineLogText" IsReadOnly="True" AcceptsReturn="True"
                                      TextWrapping="Wrap" FontFamily="Cascadia Mono, Consolas" FontSize="11"
                                      CornerRadius="3" MaxHeight="300" Visibility="Collapsed" />
-                            <InfoBar x:Name="QcOpenStatus" Severity="Warning" IsOpen="False" IsClosable="False" />
                         </StackPanel>
                     </Border>
                 </StackPanel>
 
-                <!-- Transport Stream (TS / TS192 / M2T) Result Details -->
+                <!-- Transport Stream (TS / TS192 / M2T) & DV Result Details -->
                 <StackPanel x:Name="TsResultSection" Spacing="12" Visibility="Collapsed">
                     <Border Style="{StaticResource StudioInspectorCardStyle}" Padding="14">
                         <StackPanel Spacing="10">
-                            <Grid>
-                                <TextBlock x:Name="TsFormatText" Style="{StaticResource StudioMonoTextStyle}"
-                                           FontWeight="SemiBold" Foreground="{ThemeResource StudioAccentBrush}" />
-                                <Button x:Name="SaveTsJsonButton" HorizontalAlignment="Right"
+                            <TextBlock x:Name="TsFormatText" Style="{StaticResource StudioMonoTextStyle}"
+                                       FontWeight="SemiBold" TextWrapping="Wrap"
+                                       Foreground="{ThemeResource StudioAccentBrush}" />
+                            <controls:StudioWrapPanel HorizontalSpacing="8" VerticalSpacing="8">
+                                <Button x:Name="TsFolderButton" Tag="folder" Click="ArtifactButton_Click"
+                                        Style="{StaticResource StudioTransportPrimaryButtonStyle}" />
+                                <Button x:Name="TsOpenMediaButton" Tag="video" Click="ArtifactButton_Click"
+                                        Style="{StaticResource StudioTransportPrimaryButtonStyle}" />
+                                <Button x:Name="TsRecordingReportButton" Tag="recording-report" Click="ArtifactButton_Click"
+                                        Style="{StaticResource StudioTransportPrimaryButtonStyle}" Visibility="Collapsed" />
+                                <Button x:Name="SaveTsJsonButton"
                                         Style="{StaticResource StudioTransportPrimaryButtonStyle}"
                                         Click="SaveTsJsonButton_Click" />
-                            </Grid>
+                            </controls:StudioWrapPanel>
                             <ItemsControl x:Name="TsMetricsList">
                                 <ItemsControl.ItemTemplate>
                                     <DataTemplate>
@@ -254,13 +281,22 @@
                         </StackPanel>
                     </Border>
                 </StackPanel>
+
+                <!-- Shared Artifact Open Error Banner (MOV / MKV / TS / DV) -->
+                <InfoBar x:Name="QcOpenStatus" Severity="Warning" IsOpen="False" IsClosable="False" />
             </StackPanel>
 
             <!-- Session QC History Sidebar -->
-            <Border x:Name="QcHistoryPanel" Grid.Column="1" Visibility="Collapsed"
+            <Border x:Name="QcHistoryPanel" Grid.Column="1" Grid.Row="0" Visibility="Collapsed"
                     Style="{StaticResource StudioInstrumentCardStyle}" Padding="10" VerticalAlignment="Top">
                 <StackPanel Spacing="8">
-                    <TextBlock x:Name="QcHistoryHeading" Style="{StaticResource StudioSectionHeadingStyle}" />
+                    <Grid>
+                        <TextBlock x:Name="QcHistoryHeading" Style="{StaticResource StudioSectionHeadingStyle}"
+                                   VerticalAlignment="Center" />
+                        <Button x:Name="QcClearHistoryButton" HorizontalAlignment="Right"
+                                Style="{StaticResource SubtleButtonStyle}" Height="22" Padding="6,0"
+                                CornerRadius="3" FontSize="11" Click="ClearHistory_Click" />
+                    </Grid>
                     <ListView x:Name="QcHistoryList" SelectionMode="Single" MaxHeight="520"
                               SelectionChanged="QcHistoryList_SelectionChanged">
                         <ListView.ItemContainerStyle>

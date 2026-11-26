@@ -19,6 +19,7 @@ public sealed partial class QcCenterView : UserControl
     private QcStage? activeStage;
     private bool running;
     private bool syncingHistorySelection;
+    private bool dropHighlightActive;
 
     public ScrollView Scroller => QcCenterScroller;
     public bool CanCheckFile { get => CheckFileButton.IsEnabled; set => CheckFileButton.IsEnabled = value; }
@@ -33,6 +34,7 @@ public sealed partial class QcCenterView : UserControl
     public event EventHandler<TsFileReport>? SaveTsReportRequested;
     public event EventHandler<DvFileReport>? SaveDvReportRequested;
     public event EventHandler<Guid>? HistoryEntrySelected;
+    public event EventHandler? ClearHistoryRequested;
 
     public QcCenterView() => InitializeComponent();
 
@@ -48,19 +50,25 @@ public sealed partial class QcCenterView : UserControl
         QcStep1Label.Text = localize("QcStepInspect");
         QcStep2Label.Text = localize("QcStepDecode");
         QcStep3Label.Text = localize("QcStepAnalyze");
+        QcStreamProgressLabel.Text = localize("QcStreamAnalyzing");
         QcMetricVideoLabel.Text = localize("QcMetricVideo");
         QcMetricAudioLabel.Text = localize("QcMetricAudio");
         QcMetricWarningsLabel.Text = localize("QcWarningsHeading");
         QcWarningsHeading.Text = localize("QcWarningsHeading");
         QcArtifactsHeading.Text = localize("QcArtifactsHeading");
         QcFolderButton.Content = localize("QcFolder");
-        QcVideoButton.Content = localize("OpenRecordedMov");
+        TsFolderButton.Content = localize("QcFolder");
+        QcVideoButton.Content = localize(QcPresentationHelper.OpenMediaLabelKey(displayedEntry?.FilePath));
+        TsOpenMediaButton.Content = localize(QcPresentationHelper.OpenMediaLabelKey(displayedEntry?.FilePath));
         QcLogButton.Content = localize("QcLog");
+        QcRecordingReportButton.Content = localize("DsOpenRecordingReport");
+        TsRecordingReportButton.Content = localize("DsOpenRecordingReport");
         QcHashButton.Content = localize("QcHash");
         QcReportButton.Content = localize("QcReport");
-        SaveTsJsonButton.Content = localize("SaveTsJson");
+        SaveTsJsonButton.Content = localize(QcPresentationHelper.SaveReportLabelKey(displayedEntry?.Kind ?? QcEntryKind.TransportStream));
         TsDecodeNoteText.Text = localize("TsDecodeNote");
         QcHistoryHeading.Text = localize("QcHistoryHeading");
+        QcClearHistoryButton.Content = localize("QcClearHistory");
         QcToggleInlineLogLabel.Text = QcInlineLogText.Visibility == Visibility.Visible
             ? localize("QcHideInlineLog") : localize("QcViewInlineLog");
 
@@ -81,6 +89,7 @@ public sealed partial class QcCenterView : UserControl
         running = true;
         activeStage = null;
         QcHistoryList.IsEnabled = false;
+        QcClearHistoryButton.IsEnabled = false;
         QcFileName.Text = Path.GetFileName(path);
         QcFilePathText.Text = path;
         QcInlineLogText.Text = "";
@@ -92,6 +101,10 @@ public sealed partial class QcCenterView : UserControl
         TsResultSection.Visibility = Visibility.Collapsed;
         QcStatusPill.Visibility = Visibility.Collapsed;
         QcPipelineCard.Visibility = kind == QcEntryKind.Mov ? Visibility.Visible : Visibility.Collapsed;
+        var showStreamProgress = kind != QcEntryKind.Mov;
+        QcStreamProgressCard.Visibility = showStreamProgress ? Visibility.Visible : Visibility.Collapsed;
+        QcStreamProgressRing.IsActive = showStreamProgress;
+        QcStreamProgressLabel.Text = localize(kind == QcEntryKind.Dv ? "DvChecking" : "TsChecking");
         QcProgressBar.Visibility = Visibility.Visible;
         if (kind == QcEntryKind.Mov)
             UpdatePipeline(null, isRunning: true, finalStatus: null);
@@ -107,7 +120,29 @@ public sealed partial class QcCenterView : UserControl
     {
         running = false;
         QcHistoryList.IsEnabled = true;
+        QcClearHistoryButton.IsEnabled = true;
         QcProgressBar.Visibility = Visibility.Collapsed;
+        QcStreamProgressCard.Visibility = Visibility.Collapsed;
+        QcStreamProgressRing.IsActive = false;
+    }
+
+    public void ClearDisplayedEntry()
+    {
+        displayedEntry = null;
+        QcFileName.Text = localize("QcDropPromptMulti");
+        QcFilePathText.Text = localize("QcDropHint");
+        QcInlineLogText.Text = "";
+        QcInlineLogText.Visibility = Visibility.Collapsed;
+        QcToggleInlineLogLabel.Text = localize("QcViewInlineLog");
+        QcOutcomeBanner.Visibility = Visibility.Collapsed;
+        QcStatusPill.Visibility = Visibility.Collapsed;
+        QcPipelineCard.Visibility = Visibility.Collapsed;
+        QcStreamProgressCard.Visibility = Visibility.Collapsed;
+        QcStreamProgressRing.IsActive = false;
+        MovResultSection.Visibility = Visibility.Collapsed;
+        TsResultSection.Visibility = Visibility.Collapsed;
+        QcOpenStatus.IsOpen = false;
+        TsSaveStatus.IsOpen = false;
     }
 
     public void RenderEntry(QcSessionHistoryEntry entry)
@@ -140,6 +175,13 @@ public sealed partial class QcCenterView : UserControl
         QcStatusPillText.Text = localize(entry.TitleKey);
         QcStatusPillText.Foreground = StudioBrushes.Resolve(this, toneSolid);
 
+        QcVideoButton.Content = localize(QcPresentationHelper.OpenMediaLabelKey(entry.FilePath));
+        TsOpenMediaButton.Content = localize(QcPresentationHelper.OpenMediaLabelKey(entry.FilePath));
+        SaveTsJsonButton.Content = localize(QcPresentationHelper.SaveReportLabelKey(entry.Kind));
+        QcStreamProgressCard.Visibility = Visibility.Collapsed;
+        QcStreamProgressRing.IsActive = false;
+        var hasRecordingReport = File.Exists(NativeCaptureReport.PathFor(entry.FilePath));
+
         if (entry.Kind == QcEntryKind.Mov)
         {
             QcPipelineCard.Visibility = Visibility.Visible;
@@ -157,6 +199,7 @@ public sealed partial class QcCenterView : UserControl
             QcWarningsList.ItemsSource = entry.Warnings;
             QcWarningsPanel.Visibility = entry.Warnings.Count > 0 ? Visibility.Visible : Visibility.Collapsed;
             QcLogButton.Visibility = entry.MovResult?.CaptureLog is null ? Visibility.Collapsed : Visibility.Visible;
+            QcRecordingReportButton.Visibility = hasRecordingReport ? Visibility.Visible : Visibility.Collapsed;
             QcToggleInlineLogButton.Visibility = entry.MovResult?.CaptureLog is null ? Visibility.Collapsed : Visibility.Visible;
             QcHashButton.Visibility = entry.MovResult?.FrameMd5 is null ? Visibility.Collapsed : Visibility.Visible;
             QcReportButton.Visibility = entry.MovResult?.QcToolsReport is null ? Visibility.Collapsed : Visibility.Visible;
@@ -166,6 +209,7 @@ public sealed partial class QcCenterView : UserControl
             QcPipelineCard.Visibility = Visibility.Collapsed;
             MovResultSection.Visibility = Visibility.Collapsed;
             TsResultSection.Visibility = Visibility.Visible;
+            TsRecordingReportButton.Visibility = hasRecordingReport ? Visibility.Visible : Visibility.Collapsed;
             TsDecodeNoteText.Text = localize("TsDecodeNote");
 
             var stats = ts.Analysis;
@@ -201,6 +245,7 @@ public sealed partial class QcCenterView : UserControl
         {
             QcPipelineCard.Visibility = MovResultSection.Visibility = TsFirstErrorsCard.Visibility = Visibility.Collapsed;
             TsResultSection.Visibility = Visibility.Visible;
+            TsRecordingReportButton.Visibility = hasRecordingReport ? Visibility.Visible : Visibility.Collapsed;
             TsDecodeNoteText.Text = localize(dv.Success ? "DvCheckPassedDetail" : "DvCheckFailedDetail");
             var stats = dv.Analysis;
             var format = stats.LastFrame is { } frame ? $"{frame.Encoding.DisplayName()} · {frame.Width} × {frame.Height} · {frame.FramesPerSecond:0.###} fps" : "DV";
@@ -226,9 +271,12 @@ public sealed partial class QcCenterView : UserControl
         historyEntries = entries;
         var hasHistory = entries.Count > 0;
         QcHistoryPanel.Visibility = hasHistory ? Visibility.Visible : Visibility.Collapsed;
-        HistoryColumn.Width = hasHistory ? new GridLength(250) : new GridLength(0);
+        UpdateHistoryResponsiveLayout();
         if (!hasHistory)
+        {
+            QcHistoryList.ItemsSource = null;
             return;
+        }
 
         syncingHistorySelection = true;
         try
@@ -271,10 +319,17 @@ public sealed partial class QcCenterView : UserControl
 
     public void RefreshTheme()
     {
-        if (displayedEntry is not null)
+        if (dropHighlightActive)
+            SetDropHighlight(true);
+        if (running)
+        {
+            if (QcPipelineCard.Visibility == Visibility.Visible)
+                UpdatePipeline(activeStage, isRunning: true, finalStatus: null);
+        }
+        else if (displayedEntry is not null)
+        {
             RenderEntry(displayedEntry);
-        else if (running && QcPipelineCard.Visibility == Visibility.Visible)
-            UpdatePipeline(activeStage, isRunning: true, finalStatus: null);
+        }
         RenderHistory(historyEntries, displayedEntry?.Id);
     }
 
@@ -355,7 +410,7 @@ public sealed partial class QcCenterView : UserControl
 
     private async void ToggleInlineLog_Click(object sender, RoutedEventArgs e)
     {
-        if (displayedEntry?.MovResult?.CaptureLog is not { } logPath)
+        if (running || displayedEntry is not { MovResult.CaptureLog: { } logPath } entry)
             return;
 
         if (QcInlineLogText.Visibility == Visibility.Visible)
@@ -365,26 +420,88 @@ public sealed partial class QcCenterView : UserControl
             return;
         }
 
+        var entryId = entry.Id;
         try
         {
-            QcInlineLogText.Text = await File.ReadAllTextAsync(logPath);
+            var text = await File.ReadAllTextAsync(logPath);
+            if (running || displayedEntry?.Id != entryId)
+                return;
+            QcInlineLogText.Text = text;
             QcInlineLogText.Visibility = Visibility.Visible;
             QcToggleInlineLogLabel.Text = localize("QcHideInlineLog");
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
-            ShowArtifactOpenError(ex.Message);
+            if (!running && displayedEntry?.Id == entryId)
+                ShowArtifactOpenError(ex.Message);
+        }
+    }
+
+    private void QcRootGrid_SizeChanged(object sender, SizeChangedEventArgs e) => UpdateHistoryResponsiveLayout();
+
+    private void UpdateHistoryResponsiveLayout()
+    {
+        var hasHistory = historyEntries.Count > 0;
+        if (!hasHistory)
+        {
+            HistoryColumn.Width = new GridLength(0);
+            return;
+        }
+
+        var narrow = QcRootGrid.ActualWidth > 0 && QcRootGrid.ActualWidth < 860;
+        if (narrow)
+        {
+            HistoryColumn.Width = new GridLength(0);
+            Grid.SetColumn(QcHistoryPanel, 0);
+            Grid.SetRow(QcHistoryPanel, 1);
+            QcHistoryList.MaxHeight = 240;
+        }
+        else
+        {
+            HistoryColumn.Width = new GridLength(250);
+            Grid.SetColumn(QcHistoryPanel, 1);
+            Grid.SetRow(QcHistoryPanel, 0);
+            QcHistoryList.MaxHeight = 520;
+        }
+    }
+
+    private void ClearHistory_Click(object sender, RoutedEventArgs e)
+    {
+        if (!running)
+            ClearHistoryRequested?.Invoke(this, EventArgs.Empty);
+    }
+
+    private void SetDropHighlight(bool active)
+    {
+        dropHighlightActive = active;
+        if (active)
+        {
+            QcFileCard.BorderBrush = StudioBrushes.Resolve(this, "StudioAccentBrush");
+            QcFileCard.Background = StudioBrushes.Resolve(this, "StudioAccentSoftBrush");
+            if (displayedEntry is null && !running)
+                QcFilePathText.Text = localize("QcDropReleaseHint");
+        }
+        else
+        {
+            QcFileCard.ClearValue(Border.BorderBrushProperty);
+            QcFileCard.ClearValue(Border.BackgroundProperty);
+            if (displayedEntry is null && !running)
+                QcFilePathText.Text = localize("QcDropHint");
         }
     }
 
     private void QcDropZone_DragOver(object sender, DragEventArgs e)
     {
-        e.AcceptedOperation = CheckFileButton.IsEnabled && e.DataView.Contains(StandardDataFormats.StorageItems)
-            ? DataPackageOperation.Copy : DataPackageOperation.None;
+        var accept = CheckFileButton.IsEnabled && e.DataView.Contains(StandardDataFormats.StorageItems);
+        e.AcceptedOperation = accept ? DataPackageOperation.Copy : DataPackageOperation.None;
+        SetDropHighlight(accept);
     }
+
+    private void QcDropZone_DragLeave(object sender, DragEventArgs e) => SetDropHighlight(false);
 
     private async void QcDropZone_Drop(object sender, DragEventArgs e)
     {
+        SetDropHighlight(false);
         if (!CheckFileButton.IsEnabled || !e.DataView.Contains(StandardDataFormats.StorageItems))
             return;
 

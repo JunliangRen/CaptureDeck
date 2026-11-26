@@ -68,7 +68,7 @@
                         </Border>
                         <Button x:Name="CopyCliButton" Grid.Column="1" Style="{StaticResource StudioIconButtonStyle}"
                                 Height="32" Width="32" Click="CopyCliButton_Click">
-                            <FontIcon Glyph="&#xE8C8;" FontSize="13" />
+                            <FontIcon x:Name="CopyCliIcon" Glyph="&#xE8C8;" FontSize="13" />
                         </Button>
                     </Grid>
                 </StackPanel>

@@ -49,17 +49,38 @@
                                TextWrapping="Wrap" Visibility="Collapsed"
                                Foreground="{ThemeResource StudioTextSecondaryBrush}" />
                 </StackPanel>
-                <StackPanel x:Name="VancScanGroup" Spacing="5" Visibility="Collapsed">
-                    <Button x:Name="VancScanButton" Style="{StaticResource SubtleButtonStyle}"
-                            HorizontalAlignment="Left" Click="VancScan_Click" />
-                    <TextBlock x:Name="VancScanStatusText" FontSize="11" TextWrapping="Wrap" Visibility="Collapsed"
-                               AutomationProperties.LiveSetting="Polite"
-                               Foreground="{ThemeResource StudioTextSecondaryBrush}" />
+            </StackPanel>
+        </Border>
+
+        <!-- Conditional Card: VANC / VBI Scan & Line Mapping -->
+        <Border x:Name="VancCard" Style="{StaticResource StudioInspectorCardStyle}"
+                Visibility="Collapsed">
+            <StackPanel Spacing="9">
+                <TextBlock x:Name="VancSectionHeading" Text="VANC / VBI"
+                           Style="{StaticResource StudioSectionHeadingStyle}" />
+
+                <StackPanel x:Name="VancScanGroup" Spacing="6" Visibility="Collapsed">
+                    <Button x:Name="VancScanButton" Style="{StaticResource StudioTransportPrimaryButtonStyle}"
+                            MinHeight="30" Padding="10,0" HorizontalAlignment="Stretch"
+                            Click="VancScan_Click">
+                        <StackPanel Orientation="Horizontal" Spacing="7" VerticalAlignment="Center">
+                            <FontIcon x:Name="VancScanIcon" Glyph="&#xE721;" FontSize="12" />
+                            <ProgressRing x:Name="VancScanRing" Width="13" Height="13" IsActive="False" Visibility="Collapsed" />
+                            <TextBlock x:Name="VancScanButtonLabel" FontSize="12" VerticalAlignment="Center" />
+                        </StackPanel>
+                    </Button>
+                    <Border x:Name="VancScanStatusBanner" Visibility="Collapsed" CornerRadius="3" Padding="8,6"
+                            Background="{ThemeResource StudioPanelSecondaryBrush}"
+                            BorderBrush="{ThemeResource StudioHairlineBrush}" BorderThickness="1">
+                        <TextBlock x:Name="VancScanStatusText" FontSize="11" TextWrapping="Wrap"
+                                   IsTextSelectionEnabled="True" AutomationProperties.LiveSetting="Polite"
+                                   Foreground="{ThemeResource StudioTextSecondaryBrush}" />
+                    </Border>
                 </StackPanel>
 
-                <StackPanel x:Name="VancInputGroup" Spacing="5" Visibility="Collapsed">
-                    <CheckBox x:Name="VancInputCheckBox" Click="VancInput_Click" />
-                    <StackPanel x:Name="VancInputLines" Spacing="5" Visibility="Collapsed">
+                <StackPanel x:Name="VancInputGroup" Spacing="6" Visibility="Collapsed">
+                    <CheckBox x:Name="VancInputCheckBox" MinWidth="0" Click="VancInput_Click" />
+                    <StackPanel x:Name="VancInputLines" Spacing="6" Visibility="Collapsed">
                         <Grid ColumnSpacing="6">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*" />
@@ -67,14 +88,14 @@
                                 <ColumnDefinition Width="*" />
                             </Grid.ColumnDefinitions>
                             <NumberBox x:Name="VancInputLine1" Minimum="1" Maximum="30" SmallChange="1"
-                                       ValueChanged="VancLine_ValueChanged" />
+                                       CornerRadius="3" ValueChanged="VancLine_ValueChanged" />
                             <NumberBox x:Name="VancInputLine2" Grid.Column="1" Minimum="0" Maximum="30" SmallChange="1"
-                                       ValueChanged="VancLine_ValueChanged" />
+                                       CornerRadius="3" ValueChanged="VancLine_ValueChanged" />
                             <NumberBox x:Name="VancInputLine3" Grid.Column="2" Minimum="0" Maximum="30" SmallChange="1"
-                                       ValueChanged="VancLine_ValueChanged" />
+                                       CornerRadius="3" ValueChanged="VancLine_ValueChanged" />
                         </Grid>
                         <TextBlock x:Name="VancInputHint" FontSize="11" TextWrapping="Wrap"
-                                   Foreground="{ThemeResource StudioTextSecondaryBrush}" />
+                                   Foreground="{ThemeResource StudioTextMutedBrush}" />
                     </StackPanel>
                 </StackPanel>
             </StackPanel>

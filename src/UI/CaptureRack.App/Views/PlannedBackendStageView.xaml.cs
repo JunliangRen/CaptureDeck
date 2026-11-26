@@ -1,4 +1,5 @@
 using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Controls;
 using Windows.ApplicationModel.DataTransfer;
 
@@ -23,7 +24,8 @@ public sealed partial class PlannedBackendStageView : UserControl
         CliHeading.Text = localize("PlannedCliHeading");
         PlannedNoticeText.Text = localize("PlannedBackendStageNotice");
         SwitchToDeckLinkButton.Content = localize("SwitchBackToDeckLink");
-        ToolTipService.SetToolTip(CopyCliButton, localize("CopyEvents"));
+        ToolTipService.SetToolTip(CopyCliButton, localize("PlannedCliHeading"));
+        AutomationProperties.SetName(CopyCliButton, localize("PlannedCliHeading"));
 
         var caps = descriptor.Capabilities;
         List<string> labels = [];
@@ -55,6 +57,7 @@ public sealed partial class PlannedBackendStageView : UserControl
         var package = new DataPackage();
         package.SetText(command);
         Clipboard.SetContent(package);
+        Controls.StudioFeedback.FlashCopied(CopyCliIcon, "\uE8C8", themeRoot: this);
     }
 
     private void SwitchToDeckLinkButton_Click(object sender, RoutedEventArgs e) =>

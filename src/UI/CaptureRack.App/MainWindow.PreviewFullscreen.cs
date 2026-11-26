@@ -114,7 +114,7 @@ public sealed partial class MainWindow
         var opacity = visible ? 1 : 0;
         if (FullscreenMiniBar.Opacity != opacity)
         {
-            FullscreenMiniBar.OpacityTransition = new UISettings().AnimationsEnabled
+            FullscreenMiniBar.OpacityTransition = Controls.StudioFeedback.AnimationsEnabled
                 ? previewFullscreenFade : null;
             FullscreenMiniBar.Opacity = opacity;
         }
@@ -128,7 +128,7 @@ public sealed partial class MainWindow
         var opacity = visible ? 1 : 0;
         if (PreviewFullscreenButton.Opacity != opacity)
         {
-            PreviewFullscreenButton.OpacityTransition = new UISettings().AnimationsEnabled
+            PreviewFullscreenButton.OpacityTransition = Controls.StudioFeedback.AnimationsEnabled
                 ? previewFullscreenFade : null;
             PreviewFullscreenButton.Opacity = opacity;
         }

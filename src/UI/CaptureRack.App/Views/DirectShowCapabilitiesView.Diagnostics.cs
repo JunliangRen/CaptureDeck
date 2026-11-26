@@ -79,6 +79,7 @@ public sealed partial class DirectShowCapabilitiesView
             var clipboard = new DataPackage();
             clipboard.SetText(JsonSerializer.Serialize(report, new JsonSerializerOptions { WriteIndented = true }));
             Clipboard.SetContent(clipboard);
+            Controls.StudioFeedback.FlashCopied(CopyDiagnosticsIcon, "\uE8C8", CopyDiagnosticsLabel, L("CopiedFeedback"), () => L("DsCopyDiagnostics"), this);
             ShowNotice("DsDiagnosticsCopied", InfoBarSeverity.Success);
         }, allowPreview: true);
     }

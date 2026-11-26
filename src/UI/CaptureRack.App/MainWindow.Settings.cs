@@ -87,6 +87,9 @@ public sealed partial class MainWindow
             settings.DeckLink.AnalogAudioGainRightDb,
             settings.DeckLink.AnalogAudioGainLinked);
         deckLinkInspector.RestoreVancSettings(settings.DeckLink.VancInput);
+        directShowCapabilitiesView.RestoreSettings(settings.DirectShow);
+        fireWireView.RestoreSettings(settings.FireWire);
+        testSignalInspector.RestoreScenario(settings.TestSignalScenario);
 
         ApplySettingsLanguage(language, settings.DeckLink.VideoFormat, settings.DeckLink.AudioFormat);
         OutputPath.Text = settings.OutputFolder ?? "";
@@ -191,6 +194,9 @@ public sealed partial class MainWindow
         {
             CaptureBackendId = activeModule.Descriptor.BackendId,
             DeckLink = deckLink,
+            DirectShow = directShowCapabilitiesView.ExportSettings(),
+            FireWire = fireWireView.ExportSettings(),
+            TestSignalScenario = testSignalInspector.SelectedScenarioTag,
             OutputFolder = OutputPath.Text.Trim(),
             RecordingLabel = RecordingLabelBox.Text.Trim(),
             LanguageOverride = settingsCulture.Name,
@@ -351,17 +357,26 @@ public sealed partial class MainWindow
 
     private void UpdateConfigurationStatus()
     {
+        QuickSourceIcon.Glyph = activeModule.Descriptor.IconGlyph;
         if (!IsDeckLinkActive)
         {
             var backendName = L(activeModule.Descriptor.DisplayNameKey);
+            var liveSummary = LiveMediaSource?.ConfigurationSummaryText;
             var text = IsTestSignalActive
                 ? $"{backendName} · {L(TestSignalScenarioKey)} · {TestSignal.Mode.Description} · " +
                     $"{LocalFormat("ShortVideoFormat", "v210", 10)} / {LocalFormat("ShortPcmFormat", (uint)TestSignal.AudioFormat)}"
-                : IsFireWireActive ? $"{backendName} · {fireWireView.FormatSummary}"
-                : IsDirectShowActive ? backendName : $"{backendName} · {L("SourceStatusPlanned")}";
+                : LiveMediaSource is not null
+                    ? string.IsNullOrWhiteSpace(liveSummary) ? backendName : $"{backendName} · {liveSummary}"
+                    : $"{backendName} · {L("SourceStatusPlanned")}";
             ConfigurationSummary.Text = text;
             AutomationProperties.SetName(QuickSourceButton, $"{L("Capture")} · {text}");
-            QuickSourceDot.Fill = ThemeBrush("StudioInfoBrush");
+            QuickSourceDot.Fill = !HasLiveCapture
+                ? ThemeBrush("StudioInfoBrush")
+                : IsCaptureInputActive && liveSignal == VideoSignal.Present
+                    ? ThemeBrush("StudioSignalLockBrush")
+                    : IsCaptureInputActive && liveSignal == VideoSignal.NoInput
+                        ? ThemeBrush("StudioCautionBrush")
+                        : (LiveMediaSource is { CanStart: false } ? ThemeBrush("StudioTextMutedBrush") : ThemeBrush("StudioInfoBrush"));
             InspectorNotice.Visibility = settingsError is not null ? Visibility.Visible : Visibility.Collapsed;
             if (settingsError is { } err)
             {

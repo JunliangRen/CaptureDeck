@@ -50,6 +50,8 @@
             <SolidColorBrush x:Key="StudioMeterTrackBrush" Color="#0C0F14" />
             <SolidColorBrush x:Key="StudioMeterPeakBrush" Color="#F8FAFC" />
             <SolidColorBrush x:Key="StudioSafeGuideBrush" Color="#59FFFFFF" />
+            <SolidColorBrush x:Key="StudioSpectrumGridBrush" Color="#2A313D" />
+            <SolidColorBrush x:Key="StudioSpectrumAxisBrush" Color="#9BA5B8" />
         </ResourceDictionary>
 
         <ResourceDictionary x:Key="Light">
@@ -100,6 +102,8 @@
             <SolidColorBrush x:Key="StudioMeterTrackBrush" Color="#E6E8ED" />
             <SolidColorBrush x:Key="StudioMeterPeakBrush" Color="#181A1F" />
             <SolidColorBrush x:Key="StudioSafeGuideBrush" Color="#59FFFFFF" />
+            <SolidColorBrush x:Key="StudioSpectrumGridBrush" Color="#2C3340" />
+            <SolidColorBrush x:Key="StudioSpectrumAxisBrush" Color="#A6B0C2" />
         </ResourceDictionary>
     </ResourceDictionary.ThemeDictionaries>
 
@@ -201,6 +205,8 @@
         <Setter Property="Foreground" Value="{ThemeResource StudioTextSecondaryBrush}" />
         <Setter Property="HorizontalContentAlignment" Value="Center" />
         <Setter Property="VerticalContentAlignment" Value="Center" />
+        <Setter Property="UseSystemFocusVisuals" Value="True" />
+        <Setter Property="FocusVisualMargin" Value="-3" />
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="Button">
@@ -264,6 +270,56 @@
         <Setter Property="Background" Value="{ThemeResource StudioCardBrush}" />
         <Setter Property="BorderBrush" Value="{ThemeResource StudioHairlineBrush}" />
         <Setter Property="Foreground" Value="{ThemeResource StudioTextPrimaryBrush}" />
+        <Setter Property="HorizontalContentAlignment" Value="Center" />
+        <Setter Property="VerticalContentAlignment" Value="Center" />
+        <Setter Property="UseSystemFocusVisuals" Value="True" />
+        <Setter Property="FocusVisualMargin" Value="-3" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Button">
+                    <Grid>
+                        <VisualStateManager.VisualStateGroups>
+                            <VisualStateGroup x:Name="CommonStates">
+                                <VisualState x:Name="Normal" />
+                                <VisualState x:Name="PointerOver">
+                                    <VisualState.Setters>
+                                        <Setter Target="StateOverlay.Opacity" Value="1" />
+                                    </VisualState.Setters>
+                                </VisualState>
+                                <VisualState x:Name="Pressed">
+                                    <VisualState.Setters>
+                                        <Setter Target="StateOverlay.Opacity" Value="1" />
+                                        <Setter Target="RootBorder.Opacity" Value="0.86" />
+                                    </VisualState.Setters>
+                                </VisualState>
+                                <VisualState x:Name="Disabled">
+                                    <VisualState.Setters>
+                                        <Setter Target="RootBorder.Opacity" Value="0.48" />
+                                    </VisualState.Setters>
+                                </VisualState>
+                            </VisualStateGroup>
+                        </VisualStateManager.VisualStateGroups>
+                        <Border x:Name="RootBorder"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="{TemplateBinding CornerRadius}"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter x:Name="ContentPresenter"
+                                              Content="{TemplateBinding Content}"
+                                              ContentTemplate="{TemplateBinding ContentTemplate}"
+                                              Foreground="{TemplateBinding Foreground}"
+                                              HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                              VerticalAlignment="{TemplateBinding VerticalContentAlignment}" />
+                        </Border>
+                        <Border x:Name="StateOverlay"
+                                Background="{ThemeResource SubtleFillColorSecondaryBrush}"
+                                CornerRadius="{TemplateBinding CornerRadius}"
+                                Opacity="0" IsHitTestVisible="False" />
+                    </Grid>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
     </Style>
 
     <Style x:Key="StudioRecordIdleButtonStyle" TargetType="Button">
@@ -275,6 +331,51 @@
         <Setter Property="Background" Value="{ThemeResource StudioRecSoftBrush}" />
         <Setter Property="BorderBrush" Value="{ThemeResource StudioRecBorderBrush}" />
         <Setter Property="Foreground" Value="{ThemeResource StudioRecTextBrush}" />
+        <Setter Property="HorizontalContentAlignment" Value="Center" />
+        <Setter Property="VerticalContentAlignment" Value="Center" />
+        <Setter Property="UseSystemFocusVisuals" Value="True" />
+        <Setter Property="FocusVisualMargin" Value="-3" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Button">
+                    <Border x:Name="RootBorder"
+                            Background="{TemplateBinding Background}"
+                            BorderBrush="{TemplateBinding BorderBrush}"
+                            BorderThickness="{TemplateBinding BorderThickness}"
+                            CornerRadius="{TemplateBinding CornerRadius}"
+                            Padding="{TemplateBinding Padding}">
+                        <VisualStateManager.VisualStateGroups>
+                            <VisualStateGroup x:Name="CommonStates">
+                                <VisualState x:Name="Normal" />
+                                <VisualState x:Name="PointerOver">
+                                    <VisualState.Setters>
+                                        <Setter Target="RootBorder.BorderBrush" Value="{ThemeResource StudioRecBrush}" />
+                                        <Setter Target="RootBorder.Opacity" Value="0.92" />
+                                    </VisualState.Setters>
+                                </VisualState>
+                                <VisualState x:Name="Pressed">
+                                    <VisualState.Setters>
+                                        <Setter Target="RootBorder.BorderBrush" Value="{ThemeResource StudioRecBrush}" />
+                                        <Setter Target="RootBorder.Opacity" Value="0.76" />
+                                    </VisualState.Setters>
+                                </VisualState>
+                                <VisualState x:Name="Disabled">
+                                    <VisualState.Setters>
+                                        <Setter Target="RootBorder.Opacity" Value="0.45" />
+                                    </VisualState.Setters>
+                                </VisualState>
+                            </VisualStateGroup>
+                        </VisualStateManager.VisualStateGroups>
+                        <ContentPresenter x:Name="ContentPresenter"
+                                          Content="{TemplateBinding Content}"
+                                          ContentTemplate="{TemplateBinding ContentTemplate}"
+                                          Foreground="{TemplateBinding Foreground}"
+                                          HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                          VerticalAlignment="{TemplateBinding VerticalContentAlignment}" />
+                    </Border>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
     </Style>
 
     <Style x:Key="StudioRecordActiveButtonStyle" TargetType="Button">
@@ -286,5 +387,48 @@
         <Setter Property="Background" Value="{ThemeResource StudioRecBrush}" />
         <Setter Property="BorderBrush" Value="{ThemeResource StudioRecHoverBrush}" />
         <Setter Property="Foreground" Value="#FFFFFF" />
+        <Setter Property="HorizontalContentAlignment" Value="Center" />
+        <Setter Property="VerticalContentAlignment" Value="Center" />
+        <Setter Property="UseSystemFocusVisuals" Value="True" />
+        <Setter Property="FocusVisualMargin" Value="-3" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Button">
+                    <Border x:Name="RootBorder"
+                            Background="{TemplateBinding Background}"
+                            BorderBrush="{TemplateBinding BorderBrush}"
+                            BorderThickness="{TemplateBinding BorderThickness}"
+                            CornerRadius="{TemplateBinding CornerRadius}"
+                            Padding="{TemplateBinding Padding}">
+                        <VisualStateManager.VisualStateGroups>
+                            <VisualStateGroup x:Name="CommonStates">
+                                <VisualState x:Name="Normal" />
+                                <VisualState x:Name="PointerOver">
+                                    <VisualState.Setters>
+                                        <Setter Target="RootBorder.Background" Value="{ThemeResource StudioRecHoverBrush}" />
+                                    </VisualState.Setters>
+                                </VisualState>
+                                <VisualState x:Name="Pressed">
+                                    <VisualState.Setters>
+                                        <Setter Target="RootBorder.Background" Value="{ThemeResource StudioRecPressedBrush}" />
+                                    </VisualState.Setters>
+                                </VisualState>
+                                <VisualState x:Name="Disabled">
+                                    <VisualState.Setters>
+                                        <Setter Target="RootBorder.Opacity" Value="0.62" />
+                                    </VisualState.Setters>
+                                </VisualState>
+                            </VisualStateGroup>
+                        </VisualStateManager.VisualStateGroups>
+                        <ContentPresenter x:Name="ContentPresenter"
+                                          Content="{TemplateBinding Content}"
+                                          ContentTemplate="{TemplateBinding ContentTemplate}"
+                                          Foreground="{TemplateBinding Foreground}"
+                                          HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                          VerticalAlignment="{TemplateBinding VerticalContentAlignment}" />
+                    </Border>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
     </Style>
 </ResourceDictionary>

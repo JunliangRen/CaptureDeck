@@ -33,6 +33,37 @@ public sealed partial class DirectShowCapabilitiesView
     public string? PreviewHint => !IsCapturing ? null : VideoFormat?.IsMpeg2Video == true ? "DsMpeg2RecordOnly" :
         preview is { Decoded: 0, Unreadable: > 0 } ? "DsPreviewUnreadable" : "DsWaitingForFrames";
 
+    public string? ConfigurationSummaryText
+    {
+        get
+        {
+            if (DevicePicker.SelectedItem is not DirectShowDevice device)
+                return null;
+            if (ActiveVideo is not { } video)
+                return device.Name;
+            var encoding = Encoding(video);
+            var size = video.Width is { } w && video.Height is { } h ? $"{w} × {h}" : null;
+            var fps = video.FramesPerSecond is { } rate ? $"{rate:0.###} fps" : null;
+            return string.Join(" · ", new[] { device.Name, size, fps, encoding }.OfType<string>());
+        }
+    }
+
+    public string? BuildFilenamePreview(string label)
+    {
+        if (ActiveVideo is not { } video)
+            return null;
+        var videoTag = video.IsMpeg2Video ? "MPEG2" : DirectShowPreviewVideo.Encoding(video) ?? "Video";
+        var extensions = DirectShowRecording.OutputExtensions(video);
+        return RecordingFileNaming.BuildDirectShowPreviewName(label, videoTag, ActiveAudio?.BitsPerSample, extensions);
+    }
+
+    public IReadOnlyList<TelemetryMetric> BuildLiveTelemetry(long previewSkippedFrames,
+        Func<string, string> localize, IFormatProvider formatProvider) =>
+        DirectShowWorkspaceModule.BuildLiveTelemetry(
+            ReceivedUnits, DecodedFrames, preview?.Unreadable ?? 0, previewSkippedFrames, localize, formatProvider);
+
+    public void NotifyOutputFolderChanged() => UpdateRecordingControls();
+
     public void StopPreview()
     {
         if (previewStop is not { IsCancellationRequested: false } stop)
@@ -59,7 +90,7 @@ public sealed partial class DirectShowCapabilitiesView
 
     private void UpdatePreviewControls()
     {
-        PreviewUnavailable.Visibility = VideoFormat is not null && !HasPreview && !SupportsRecording
+        PreviewUnavailableBanner.Visibility = VideoFormat is not null && !HasPreview && !SupportsRecording
             ? Visibility.Visible : Visibility.Collapsed;
         PreviewUnavailable.Text = L("DsPreviewUnsupported");
         UpdateRecordingControls();
@@ -79,7 +110,7 @@ public sealed partial class DirectShowCapabilitiesView
         var session = new DirectShowPreviewSession(feed);
         preview = session;
         previewDiagnostic = null;
-        Notice.IsOpen = false;
+        HideNotice();
         PreviewFailure = null;
         RenderEvidence();
         try

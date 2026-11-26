@@ -121,6 +121,9 @@ public sealed class CaptureSettingsTests
         Assert.Equal("Luma", restored.ScopeWaveformMode);
         Assert.Equal("Code", restored.ScopeLumaScale);
         Assert.Equal(new VancInputOptions(false, 18, 19, 20), restored.DeckLink.VancInput);
+        Assert.Equal(new DirectShowSettings(), restored.DirectShow);
+        Assert.Equal(new FireWireSettings(), restored.FireWire);
+        Assert.Equal("Normal", restored.TestSignalScenario);
     }
 
     [Fact]
@@ -142,6 +145,23 @@ public sealed class CaptureSettingsTests
             SplitPreviewRatio = 0.54,
             ScopeWaveformMode = "RgbParade",
             ScopeLumaScale = "Ire",
+            TestSignalScenario = "TimingFaults",
+            DirectShow = new DirectShowSettings
+            {
+                DeviceId = @"\\?\usb#vid_046d&pid_085e",
+                PinId = "0",
+                IsInfrared = false,
+                Width = 3840,
+                Height = 2160,
+                FramesPerSecond = 30,
+                Encoding = "MJPG",
+                VideoFormatIndex = 12,
+                AudioFormatIndex = 2
+            },
+            FireWire = new FireWireSettings
+            {
+                DeviceId = "simulated:dvcpro50-ntsc"
+            },
             DeckLink = new DeckLinkSettings
             {
                 AnalogNtscIre = "Ire75",

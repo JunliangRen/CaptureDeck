@@ -96,27 +96,14 @@ public sealed partial class MainWindow
         PreviewPlaceholderText.Text = L(media.PreviewHint ?? "WaitingPreview");
         PreviewPlaceholderHint.Text = "";
         RenderCounts(null);
-        if (IsFireWireActive)
-        {
-            UpdateRecordingFilenamePreview();
-            UpdateConfigurationStatus();
-        }
+        UpdateRecordingFilenamePreview();
+        UpdateConfigurationStatus();
         UpdateNavigationStyles();
         UpdateControls();
     }
 
-    private TelemetryMetric[] BuildDecodedMediaTelemetry(ILiveMediaSource media)
-    {
-        var received = media.ReceivedUnits.ToString("N0", settingsCulture);
-        var presented = media.DecodedFrames.ToString("N0", settingsCulture);
-        var skipped = (preview?.SkippedFrames ?? 0).ToString("N0", settingsCulture);
-        return
-        [
-            new("input", L(IsFireWireActive && !fireWireView.ExpectedFormat.IsDv ? "TsMetricPackets" : "DsVideo"), received),
-            new("decoded", L("MetricValidFrames"), presented),
-            new("skipped", L("MetricSkipped"), skipped)
-        ];
-    }
+    private IReadOnlyList<TelemetryMetric> BuildDecodedMediaTelemetry(ILiveMediaSource media) =>
+        media.BuildLiveTelemetry(preview?.SkippedFrames ?? 0, L, settingsCulture);
 
     private async Task StartDecodedMediaAsync(ILiveMediaSource media)
     {
@@ -181,12 +168,26 @@ public sealed partial class MainWindow
     private async Task RecordDecodedMediaAsync(ILiveMediaSource media)
     {
         var wasRecording = media.IsRecording;
+        if (!wasRecording)
+        {
+            var directory = OutputPath.Text.Trim();
+            if (!Path.IsPathFullyQualified(directory) || !Directory.Exists(directory))
+            {
+                holdRecordingStatus = true;
+                UpdateLivePreviewStatus();
+                SetStatus("ChooseOutput", "ExistingOutput", InfoBarSeverity.Warning);
+                if (!IsInspectorOpen)
+                    ToggleInspector();
+                return;
+            }
+        }
         var previousFile = media.SavedPath;
         var recording = media.ToggleRecordingAsync();
         if (!wasRecording && media.IsRecording && media.RecordingDetail is { } detail)
             SetStatus("StartRecording", () => media.RecordingDetail ?? detail);
         if (wasRecording && media.IsFinalizing)
             SetStatus("StopRecording", () => media.RecordingDetail ?? L("QcFinishing"));
+        RenderCaptureActions();
 
         await recording;
         if (wasRecording || finishingMediaForClose || closing)

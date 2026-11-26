@@ -112,6 +112,143 @@ public sealed class TestSignalWorkspaceModule : ICaptureWorkspaceModule
         DeckLinkWorkspaceModule.BuildVideoTelemetry(stats, previewSkippedFrames, localize, formatProvider);
 }
 
+public sealed class DirectShowWorkspaceModule : ICaptureWorkspaceModule
+{
+    public const string BackendId = "windows.directshow";
+
+    public CaptureSourceDescriptor Descriptor { get; } = new(
+        BackendId,
+        CaptureBackendCategory.Video,
+        "BackendDirectShowName",
+        "BackendDirectShowDesc",
+        IsImplementedInUi: true,
+        new(true, true, true, true, false, true, true, false, false),
+        IconGlyph: "\uE722",
+        CliCommandHint: "CaptureRack.Probe.exe directshow list");
+
+    public IReadOnlyList<TelemetryMetric> BuildTelemetry(
+        CaptureStats? stats,
+        long previewSkippedFrames,
+        Func<string, string> localize,
+        IFormatProvider formatProvider) =>
+        BuildLiveTelemetry(0, 0, 0, previewSkippedFrames, localize, formatProvider);
+
+    public static IReadOnlyList<TelemetryMetric> BuildLiveTelemetry(
+        long received,
+        long decoded,
+        long unreadable,
+        long previewSkippedFrames,
+        Func<string, string> localize,
+        IFormatProvider formatProvider)
+    {
+        var skipped = Math.Max(0, previewSkippedFrames);
+        var metrics = new List<TelemetryMetric>(4)
+        {
+            new("ds-received", localize("DsVideo"), received.ToString("N0", formatProvider)),
+            new("ds-decoded", localize("MetricValidFrames"), decoded.ToString("N0", formatProvider))
+        };
+        if (unreadable > 0)
+        {
+            metrics.Add(new("ds-unreadable", localize("DsMetricUnreadable"), unreadable.ToString("N0", formatProvider),
+                TelemetrySeverity.Danger));
+        }
+        metrics.Add(new("ds-skipped", localize("MetricSkipped"), skipped.ToString("N0", formatProvider),
+            skipped > 0 ? TelemetrySeverity.Caution : TelemetrySeverity.Normal));
+        return metrics;
+    }
+}
+
+public sealed class FireWireWorkspaceModule : ICaptureWorkspaceModule
+{
+    public const string BackendId = "windows.firewire";
+
+    public CaptureSourceDescriptor Descriptor { get; } = new(
+        BackendId,
+        CaptureBackendCategory.FireWire,
+        "BackendFireWireName",
+        "BackendFireWireDesc",
+        IsImplementedInUi: true,
+        new(true, true, true, true, false, true, true, false, false),
+        IconGlyph: "\uE88E",
+        CliCommandHint: "CaptureRack.Probe.exe firewire list");
+
+    public IReadOnlyList<TelemetryMetric> BuildTelemetry(
+        CaptureStats? stats,
+        long previewSkippedFrames,
+        Func<string, string> localize,
+        IFormatProvider formatProvider) =>
+        BuildTsTelemetry(0, 0, 0, 0, 0, previewSkippedFrames, localize, formatProvider);
+
+    public static IReadOnlyList<TelemetryMetric> BuildTsTelemetry(
+        long packets,
+        long decodedFrames,
+        long continuityErrors,
+        long syncErrors,
+        double bitsPerSecond,
+        long previewSkippedFrames,
+        Func<string, string> localize,
+        IFormatProvider formatProvider)
+    {
+        var skipped = Math.Max(0, previewSkippedFrames);
+        var metrics = new List<TelemetryMetric>(5)
+        {
+            new("ts-packets", localize("TsMetricPackets"), packets.ToString("N0", formatProvider)),
+            new("ts-decoded", localize("MetricValidFrames"), decodedFrames.ToString("N0", formatProvider))
+        };
+        if (bitsPerSecond > 0)
+        {
+            var mbps = bitsPerSecond / 1_000_000d;
+            var rateText = mbps >= 1
+                ? $"{mbps.ToString("0.##", formatProvider)} Mb/s"
+                : $"{(bitsPerSecond / 1000d).ToString("N0", formatProvider)} kb/s";
+            metrics.Add(new("ts-bitrate", localize("FwBitrateShort"), rateText));
+        }
+        if (syncErrors > 0)
+        {
+            metrics.Add(new("ts-sync", localize("TsMetricSync"), syncErrors.ToString("N0", formatProvider),
+                TelemetrySeverity.Danger));
+        }
+        metrics.Add(new("ts-cc", localize("TsMetricContinuity"), continuityErrors.ToString("N0", formatProvider),
+            continuityErrors > 0 ? TelemetrySeverity.Danger : TelemetrySeverity.Normal));
+        if (skipped > 0)
+        {
+            metrics.Add(new("ts-skipped", localize("MetricSkipped"), skipped.ToString("N0", formatProvider),
+                TelemetrySeverity.Caution));
+        }
+        return metrics;
+    }
+
+    public static IReadOnlyList<TelemetryMetric> BuildDvTelemetry(
+        long dvFrames,
+        long decodedFrames,
+        long invalidFrames,
+        long discontinuities,
+        long previewSkippedFrames,
+        Func<string, string> localize,
+        IFormatProvider formatProvider)
+    {
+        var skipped = Math.Max(0, previewSkippedFrames);
+        var metrics = new List<TelemetryMetric>(4)
+        {
+            new("dv-frames", localize("DvInfoFrames"), dvFrames.ToString("N0", formatProvider)),
+            new("dv-decoded", localize("MetricValidFrames"), decodedFrames.ToString("N0", formatProvider)),
+            new("dv-invalid", localize("DvInfoInvalidFrames"), invalidFrames.ToString("N0", formatProvider),
+                invalidFrames > 0 ? TelemetrySeverity.Danger : TelemetrySeverity.Normal)
+        };
+        if (discontinuities > 0)
+        {
+            metrics.Add(new("dv-disc", localize("DvInfoDiscontinuities"), discontinuities.ToString("N0", formatProvider),
+                TelemetrySeverity.Caution));
+        }
+        if (skipped > 0 || discontinuities == 0)
+        {
+            metrics.Add(new("dv-skipped", localize("MetricSkipped"), skipped.ToString("N0", formatProvider),
+                skipped > 0 ? TelemetrySeverity.Caution : TelemetrySeverity.Normal));
+        }
+        return metrics;
+    }
+}
+
 public sealed class PlannedWorkspaceModule(
     CaptureSourceDescriptor descriptor,
     Func<Func<string, string>, TelemetryMetric[]> telemetryFactory) : ICaptureWorkspaceModule
@@ -140,30 +277,8 @@ public sealed class WorkspaceModuleRegistry
         [
             DefaultModule,
             new TestSignalWorkspaceModule(),
-            new PlannedWorkspaceModule(
-                new("windows.directshow", CaptureBackendCategory.Video,
-                    "BackendDirectShowName", "BackendDirectShowDesc", IsImplementedInUi: true,
-                    new(true, true, true, true, false, true, true, false, false),
-                    IconGlyph: "\uE722",
-                    CliCommandHint: "CaptureRack.Probe.exe directshow list"),
-                loc =>
-                [
-                    new("ds-state", loc("SourceRackStatusLabel"), loc("SourceStatusPlanned"), TelemetrySeverity.Info),
-                    new("ds-frames", loc("MetricValidFrames"), "—"),
-                    new("ds-dropped", loc("MetricMissing"), "—")
-                ]),
-            new PlannedWorkspaceModule(
-                new("windows.firewire", CaptureBackendCategory.FireWire,
-                    "BackendFireWireName", "BackendFireWireDesc", IsImplementedInUi: true,
-                    new(true, true, true, true, false, true, true, false, false),
-                    IconGlyph: "\uE88E",
-                    CliCommandHint: "CaptureRack.Probe.exe firewire list"),
-                loc =>
-                [
-                    new("ts-packets", loc("TsMetricPackets"), "—"),
-                    new("ts-sync", loc("TsMetricSync"), "—"),
-                    new("ts-cc", loc("TsMetricContinuity"), "—")
-                ]),
+            new DirectShowWorkspaceModule(),
+            new FireWireWorkspaceModule(),
             new PlannedWorkspaceModule(
                 new("windows.signalcapture", CaptureBackendCategory.SignalCapture,
                     "BackendRfName", "BackendRfDesc", IsImplementedInUi: false,
@@ -289,6 +404,21 @@ public static class RecordingFileNaming
         CaptureRack.DirectShow.Windows.FireWire.MsTape.FireWireMediaFormat format) =>
         BuildPrefix(rawLabel, localTime, $"CaptureRack_{format.FilePrefix}") + format.Extension;
 
+    public static string BuildDirectShowPreviewName(string? rawLabel, string? videoTag, int? audioBitsPerSample,
+        IReadOnlyList<string>? outputExtensions)
+    {
+        var prefix = BuildPrefix(rawLabel, localTime: null, "CaptureRack");
+        var video = string.IsNullOrWhiteSpace(videoTag) ? "Video" : videoTag;
+        var audio = audioBitsPerSample is > 0 ? $"_{audioBitsPerSample}bit-PCM" : "";
+        var ext = outputExtensions is { Count: > 0 }
+            ? outputExtensions[0]
+            : ".mkv";
+        var suffix = outputExtensions is { Count: > 1 }
+            ? $" ({string.Join(" / ", outputExtensions)})"
+            : "";
+        return $"{prefix}_DirectShow_{video}{audio}{ext}{suffix}";
+    }
+
     private static string BuildPrefix(string? rawLabel, DateTime? localTime, string capturePrefix)
     {
         var timestamp = localTime?.ToString("yyyyMMdd_HHmmss_fff", System.Globalization.CultureInfo.InvariantCulture)
@@ -394,6 +524,263 @@ public sealed class QcSessionHistory(int maxEntries = 30)
 
     public QcSessionHistoryEntry? Find(Guid id) =>
         entries.FirstOrDefault(entry => entry.Id == id);
+
+    public void Clear() => entries.Clear();
+}
+
+public static class MonitoringSeverity
+{
+    public static TelemetrySeverity ClassifyLumaExcursion(double? outsideLegalFraction) => outsideLegalFraction switch
+    {
+        null or <= 0 => TelemetrySeverity.Normal,
+        < 0.05 => TelemetrySeverity.Caution,
+        _ => TelemetrySeverity.Danger
+    };
+}
+
+public static class QcPresentationHelper
+{
+    public static string OpenMediaLabelKey(string? filePath)
+    {
+        var ext = string.IsNullOrWhiteSpace(filePath) ? "" : Path.GetExtension(filePath);
+        return ext.ToLowerInvariant() switch
+        {
+            ".mkv" => "OpenRecordedMkv",
+            ".ts" or ".ts192" or ".m2t" => "OpenRecordedTs",
+            ".dv" => "OpenRecordedDv",
+            _ => "OpenRecordedMov"
+        };
+    }
+
+    public static string SaveReportLabelKey(QcEntryKind kind) => kind switch
+    {
+        QcEntryKind.Dv => "SaveDvJson",
+        _ => "SaveTsJson"
+    };
+
+    public static bool ShouldShowStatusFileName(bool recordingActive, bool qcActive, string? statusTitle) =>
+        recordingActive || qcActive ||
+        (!string.IsNullOrEmpty(statusTitle) &&
+         (statusTitle.StartsWith("Qc", StringComparison.Ordinal) ||
+          statusTitle.StartsWith("Ts", StringComparison.Ordinal) ||
+          statusTitle.StartsWith("Dv", StringComparison.Ordinal)));
+}
+
+public static class CameraControlEditHelper
+{
+    public static bool HasPendingChanges(bool currentIsAuto, int currentValue, bool editedIsAuto, int editedValue, bool supportsAuto)
+    {
+        if (supportsAuto && currentIsAuto != editedIsAuto)
+            return true;
+        return !editedIsAuto && currentValue != editedValue;
+    }
+
+    public static bool CanResetToDefault(int? defaultValue, int editedValue, bool editedIsAuto, bool supportsManual) =>
+        defaultValue is { } target && supportsManual && (editedIsAuto || editedValue != target);
+}
+
+public readonly record struct WrapItemRect(double X, double Y, double Width, double Height);
+
+public static class WrapLayoutCalculator
+{
+    public static double NormalizeChildAvailableWidth(double availableWidth) =>
+        double.IsInfinity(availableWidth) || double.IsNaN(availableWidth)
+            ? double.PositiveInfinity
+            : Math.Max(0, availableWidth);
+
+    public static (double Width, double Height) Measure(
+        IReadOnlyList<(double Width, double Height)> items,
+        double availableWidth,
+        double horizontalSpacing,
+        double verticalSpacing)
+    {
+        var maxWidth = double.IsInfinity(availableWidth) || double.IsNaN(availableWidth)
+            ? double.PositiveInfinity
+            : Math.Max(0, availableWidth);
+        var hSpacing = Math.Max(0, horizontalSpacing);
+        var vSpacing = Math.Max(0, verticalSpacing);
+
+        double lineWidth = 0;
+        double lineHeight = 0;
+        double totalWidth = 0;
+        double totalHeight = 0;
+        var hasItemOnLine = false;
+
+        foreach (var (rawW, rawH) in items)
+        {
+            var w = Math.Max(0, double.IsNaN(rawW) ? 0 : rawW);
+            var h = Math.Max(0, double.IsNaN(rawH) ? 0 : rawH);
+            var candidateWidth = hasItemOnLine ? lineWidth + hSpacing + w : w;
+
+            if (hasItemOnLine && candidateWidth > maxWidth)
+            {
+                totalWidth = Math.Max(totalWidth, lineWidth);
+                totalHeight += lineHeight + vSpacing;
+                lineWidth = w;
+                lineHeight = h;
+                hasItemOnLine = true;
+            }
+            else
+            {
+                lineWidth = candidateWidth;
+                lineHeight = Math.Max(lineHeight, h);
+                hasItemOnLine = true;
+            }
+        }
+
+        totalWidth = Math.Max(totalWidth, lineWidth);
+        totalHeight += lineHeight;
+        return (totalWidth, totalHeight);
+    }
+
+    public static WrapItemRect[] Arrange(
+        IReadOnlyList<(double Width, double Height)> items,
+        double finalWidth,
+        double horizontalSpacing,
+        double verticalSpacing)
+    {
+        var maxWidth = double.IsInfinity(finalWidth) || double.IsNaN(finalWidth)
+            ? double.PositiveInfinity
+            : Math.Max(0, finalWidth);
+        var hSpacing = Math.Max(0, horizontalSpacing);
+        var vSpacing = Math.Max(0, verticalSpacing);
+
+        var rects = new WrapItemRect[items.Count];
+        double x = 0;
+        double y = 0;
+        double lineHeight = 0;
+        var hasItemOnLine = false;
+
+        for (var i = 0; i < items.Count; i++)
+        {
+            var w = Math.Max(0, double.IsNaN(items[i].Width) ? 0 : items[i].Width);
+            var h = Math.Max(0, double.IsNaN(items[i].Height) ? 0 : items[i].Height);
+            var startX = hasItemOnLine ? x + hSpacing : 0;
+
+            if (hasItemOnLine && startX + w > maxWidth)
+            {
+                x = 0;
+                y += lineHeight + vSpacing;
+                lineHeight = 0;
+                startX = 0;
+                hasItemOnLine = false;
+            }
+
+            rects[i] = new WrapItemRect(startX, y, w, h);
+            x = startX + w;
+            lineHeight = Math.Max(lineHeight, h);
+            hasItemOnLine = true;
+        }
+
+        return rects;
+    }
+}
+
+internal sealed record DirectShowFormatSnapshot(
+    string? PinId,
+    bool IsInfrared,
+    int? Width,
+    int? Height,
+    double? FramesPerSecond,
+    string? Encoding,
+    int Index);
+
+internal static class DirectShowSettingsResolver
+{
+    public static string? ResolveRefreshTargetDeviceId(
+        DirectShowSettings saved,
+        string? currentlySelectedDeviceId,
+        bool isFallbackSelection) =>
+        isFallbackSelection ? saved.DeviceId : currentlySelectedDeviceId ?? saved.DeviceId;
+
+    public static int? FindMatchingVideoFormatIndex(
+        DirectShowSettings saved,
+        IReadOnlyList<DirectShowFormatSnapshot> candidates)
+    {
+        if (candidates.Count == 0)
+            return null;
+
+        bool MatchesMetadata(DirectShowFormatSnapshot f) =>
+            (saved.PinId is null || string.Equals(f.PinId, saved.PinId, StringComparison.OrdinalIgnoreCase)) &&
+            (saved.IsInfrared is null || f.IsInfrared == saved.IsInfrared) &&
+            (saved.Width is null || f.Width == saved.Width) &&
+            (saved.Height is null || f.Height == saved.Height) &&
+            (saved.FramesPerSecond is null || f.FramesPerSecond == saved.FramesPerSecond) &&
+            (saved.Encoding is null || string.Equals(f.Encoding, saved.Encoding, StringComparison.OrdinalIgnoreCase));
+
+        var hasMetadata = saved.Width is not null || saved.Height is not null ||
+            saved.Encoding is not null || saved.FramesPerSecond is not null ||
+            saved.PinId is not null || saved.IsInfrared is not null;
+
+        if (saved.VideoFormatIndex is { } savedIdx && hasMetadata &&
+            candidates.FirstOrDefault(f => f.Index == savedIdx && MatchesMetadata(f)) is { } exact)
+            return exact.Index;
+
+        if (hasMetadata && candidates.FirstOrDefault(MatchesMetadata) is { } fullMetadata)
+            return fullMetadata.Index;
+
+        if (saved.Width is not null && saved.Height is not null && saved.Encoding is not null &&
+            candidates.FirstOrDefault(f => f.Width == saved.Width && f.Height == saved.Height &&
+                string.Equals(f.Encoding, saved.Encoding, StringComparison.OrdinalIgnoreCase)) is { } loose)
+            return loose.Index;
+
+        if (!hasMetadata && saved.VideoFormatIndex is { } indexOnly &&
+            candidates.FirstOrDefault(f => f.Index == indexOnly) is { } byIndex)
+            return byIndex.Index;
+
+        return null;
+    }
+
+    public static DirectShowSettings Export(
+        DirectShowSettings saved,
+        string? selectedDeviceId,
+        bool isFallbackSelection,
+        string? loadedCapabilitiesDeviceId,
+        DirectShowFormatSnapshot? video,
+        int? audioFormatIndex)
+    {
+        if (string.IsNullOrWhiteSpace(selectedDeviceId) || isFallbackSelection)
+            return saved;
+
+        if (!string.IsNullOrWhiteSpace(loadedCapabilitiesDeviceId) &&
+            string.Equals(loadedCapabilitiesDeviceId, selectedDeviceId, StringComparison.OrdinalIgnoreCase))
+        {
+            return new DirectShowSettings
+            {
+                DeviceId = selectedDeviceId,
+                PinId = video?.PinId,
+                IsInfrared = video?.IsInfrared,
+                Width = video?.Width,
+                Height = video?.Height,
+                FramesPerSecond = video?.FramesPerSecond,
+                Encoding = video?.Encoding,
+                VideoFormatIndex = video?.Index,
+                AudioFormatIndex = audioFormatIndex
+            };
+        }
+
+        if (string.Equals(saved.DeviceId, selectedDeviceId, StringComparison.OrdinalIgnoreCase))
+            return saved;
+
+        return new DirectShowSettings { DeviceId = selectedDeviceId };
+    }
+}
+
+internal static class FireWireSettingsResolver
+{
+    public static string? ResolveRefreshTargetDeviceId(
+        FireWireSettings saved,
+        string? currentlySelectedDeviceId,
+        bool isFallbackSelection) =>
+        isFallbackSelection ? saved.DeviceId : currentlySelectedDeviceId ?? saved.DeviceId;
+
+    public static FireWireSettings Export(
+        FireWireSettings saved,
+        string? selectedDeviceId,
+        bool isFallbackSelection) =>
+        string.IsNullOrWhiteSpace(selectedDeviceId) || isFallbackSelection
+            ? saved
+            : new FireWireSettings { DeviceId = selectedDeviceId };
 }
 
 public sealed class BroadcastMeterBallistics

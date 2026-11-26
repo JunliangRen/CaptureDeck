@@ -1722,4 +1722,61 @@
   <data name="FwInfoNetwork" xml:space="preserve">
     <value>放送ネットワーク</value>
   </data>
+  <data name="CopiedFeedback" xml:space="preserve">
+    <value>コピー済み</value>
+  </data>
+  <data name="VancSectionHeading" xml:space="preserve">
+    <value>VANC / VBI</value>
+  </data>
+  <data name="DsDeviceSectionHeading" xml:space="preserve">
+    <value>DIRECTSHOW ソース</value>
+  </data>
+  <data name="DsCameraResetDefault" xml:space="preserve">
+    <value>デフォルト</value>
+  </data>
+  <data name="DsCameraValueNoDefault" xml:space="preserve">
+    <value>値 {0:0}</value>
+  </data>
+  <data name="DsCameraPendingChanges" xml:space="preserve">
+    <value>未適用</value>
+  </data>
+  <data name="DsMetricUnreadable" xml:space="preserve">
+    <value>デコード不可</value>
+  </data>
+  <data name="FwDeviceSectionHeading" xml:space="preserve">
+    <value>i.LINK / FIREWIRE</value>
+  </data>
+  <data name="FwBitrateShort" xml:space="preserve">
+    <value>ビットレート</value>
+  </data>
+  <data name="OpenRecordedMkv" xml:space="preserve">
+    <value>MKV を開く</value>
+  </data>
+  <data name="OpenRecordedTs" xml:space="preserve">
+    <value>TS を開く</value>
+  </data>
+  <data name="OpenRecordedDv" xml:space="preserve">
+    <value>DV を開く</value>
+  </data>
+  <data name="SaveDvJson" xml:space="preserve">
+    <value>DV JSON を保存</value>
+  </data>
+  <data name="QcClearHistory" xml:space="preserve">
+    <value>クリア</value>
+  </data>
+  <data name="QcDropReleaseHint" xml:space="preserve">
+    <value>ドロップして品質検査を開始</value>
+  </data>
+  <data name="QcStreamAnalyzing" xml:space="preserve">
+    <value>ストリーム構造を解析中…</value>
+  </data>
+  <data name="NavigationLockedRecording" xml:space="preserve">
+    <value>録画を停止してからキャプチャ画面を離れてください。</value>
+  </data>
+  <data name="ShortcutAudioMute" xml:space="preserve">
+    <value>ローカル音声モニター切替</value>
+  </data>
+  <data name="TestSignalSectionHeading" xml:space="preserve">
+    <value>テスト信号ジェネレーター</value>
+  </data>
 </root>

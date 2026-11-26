@@ -14,6 +14,7 @@ internal interface ILiveMediaSource
     bool IsRecording { get; }
     bool IsFinalizing { get; }
     bool HasInput { get; }
+    bool HasOpenDropdown { get; }
     long ReceivedUnits { get; }
     long DecodedFrames { get; }
     bool HasPreview { get; }
@@ -23,8 +24,13 @@ internal interface ILiveMediaSource
     string? PreviewHint { get; }
     string? PreviewFailure { get; }
     string? SavedPath { get; }
+    string? RecordingReportPath { get; }
     string? RecordingDetail { get; }
+    string? ConfigurationSummaryText { get; }
 
+    string? BuildFilenamePreview(string label);
+    IReadOnlyList<TelemetryMetric> BuildLiveTelemetry(long previewSkippedFrames, Func<string, string> localize, IFormatProvider formatProvider);
+    void NotifyOutputFolderChanged();
     Task StartAsync(PreviewFeed feed);
     void StopPreview();
     Task ToggleRecordingAsync();

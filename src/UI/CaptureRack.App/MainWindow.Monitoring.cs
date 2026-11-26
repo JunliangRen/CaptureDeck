@@ -26,17 +26,21 @@ public sealed partial class MainWindow
     private VideoScopeWaveformMode scopeWaveformMode = VideoScopeWaveformMode.Luma;
     private ScopeLumaScaleMode scopeLumaScale = ScopeLumaScaleMode.Code;
 
-    private readonly SolidColorBrush spectrumGridBrush = new(Windows.UI.Color.FromArgb(255, 42, 49, 61));
-    private readonly SolidColorBrush spectrumAxisBrush = new(Windows.UI.Color.FromArgb(255, 155, 165, 184));
-    private readonly SolidColorBrush eventDangerBrush = new(Windows.UI.Color.FromArgb(255, 239, 68, 68));
-    private readonly SolidColorBrush eventCautionBrush = new(Windows.UI.Color.FromArgb(255, 245, 158, 11));
-    private readonly SolidColorBrush eventLockBrush = new(Windows.UI.Color.FromArgb(255, 34, 197, 94));
-    private readonly SolidColorBrush eventInfoBrush = new(Windows.UI.Color.FromArgb(255, 56, 189, 248));
     private float[]? spectrumPeakHoldValues;
     private long lastSpectrumPaint;
     private long nextMonitorFrame;
     private static readonly long MonitorFrameTicks = (long)Math.Round(Stopwatch.Frequency / 60d);
     private static readonly long RenderToleranceTicks = Stopwatch.Frequency / 1000;
+
+    private Brush SpectrumGridBrush => ThemeBrush("StudioSpectrumGridBrush");
+    private Brush SpectrumAxisBrush => ThemeBrush("StudioSpectrumAxisBrush");
+
+    private void RefreshMonitoringTheme()
+    {
+        RenderEvents();
+        RenderLumaRange(visibleScopes);
+        PaintSpectrumScale(visibleAudio?.SpectrumFloorDbfs);
+    }
 
     private void StartPreviewClock()
     {
@@ -191,6 +195,7 @@ public sealed partial class MainWindow
         var package = new DataPackage();
         package.SetText(string.Join(Environment.NewLine, lines));
         Clipboard.SetContent(package);
+        Controls.StudioFeedback.FlashCopied(CopyEventsIcon, "\uE8C8", themeRoot: RootShell);
     }
 
     private string LocalEventDescription(CaptureEvent item) => item.Kind switch
@@ -207,10 +212,10 @@ public sealed partial class MainWindow
 
     private Brush EventAccentBrush(CaptureEventKind kind) => kind switch
     {
-        CaptureEventKind.TimestampRegression or CaptureEventKind.FrameGap => eventDangerBrush,
-        CaptureEventKind.NoInputAtStart or CaptureEventKind.SignalLost => eventCautionBrush,
-        CaptureEventKind.SignalRestored => eventLockBrush,
-        _ => eventInfoBrush
+        CaptureEventKind.TimestampRegression or CaptureEventKind.FrameGap => ThemeBrush("StudioDangerBrush"),
+        CaptureEventKind.NoInputAtStart or CaptureEventKind.SignalLost => ThemeBrush("StudioCautionBrush"),
+        CaptureEventKind.SignalRestored => ThemeBrush("StudioSignalLockBrush"),
+        _ => ThemeBrush("StudioInfoBrush")
     };
 
     private void RenderEvents()
@@ -445,10 +450,25 @@ public sealed partial class MainWindow
     private void RenderLumaRange(VideoScopes? scopes)
     {
         var noInput = displayedStats?.Signal == VideoSignal.NoInput || scopes?.NoInput == true;
-        ScopeStatus.Text = noInput ? L("ScopeNoInput")
-            : scopes?.LumaOutsideLegalFraction is { } fraction
-                ? LocalFormat("ScopeLumaOutOfRange", fraction)
-                : L("ScopeWaiting");
+        if (noInput)
+        {
+            ScopeStatus.Text = L("ScopeNoInput");
+            ScopeStatus.Foreground = ThemeBrush("StudioCautionBrush");
+            return;
+        }
+        if (scopes?.LumaOutsideLegalFraction is { } fraction)
+        {
+            ScopeStatus.Text = LocalFormat("ScopeLumaOutOfRange", fraction);
+            ScopeStatus.Foreground = MonitoringSeverity.ClassifyLumaExcursion(fraction) switch
+            {
+                TelemetrySeverity.Danger => ThemeBrush("StudioDangerBrush"),
+                TelemetrySeverity.Caution => ThemeBrush("StudioCautionBrush"),
+                _ => ThemeBrush("StudioSignalLockBrush")
+            };
+            return;
+        }
+        ScopeStatus.Text = L("ScopeWaiting");
+        ScopeStatus.Foreground = ThemeBrush("StudioTextMutedBrush");
     }
 
     private void SpectrumPlot_SizeChanged(object sender, SizeChangedEventArgs e)
@@ -470,12 +490,14 @@ public sealed partial class MainWindow
         var floor = floorDbfs.Value;
         var step = Math.Max(1, Math.Round(-floor / 30) * 10);
         var levels = new[] { 0, -step, -2 * step, floor };
+        var gridBrush = SpectrumGridBrush;
+        var axisBrush = SpectrumAxisBrush;
         var labels = levels.Select(level => new TextBlock
         {
             Text = level.ToString("0.#", settingsCulture),
             FontSize = 10,
             FontFamily = new FontFamily("Cascadia Mono, Consolas"),
-            Foreground = spectrumAxisBrush,
+            Foreground = axisBrush,
             TextAlignment = TextAlignment.Right
         }).ToArray();
         foreach (var label in labels)
@@ -489,7 +511,7 @@ public sealed partial class MainWindow
             var y = SpectrumLevelY(levels[i], floor, height);
             SpectrumGridLines.Children.Add(new Microsoft.UI.Xaml.Shapes.Line
             {
-                X1 = 1, X2 = 1 + width, Y1 = y, Y2 = y, Stroke = spectrumGridBrush, StrokeThickness = 1
+                X1 = 1, X2 = 1 + width, Y1 = y, Y2 = y, Stroke = gridBrush, StrokeThickness = 1
             });
 
             var label = labels[i];
@@ -503,7 +525,7 @@ public sealed partial class MainWindow
             var x = 1 + width * q / 4.0;
             SpectrumGridLines.Children.Add(new Microsoft.UI.Xaml.Shapes.Line
             {
-                X1 = x, X2 = x, Y1 = 1, Y2 = 1 + height, Stroke = spectrumGridBrush, StrokeThickness = 1, Opacity = 0.55
+                X1 = x, X2 = x, Y1 = 1, Y2 = 1 + height, Stroke = gridBrush, StrokeThickness = 1, Opacity = 0.55
             });
         }
     }

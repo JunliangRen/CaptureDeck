@@ -23,6 +23,7 @@ public sealed partial class DirectShowCapabilitiesView
     public bool SupportsRecording => ActiveVideo is { } video && DirectShowRecording.Supports(video, ActiveAudio);
     public bool CanRecord => operation is null && SupportsRecording && IsCapturing && !IsStopping && HasInput;
     public string? SavedPath => savedMediaPath;
+    public string? RecordingReportPath => savedReportPath;
     public string? RecordingDetail => recordingDetail;
 
     internal void SetRecordingTarget(Func<string> directory, Func<string> label)
@@ -41,9 +42,10 @@ public sealed partial class DirectShowCapabilitiesView
             ? Visibility.Visible : Visibility.Collapsed;
         var video = VideoFormat;
         var supported = SupportsRecording;
-        var hasFolder = Path.IsPathFullyQualified(outputDirectory());
+        var folder = outputDirectory();
+        var hasFolder = Path.IsPathFullyQualified(folder) && Directory.Exists(folder);
         RecordingHint.Text = L(!supported ? "DsRecordUnsupported" : "DsRecordChooseFolder");
-        RecordingHint.Visibility = video is not null && !IsRecording && (!supported || !hasFolder)
+        RecordingHintBanner.Visibility = video is not null && !IsRecording && (!supported || !hasFolder)
             ? Visibility.Visible : Visibility.Collapsed;
     }
 
@@ -129,7 +131,10 @@ public sealed partial class DirectShowCapabilitiesView
                     dispatcher.TryEnqueue(() =>
                     {
                         if (IsRecording && generation == recordGeneration)
+                        {
                             recordingDetail = string.Format(L(key), attempt.Container);
+                            StateChanged?.Invoke(this, EventArgs.Empty);
+                        }
                     });
             });
             recording = active;

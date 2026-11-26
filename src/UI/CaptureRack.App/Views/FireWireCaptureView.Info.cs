@@ -13,13 +13,33 @@ public sealed partial class FireWireCaptureView
 
     private void BindStreamInfo()
     {
-        InfoHeading.Text = L("FwInfoHeading");
-        DeviceSection.Header = L("FwInfoDeviceSection");
-        ProgramSection.Header = L("FwInfoProgramSection");
-        StatsSection.Header = L("FwInfoStatsSection");
-        RawSection.Header = L("FwInfoRawSection");
-        CopyInfoButton.Content = L("FwInfoCopy");
+        InfoHeading.Text = L("FwInfoHeading").ToUpperInvariant();
+        DeviceSectionTitle.Text = L("FwInfoDeviceSection");
+        ProgramSectionTitle.Text = L("FwInfoProgramSection");
+        StatsSectionTitle.Text = L("FwInfoStatsSection");
+        RawSectionTitle.Text = L("FwInfoRawSection");
+        CopyInfoLabel.Text = L("FwInfoCopy");
+        Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(CopyInfoButton, L("FwInfoCopy"));
         RefreshStreamInfo(force: true);
+    }
+
+    private void InfoSectionToggle_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not Microsoft.UI.Xaml.Controls.Button { Tag: string tag })
+            return;
+
+        var (body, chevron) = tag switch
+        {
+            "Device" => (DeviceSectionBody, DeviceSectionChevron),
+            "Program" => (ProgramSectionBody, ProgramSectionChevron),
+            "Stats" => (StatsSectionBody, StatsSectionChevron),
+            _ => (RawSectionBody, RawSectionChevron)
+        };
+        var expanded = body.Visibility != Visibility.Visible;
+        body.Visibility = expanded ? Visibility.Visible : Visibility.Collapsed;
+        chevron.Glyph = expanded ? "\uE70E" : "\uE70D";
+        if (expanded)
+            Controls.StudioFeedback.RevealSubtle(body, offsetY: 4f, durationMs: 120);
     }
 
     internal string? PreviewTransportSummary
@@ -43,7 +63,8 @@ public sealed partial class FireWireCaptureView
         var stream = live?.StreamInfo;
         var dv = live?.DvInfo;
         var transport = live?.TransportInfo;
-        ProgramSection.Header = L(ExpectedFormat.IsDv ? "DvInfoMetadata" : "FwInfoProgramSection");
+        FormatBadgeText.Text = FormatSummary;
+        ProgramSectionTitle.Text = L(ExpectedFormat.IsDv ? "DvInfoMetadata" : "FwInfoProgramSection");
         InfoSummary.Text = string.Join(" · ", new[]
         {
             PreviewTransportSummary ?? L(live?.SupportsTransportInfo == false ? "FwInfoUnsupported" : "FwInfoWaiting"),
@@ -202,8 +223,9 @@ public sealed partial class FireWireCaptureView
         RefreshStreamInfo(force: true);
         var snapshot = new DataPackage();
         snapshot.SetText(string.Join("\n\n", InfoHeading.Text, InfoSummary.Text,
-            $"{DeviceSection.Header}\n{DeviceDetails.Text}", $"{ProgramSection.Header}\n{ProgramDetails.Text}",
-            $"{StatsSection.Header}\n{StatsDetails.Text}", $"{RawSection.Header}\n{RawDetails.Text}"));
+            $"{DeviceSectionTitle.Text}\n{DeviceDetails.Text}", $"{ProgramSectionTitle.Text}\n{ProgramDetails.Text}",
+            $"{StatsSectionTitle.Text}\n{StatsDetails.Text}", $"{RawSectionTitle.Text}\n{RawDetails.Text}"));
         Clipboard.SetContent(snapshot);
+        Controls.StudioFeedback.FlashCopied(CopyInfoIcon, "\uE8C8", CopyInfoLabel, L("CopiedFeedback"), () => L("FwInfoCopy"), this);
     }
 }

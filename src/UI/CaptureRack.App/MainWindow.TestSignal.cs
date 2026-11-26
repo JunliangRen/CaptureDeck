@@ -1,13 +1,10 @@
 using CaptureRack.DeckLink;
-using Microsoft.UI.Xaml.Automation;
-using Microsoft.UI.Xaml.Controls;
 
 namespace CaptureRack.App;
 
 public sealed partial class MainWindow
 {
-    private TestSignalScenario SelectedTestScenario => TestSignalScenarioPicker.SelectedIndex == 1
-        ? TestSignalScenario.TimingFaults : TestSignalScenario.Normal;
+    private TestSignalScenario SelectedTestScenario => testSignalInspector.SelectedScenario;
 
     private string TestSignalScenarioKey => SelectedTestScenario == TestSignalScenario.TimingFaults
         ? "TestSignalFaults" : "TestSignalNormal";
@@ -18,20 +15,8 @@ public sealed partial class MainWindow
         return !IsTestSignalActive ? label : label.Length == 0 ? "TestSignal" : $"TestSignal_{label}";
     }
 
-    private void ApplyTestSignalLanguage()
-    {
-        TestSignalHeading.Text = L("TestSignalScenario");
-        AutomationProperties.SetName(TestSignalScenarioPicker, TestSignalHeading.Text);
-        TestSignalNormalItem.Content = L("TestSignalNormal");
-        TestSignalFaultsItem.Content = L("TestSignalFaults");
-        TestSignalHint.Text = L("TestSignalHint");
-    }
-
-    private void TestSignalScenario_SelectionChanged(object sender, SelectionChangedEventArgs e)
-    {
-        if (settingsReady && IsTestSignalActive)
-            UpdateConfigurationStatus();
-    }
+    private void ApplyTestSignalLanguage() =>
+        testSignalInspector.ApplyLanguage(L);
 
     private Func<CaptureStats> CreatePreviewRunner(PreviewFeed feed, PreviewRecorder recorder,
         LocalAudioMonitor audioMonitor, Action<DeckLinkProgress> progress, CancellationToken cancellation)

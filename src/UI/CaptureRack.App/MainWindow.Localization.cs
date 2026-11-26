@@ -55,7 +55,7 @@ public sealed partial class MainWindow
         ToolTipService.SetToolTip(RecordingElapsed, L("ElapsedHelp"));
 
         PreviewPlaceholderText.Text = L(LiveMediaSource?.PreviewHint ?? "WaitingPreview");
-        PreviewPlaceholderHint.Text = L("PreviewBeforeRecording");
+        PreviewPlaceholderHint.Text = LiveMediaSource is null ? L("PreviewBeforeRecording") : "";
         PlaceholderStartLabel.Text = L("StartPreview");
         VectorAxes.Text = L("VectorAxes");
         FullscreenExitLabel.Text = L("ExitPreviewFullScreen");
@@ -112,8 +112,7 @@ public sealed partial class MainWindow
         SignalStatus.Message = statusMessage?.Invoke() ?? L("SelectInputs");
         StatusFileName.Text = Path.GetFileName(statusFilePath) ?? "";
         StatusFileName.Visibility = statusFilePath is not null &&
-            (recordingSession || qcStop is not null || statusTitle.StartsWith("Qc", StringComparison.Ordinal) ||
-             statusTitle.StartsWith("Ts", StringComparison.Ordinal))
+            QcPresentationHelper.ShouldShowStatusFileName(IsCaptureRecording, qcStop is not null, statusTitle)
             ? Visibility.Visible : Visibility.Collapsed;
         ToolTipService.SetToolTip(StatusFileName, statusFilePath);
         RenderCompactStatus();
@@ -123,6 +122,7 @@ public sealed partial class MainWindow
     {
         var previewActive = IsCaptureInputActive;
         var recordingActive = IsCaptureRecording && qcStop is null;
+        var finalizing = (recordingTransition && qcStop is null) || LiveMediaSource?.IsFinalizing == true;
 
         PreviewActionIcon.Glyph = previewActive ? "\uE71A" : "\uE768";
         var captureOnly = LiveMediaSource is { HasPreview: false };
@@ -132,10 +132,24 @@ public sealed partial class MainWindow
         PlaceholderStartLabel.Text = PreviewActionLabel.Text;
 
         RecordActionLabel.Text = L(recordingActive ? "StopRecording" : "StartRecording");
-        RecordActionDot.Visibility = recordingActive ? Visibility.Collapsed : Visibility.Visible;
-        RecordActionStopIcon.Visibility = recordingActive ? Visibility.Visible : Visibility.Collapsed;
+        RecordActionDot.Visibility = !recordingActive && !finalizing ? Visibility.Visible : Visibility.Collapsed;
+        RecordActionStopIcon.Visibility = recordingActive && !finalizing ? Visibility.Visible : Visibility.Collapsed;
+        RecordActionSpinner.Visibility = finalizing ? Visibility.Visible : Visibility.Collapsed;
+        RecordActionSpinner.IsActive = finalizing;
+        RecordActionSpinner.Foreground = recordingActive
+            ? new SolidColorBrush(Microsoft.UI.Colors.White)
+            : ThemeBrush("StudioRecBrush");
         RecordButton.Style = (Style)Application.Current.Resources[recordingActive
             ? "StudioRecordActiveButtonStyle" : "StudioRecordIdleButtonStyle"];
+
+        FooterFinalizingPill.Visibility = finalizing && qcStop is null ? Visibility.Visible : Visibility.Collapsed;
+        FooterFinalizingSpinner.IsActive = FooterFinalizingPill.Visibility == Visibility.Visible;
+        if (FooterFinalizingPill.Visibility == Visibility.Visible)
+        {
+            FooterFinalizingText.Text = LiveMediaSource is { IsFinalizing: true } media && !string.IsNullOrWhiteSpace(media.RecordingDetail)
+                ? media.RecordingDetail!
+                : L(statusTitle is "StartingRecording" or "FinalizingMov" or "StopRecording" ? statusTitle : "QcFinishing");
+        }
 
         FullscreenRecordLabel.Text = RecordActionLabel.Text;
         FullscreenRecordIcon.Glyph = recordingActive ? "\uE71A" : "\uE7C8";

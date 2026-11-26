@@ -4,6 +4,7 @@ using CaptureRack.DeckLink;
 using CaptureRack.DirectShow.Windows.FireWire.MsTape;
 using CaptureRack.QualityControl;
 using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Controls;
 
 namespace CaptureRack.App.Views;
@@ -21,8 +22,12 @@ public sealed partial class FireWireCaptureView : UserControl, ILiveMediaSource
     private Task? previewTask;
     private Task? recordingTask;
     private FireWireClipWriter? recording;
+    private FireWireSettings savedSelection = new();
+    private bool deviceSelectionIsFallback;
+    private InfoBarSeverity? activeNoticeSeverity;
     private bool discovering;
     private bool discovered;
+    private bool updatingPicker;
     private string? ffmpeg;
     private bool decodeFailed;
     private bool hasAudio;
@@ -39,6 +44,7 @@ public sealed partial class FireWireCaptureView : UserControl, ILiveMediaSource
     public bool SupportsRecording => CanStart;
     public bool CanRecord => IsCapturing && !IsStopping && session?.CanRecord == true;
     public bool HasInput => session?.HasRecentInput == true;
+    public bool HasOpenDropdown => DevicePicker.IsDropDownOpen;
     internal PreviewFeed? ActivePreview => Volatile.Read(ref activePreview);
     public long ReceivedUnits => session?.ReceivedUnits ?? 0;
     private FireWireDevice? SelectedDevice => DevicePicker.SelectedItem as FireWireDevice;
@@ -47,6 +53,7 @@ public sealed partial class FireWireCaptureView : UserControl, ILiveMediaSource
     internal string FormatSummary => ExpectedFormat.IsDv
         ? (session?.DvInfo?.LastFrame?.Encoding ?? session?.Format?.Encoding ?? SelectedDevice?.SimulatedFormat?.Encoding)?.DisplayName() ?? "DV" :
         (session?.Format ?? SelectedDevice?.SimulatedFormat)?.Transport is { } layout ? $"MPEG-TS ({layout.Stride} B)" : "MPEG-TS";
+    public string? ConfigurationSummaryText => SelectedDevice is { } device ? $"{device.Name} · {FormatSummary}" : FormatSummary;
     public long DecodedFrames => decoder?.DecodedFrames ?? 0;
     public bool HasPreview => ffmpeg is not null && CanStart && !decodeFailed;
     public CaptureAudioInfo? AudioInfo => Volatile.Read(ref switchingProgram) ? null :
@@ -59,21 +66,59 @@ public sealed partial class FireWireCaptureView : UserControl, ILiveMediaSource
         decodeFailed ? "FwCaptureStillAvailable" : HasInput ? "FwReacquiringVideo" :
         SelectedDevice?.SimulatedFormat is not null ? "FwGeneratingSimulation" : "FwWaitForData";
     public string? SavedPath { get; private set; }
+    public string? RecordingReportPath => null;
     public string? RecordingDetail => IsFinalizing ? L("QcFinishing") : recording is { } writer
         ? string.Format(L("FwRecordingProgress"), writer.WrittenBytes / 1048576d)
         : recordingDetail;
     private string? recordingDetail;
     public event EventHandler? StateChanged;
+    public event EventHandler? SettingsPersistenceRequested;
 
     public FireWireCaptureView()
     {
         InitializeComponent();
+        ActualThemeChanged += (_, _) => RefreshTheme();
         Loaded += async (_, _) =>
         {
+            RefreshTheme();
             if (!discovered)
                 await RefreshAsync();
         };
     }
+
+    internal void RestoreSettings(FireWireSettings settings) =>
+        savedSelection = settings ?? new();
+
+    internal FireWireSettings ExportSettings() =>
+        FireWireSettingsResolver.Export(savedSelection, SelectedDevice?.Id, deviceSelectionIsFallback);
+
+    internal void RefreshTheme()
+    {
+        if (NoticeBanner.Visibility == Visibility.Visible && activeNoticeSeverity is { } severity)
+            ApplyNoticeTheme(severity);
+    }
+
+    public string? BuildFilenamePreview(string label) =>
+        RecordingFileNaming.BuildFireWireName(label, localTime: null, ExpectedFormat);
+
+    public IReadOnlyList<TelemetryMetric> BuildLiveTelemetry(long previewSkippedFrames,
+        Func<string, string> localize, IFormatProvider formatProvider)
+    {
+        if (ExpectedFormat.IsDv || session?.DvInfo is not null)
+        {
+            var dv = session?.DvInfo;
+            return FireWireWorkspaceModule.BuildDvTelemetry(
+                dv?.Frames ?? ReceivedUnits, DecodedFrames, dv?.InvalidFrames ?? 0,
+                dv?.Discontinuities ?? 0, previewSkippedFrames, localize, formatProvider);
+        }
+
+        var stream = session?.StreamInfo;
+        return FireWireWorkspaceModule.BuildTsTelemetry(
+            stream?.Packets ?? ReceivedUnits, DecodedFrames, stream?.ContinuityErrors ?? 0,
+            stream?.SyncErrors ?? 0, stream?.BitsPerSecond ?? 0, previewSkippedFrames, localize, formatProvider);
+    }
+
+    public void NotifyOutputFolderChanged() { }
 
     internal void Bind(Func<string, string> localizer, Func<string> directory, Func<string> label)
     {
@@ -82,8 +127,11 @@ public sealed partial class FireWireCaptureView : UserControl, ILiveMediaSource
         recordingLabel = label;
         if (!IsCapturing)
             ffmpeg = QcReports.FindTools().FfmpegPath;
-        DevicePicker.Header = L("Device");
-        RefreshButton.Content = L("Refresh");
+        DeviceSectionHeading.Text = L("FwDeviceSectionHeading");
+        DeviceLabel.Text = L("Device");
+        AutomationProperties.SetName(DevicePicker, L("Device"));
+        RefreshLabel.Text = L("Refresh");
+        AutomationProperties.SetName(RefreshButton, L("Refresh"));
         BindStreamInfo();
     }
 
@@ -116,12 +164,35 @@ public sealed partial class FireWireCaptureView : UserControl, ILiveMediaSource
         StateChanged?.Invoke(this, EventArgs.Empty);
     }
 
+    private void HideNotice()
+    {
+        activeNoticeSeverity = null;
+        NoticeBanner.Visibility = Visibility.Collapsed;
+    }
+
     private void ShowNotice(string key, InfoBarSeverity severity, string detail = "")
     {
-        Notice.Title = L(key);
-        Notice.Message = detail;
-        Notice.Severity = severity;
-        Notice.IsOpen = true;
+        activeNoticeSeverity = severity;
+        NoticeTitle.Text = L(key);
+        NoticeMessage.Text = detail;
+        NoticeMessage.Visibility = string.IsNullOrWhiteSpace(detail) ? Visibility.Collapsed : Visibility.Visible;
+        ApplyNoticeTheme(severity);
+        NoticeBanner.Visibility = Visibility.Visible;
+    }
+
+    private void ApplyNoticeTheme(InfoBarSeverity severity)
+    {
+        var (bgKey, borderKey, glyph) = severity switch
+        {
+            InfoBarSeverity.Error => ("StudioDangerSoftBrush", "StudioDangerBrush", "\uE783"),
+            InfoBarSeverity.Warning => ("StudioCautionSoftBrush", "StudioCautionBrush", "\uE7BA"),
+            InfoBarSeverity.Success => ("StudioSignalLockSoftBrush", "StudioSignalLockBrush", "\uE73E"),
+            _ => ("StudioInfoSoftBrush", "StudioInfoBrush", "\uE946")
+        };
+        NoticeBanner.Background = StudioBrushes.Resolve(this, bgKey);
+        NoticeBanner.BorderBrush = StudioBrushes.Resolve(this, borderKey);
+        NoticeIcon.Foreground = StudioBrushes.Resolve(this, borderKey);
+        NoticeIcon.Glyph = glyph;
     }
 
     private async Task RefreshAsync()
@@ -137,8 +208,9 @@ public sealed partial class FireWireCaptureView : UserControl, ILiveMediaSource
         }
 
         discovering = true;
-        var previous = (DevicePicker.SelectedItem as FireWireDevice)?.Id;
-        Notice.IsOpen = false;
+        var previous = FireWireSettingsResolver.ResolveRefreshTargetDeviceId(
+            savedSelection, (DevicePicker.SelectedItem as FireWireDevice)?.Id, deviceSelectionIsFallback);
+        HideNotice();
         UpdateControls();
         try
         {
@@ -164,13 +236,25 @@ public sealed partial class FireWireCaptureView : UserControl, ILiveMediaSource
         var display = devices.Select(device => device.SimulatedFormat is not null
             ? device with { Name = string.Format(L("FwSimulatedName"), device.Model) }
             : string.IsNullOrWhiteSpace(device.Model) ? device : device with { Name = $"{device.Vendor} {device.Model}".Trim() }).ToArray();
+        var matched = string.IsNullOrWhiteSpace(previous)
+            ? null
+            : display.FirstOrDefault(device => string.Equals(device.Id, previous, StringComparison.OrdinalIgnoreCase));
+        deviceSelectionIsFallback = matched is null && !string.IsNullOrWhiteSpace(previous);
+        updatingPicker = true;
         DevicePicker.ItemsSource = display;
-        DevicePicker.SelectedItem = display.FirstOrDefault(device => device.Id == previous) ?? display.FirstOrDefault();
+        DevicePicker.SelectedItem = matched ?? display.FirstOrDefault();
+        updatingPicker = false;
+        RefreshStreamInfo(force: true);
     }
 
     private async void RefreshClicked(object sender, RoutedEventArgs e) => await RefreshAsync();
     private void DeviceChanged(object sender, SelectionChangedEventArgs e)
     {
+        if (updatingPicker)
+            return;
+        deviceSelectionIsFallback = false;
+        savedSelection = ExportSettings();
+        SettingsPersistenceRequested?.Invoke(this, EventArgs.Empty);
         RefreshStreamInfo(force: true);
         UpdateControls();
     }
@@ -196,7 +280,7 @@ public sealed partial class FireWireCaptureView : UserControl, ILiveMediaSource
         switchingProgram = false;
         hasFieldOrder = false;
         audio = new StereoMonitor(CaptureAudioFormat.Pcm16, FireWirePreviewDecoder.AudioRate);
-        Notice.IsOpen = false;
+        HideNotice();
         Volatile.Write(ref activePreview, feed);
         var previewDecoder = ffmpeg is null ? null : new FireWirePreviewRecovery(device.IsDv);
         decoder = previewDecoder;
@@ -350,7 +434,7 @@ public sealed partial class FireWireCaptureView : UserControl, ILiveMediaSource
         if (session is not { } live || !CanRecord)
             return;
 
-        Notice.IsOpen = false;
+        HideNotice();
         try
         {
             var folder = outputDirectory();

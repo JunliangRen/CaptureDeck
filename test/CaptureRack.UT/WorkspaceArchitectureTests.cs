@@ -62,6 +62,218 @@ public sealed class WorkspaceArchitectureTests
     }
 
     [Fact]
+    public void RecordingFileNamingBuildsDirectShowPreviewWithFormatAndContainers()
+    {
+        Assert.Equal("CaptureRack_YYYYMMDD_HHmmss_fff_DirectShow_YUY2_16bit-PCM.mov (.mov / .mp4 / .mkv)",
+            RecordingFileNaming.BuildDirectShowPreviewName("", "YUY2", 16, [".mov", ".mp4", ".mkv"]));
+        Assert.Equal("Tape01_CaptureRack_YYYYMMDD_HHmmss_fff_DirectShow_MPEG2.ts",
+            RecordingFileNaming.BuildDirectShowPreviewName("Tape01", "MPEG2", null, [".ts"]));
+        Assert.Equal("CaptureRack_YYYYMMDD_HHmmss_fff_DirectShow_Video.mkv",
+            RecordingFileNaming.BuildDirectShowPreviewName(null, null, 0, null));
+    }
+
+    [Fact]
+    public void DirectShowWorkspaceModuleBuildsSeverityCodedLiveTelemetry()
+    {
+        var module = new DirectShowWorkspaceModule();
+        Assert.Equal(DirectShowWorkspaceModule.BackendId, module.Descriptor.BackendId);
+        Assert.True(module.Descriptor.IsImplementedInUi);
+
+        var clean = DirectShowWorkspaceModule.BuildLiveTelemetry(120, 120, 0, -2, k => k, CultureInfo.InvariantCulture);
+        Assert.Equal(3, clean.Count);
+        Assert.All(clean, m => Assert.Equal(TelemetrySeverity.Normal, m.Severity));
+        Assert.Equal("0", clean.Single(m => m.Id == "ds-skipped").Value);
+
+        var faulted = DirectShowWorkspaceModule.BuildLiveTelemetry(250, 240, 10, 4, k => k, CultureInfo.InvariantCulture);
+        Assert.Equal(4, faulted.Count);
+        Assert.Equal(TelemetrySeverity.Danger, faulted.Single(m => m.Id == "ds-unreadable").Severity);
+        Assert.Equal("10", faulted.Single(m => m.Id == "ds-unreadable").Value);
+        Assert.Equal(TelemetrySeverity.Caution, faulted.Single(m => m.Id == "ds-skipped").Severity);
+    }
+
+    [Fact]
+    public void FireWireWorkspaceModuleBuildsTsAndDvLiveTelemetry()
+    {
+        var module = new FireWireWorkspaceModule();
+        Assert.Equal(FireWireWorkspaceModule.BackendId, module.Descriptor.BackendId);
+        Assert.True(module.Descriptor.IsImplementedInUi);
+
+        var tsClean = FireWireWorkspaceModule.BuildTsTelemetry(5000, 150, 0, 0, 25_120_000, 0, k => k, CultureInfo.InvariantCulture);
+        Assert.Equal("5,000", tsClean.Single(m => m.Id == "ts-packets").Value);
+        Assert.Equal("25.12 Mb/s", tsClean.Single(m => m.Id == "ts-bitrate").Value);
+        Assert.Equal(TelemetrySeverity.Normal, tsClean.Single(m => m.Id == "ts-cc").Severity);
+        Assert.DoesNotContain(tsClean, m => m.Id == "ts-sync");
+
+        var tsFault = FireWireWorkspaceModule.BuildTsTelemetry(6000, 180, 3, 2, 512_000, 5, k => k, CultureInfo.InvariantCulture);
+        Assert.Equal("512 kb/s", tsFault.Single(m => m.Id == "ts-bitrate").Value);
+        Assert.Equal(TelemetrySeverity.Danger, tsFault.Single(m => m.Id == "ts-sync").Severity);
+        Assert.Equal(TelemetrySeverity.Danger, tsFault.Single(m => m.Id == "ts-cc").Severity);
+        Assert.Equal(TelemetrySeverity.Caution, tsFault.Single(m => m.Id == "ts-skipped").Severity);
+
+        var dvClean = FireWireWorkspaceModule.BuildDvTelemetry(300, 300, 0, 0, 0, k => k, CultureInfo.InvariantCulture);
+        Assert.Equal("300", dvClean.Single(m => m.Id == "dv-frames").Value);
+        Assert.Equal(TelemetrySeverity.Normal, dvClean.Single(m => m.Id == "dv-invalid").Severity);
+        Assert.Contains(dvClean, m => m.Id == "dv-skipped");
+
+        var dvFault = FireWireWorkspaceModule.BuildDvTelemetry(310, 300, 4, 2, 7, k => k, CultureInfo.InvariantCulture);
+        Assert.Equal(TelemetrySeverity.Danger, dvFault.Single(m => m.Id == "dv-invalid").Severity);
+        Assert.Equal(TelemetrySeverity.Caution, dvFault.Single(m => m.Id == "dv-disc").Severity);
+        Assert.Equal(TelemetrySeverity.Caution, dvFault.Single(m => m.Id == "dv-skipped").Severity);
+        Assert.Equal("7", dvFault.Single(m => m.Id == "dv-skipped").Value);
+    }
+
+    [Fact]
+    public void WrapLayoutCalculatorHandlesInfiniteNaNZeroWidthAndMultilineWrappingConsistently()
+    {
+        Assert.Equal(double.PositiveInfinity, WrapLayoutCalculator.NormalizeChildAvailableWidth(double.PositiveInfinity));
+        Assert.Equal(double.PositiveInfinity, WrapLayoutCalculator.NormalizeChildAvailableWidth(double.NaN));
+        Assert.Equal(0d, WrapLayoutCalculator.NormalizeChildAvailableWidth(-12));
+        Assert.Equal(320d, WrapLayoutCalculator.NormalizeChildAvailableWidth(320));
+
+        // Zero-width visible item followed by real items must match between Measure and Arrange.
+        (double Width, double Height)[] zeroLead = [(0, 20), (80, 30), (80, 30)];
+        var (w1, h1) = WrapLayoutCalculator.Measure(zeroLead, availableWidth: 160, horizontalSpacing: 8, verticalSpacing: 6);
+        var rects1 = WrapLayoutCalculator.Arrange(zeroLead, finalWidth: 160, horizontalSpacing: 8, verticalSpacing: 6);
+        Assert.Equal(0, rects1[0].X);
+        Assert.Equal(8, rects1[1].X);
+        Assert.Equal(0, rects1[2].X); // 0 + 8 + 80 + 8 + 80 = 176 > 160 -> wraps to line 2!
+        Assert.Equal(36, rects1[2].Y);
+        Assert.Equal(88, w1);
+        Assert.Equal(66, h1);
+
+        // Infinite / NaN width places everything on one line.
+        var (wInf, hInf) = WrapLayoutCalculator.Measure([(60, 24), (70, 30)], double.PositiveInfinity, 8, 6);
+        Assert.Equal(138, wInf);
+        Assert.Equal(30, hInf);
+        var (wNan, hNan) = WrapLayoutCalculator.Measure([(60, 24), (70, 30)], double.NaN, 8, 6);
+        Assert.Equal(138, wNan);
+        Assert.Equal(30, hNan);
+    }
+
+    [Fact]
+    public void DirectShowAndFireWireSettingsResolversPreserveSavedSelectionAcrossProbesAndFallbacks()
+    {
+        var savedDs = new DirectShowSettings
+        {
+            DeviceId = "dev-a",
+            PinId = "0",
+            IsInfrared = false,
+            Width = 1920,
+            Height = 1080,
+            FramesPerSecond = 30,
+            Encoding = "YUY2",
+            VideoFormatIndex = 5,
+            AudioFormatIndex = 2
+        };
+
+        // 1. Mid-probe on same device (capabilities not loaded yet): preserves AudioFormatIndex and all fields!
+        var midProbe = DirectShowSettingsResolver.Export(savedDs, "DEV-A", isFallbackSelection: false,
+            loadedCapabilitiesDeviceId: null, video: null, audioFormatIndex: null);
+        Assert.Equal(savedDs, midProbe);
+
+        // 2. Saved device unplugged -> automatic fallback to Device B: does NOT overwrite saved Device A!
+        var fallback = DirectShowSettingsResolver.Export(savedDs, "dev-b", isFallbackSelection: true,
+            loadedCapabilitiesDeviceId: "dev-b",
+            video: new DirectShowFormatSnapshot("1", false, 640, 480, 30, "MJPG", 1), audioFormatIndex: null);
+        Assert.Equal(savedDs, fallback);
+
+        // 3. User switches to Device B while probe is in-flight or failed: does NOT copy Device A's format into Device B!
+        var switchedInFlight = DirectShowSettingsResolver.Export(savedDs, "dev-b", isFallbackSelection: false,
+            loadedCapabilitiesDeviceId: null, video: null, audioFormatIndex: null);
+        Assert.Equal(new DirectShowSettings { DeviceId = "dev-b" }, switchedInFlight);
+
+        // 4. User switches to Device B and probe succeeds: exports full Device B selection.
+        var loadedB = DirectShowSettingsResolver.Export(savedDs, "dev-b", isFallbackSelection: false,
+            loadedCapabilitiesDeviceId: "dev-b",
+            video: new DirectShowFormatSnapshot("1", false, 3840, 2160, 30, "MJPG", 12), audioFormatIndex: 3);
+        Assert.Equal("dev-b", loadedB.DeviceId);
+        Assert.Equal(3840, loadedB.Width);
+        Assert.Equal(12, loadedB.VideoFormatIndex);
+        Assert.Equal(3, loadedB.AudioFormatIndex);
+
+        // FireWire: fallback to simulated device when saved physical deck is unplugged preserves saved physical ID.
+        var savedFw = new FireWireSettings { DeviceId = @"\\?\avc#victor_hm-dhx2" };
+        Assert.Equal(savedFw, FireWireSettingsResolver.Export(savedFw, "simulated:dv25-ntsc", isFallbackSelection: true));
+        Assert.Equal(savedFw, FireWireSettingsResolver.Export(savedFw, null, isFallbackSelection: false));
+        Assert.Equal(new FireWireSettings { DeviceId = "simulated:dv25-ntsc" },
+            FireWireSettingsResolver.Export(savedFw, "simulated:dv25-ntsc", isFallbackSelection: false));
+
+        // Refresh while on a fallback device must target the saved device ID so re-plugging restores it.
+        Assert.Equal("dev-a", DirectShowSettingsResolver.ResolveRefreshTargetDeviceId(savedDs, "dev-b", isFallbackSelection: true));
+        Assert.Equal("dev-b", DirectShowSettingsResolver.ResolveRefreshTargetDeviceId(savedDs, "dev-b", isFallbackSelection: false));
+        Assert.Equal(@"\\?\avc#victor_hm-dhx2",
+            FireWireSettingsResolver.ResolveRefreshTargetDeviceId(savedFw, "simulated:dv25-ntsc", isFallbackSelection: true));
+        Assert.Equal("simulated:dv25-ntsc",
+            FireWireSettingsResolver.ResolveRefreshTargetDeviceId(savedFw, "simulated:dv25-ntsc", isFallbackSelection: false));
+
+        // DirectShow format matching prefers metadata+index, then full metadata when driver indices shift.
+        DirectShowFormatSnapshot[] shifted =
+        [
+            new("0", false, 640, 480, 30, "MJPG", Index: 5),   // Old index 5 now belongs to a different resolution!
+            new("0", false, 1920, 1080, 60, "YUY2", Index: 7), // Different fps
+            new("0", false, 1920, 1080, 30, "YUY2", Index: 9)  // Exact metadata match at shifted index 9
+        ];
+        Assert.Equal(9, DirectShowSettingsResolver.FindMatchingVideoFormatIndex(savedDs, shifted));
+
+        // If only VideoFormatIndex was saved (no metadata), falls back to matching by index.
+        Assert.Equal(5, DirectShowSettingsResolver.FindMatchingVideoFormatIndex(new DirectShowSettings { VideoFormatIndex = 5 }, shifted));
+    }
+
+    [Theory]
+    [InlineData(null, TelemetrySeverity.Normal)]
+    [InlineData(0.0, TelemetrySeverity.Normal)]
+    [InlineData(-0.01, TelemetrySeverity.Normal)]
+    [InlineData(0.0001, TelemetrySeverity.Caution)]
+    [InlineData(0.0499, TelemetrySeverity.Caution)]
+    [InlineData(0.05, TelemetrySeverity.Danger)]
+    [InlineData(0.42, TelemetrySeverity.Danger)]
+    public void MonitoringSeverityClassifiesLumaExcursionThresholds(double? fraction, TelemetrySeverity expected) =>
+        Assert.Equal(expected, MonitoringSeverity.ClassifyLumaExcursion(fraction));
+
+    [Theory]
+    [InlineData("clip.mov", "OpenRecordedMov")]
+    [InlineData("clip.mkv", "OpenRecordedMkv")]
+    [InlineData("clip.MKV", "OpenRecordedMkv")]
+    [InlineData("clip.ts", "OpenRecordedTs")]
+    [InlineData("clip.ts192", "OpenRecordedTs")]
+    [InlineData("clip.m2t", "OpenRecordedTs")]
+    [InlineData("clip.dv", "OpenRecordedDv")]
+    [InlineData(null, "OpenRecordedMov")]
+    public void QcPresentationHelperSelectsFormatSpecificMediaLabels(string? path, string expectedKey) =>
+        Assert.Equal(expectedKey, QcPresentationHelper.OpenMediaLabelKey(path));
+
+    [Fact]
+    public void QcPresentationHelperSelectsReportKeysAndStatusFileNameVisibility()
+    {
+        Assert.Equal("SaveDvJson", QcPresentationHelper.SaveReportLabelKey(QcEntryKind.Dv));
+        Assert.Equal("SaveTsJson", QcPresentationHelper.SaveReportLabelKey(QcEntryKind.TransportStream));
+
+        Assert.True(QcPresentationHelper.ShouldShowStatusFileName(recordingActive: true, qcActive: false, "Idle"));
+        Assert.True(QcPresentationHelper.ShouldShowStatusFileName(recordingActive: false, qcActive: true, "Idle"));
+        Assert.True(QcPresentationHelper.ShouldShowStatusFileName(false, false, "QcPassed"));
+        Assert.True(QcPresentationHelper.ShouldShowStatusFileName(false, false, "TsCheckPassed"));
+        Assert.True(QcPresentationHelper.ShouldShowStatusFileName(false, false, "DvCheckPassed"));
+        Assert.False(QcPresentationHelper.ShouldShowStatusFileName(false, false, "Idle"));
+        Assert.False(QcPresentationHelper.ShouldShowStatusFileName(false, false, "SignalPresent"));
+    }
+
+    [Fact]
+    public void CameraControlEditHelperDetectsPendingChangesAndDefaultResetAvailability()
+    {
+        Assert.False(CameraControlEditHelper.HasPendingChanges(false, 128, false, 128, supportsAuto: true));
+        Assert.True(CameraControlEditHelper.HasPendingChanges(false, 128, false, 140, supportsAuto: true));
+        Assert.True(CameraControlEditHelper.HasPendingChanges(false, 128, true, 128, supportsAuto: true));
+        Assert.False(CameraControlEditHelper.HasPendingChanges(true, 128, true, 200, supportsAuto: true));
+        Assert.False(CameraControlEditHelper.HasPendingChanges(true, 128, false, 128, supportsAuto: false));
+
+        Assert.False(CameraControlEditHelper.CanResetToDefault(null, 100, false, supportsManual: true));
+        Assert.False(CameraControlEditHelper.CanResetToDefault(128, 128, false, supportsManual: true));
+        Assert.True(CameraControlEditHelper.CanResetToDefault(128, 150, false, supportsManual: true));
+        Assert.True(CameraControlEditHelper.CanResetToDefault(128, 128, true, supportsManual: true));
+        Assert.False(CameraControlEditHelper.CanResetToDefault(128, 150, false, supportsManual: false));
+    }
+
+    [Fact]
     public void DeckLinkWorkspaceModuleBuildsSeverityCodedTelemetry()
     {
         var module = new DeckLinkWorkspaceModule();
@@ -142,6 +354,10 @@ public sealed class WorkspaceArchitectureTests
         Assert.Equal(3, history.Entries.Count);
         Assert.Null(history.Find(id2));
         Assert.Equal([id4, id1, id3], history.Entries.Select(e => e.Id).ToArray());
+
+        history.Clear();
+        Assert.Empty(history.Entries);
+        Assert.Null(history.Find(id4));
     }
 
     [Fact]
@@ -461,6 +677,8 @@ public sealed class WorkspaceArchitectureTests
         Assert.Equal("windows.signalcapture", registry.Resolve("windows.signalcapture").Descriptor.BackendId);
         Assert.Equal("windows.audio", registry.Resolve("windows.audio").Descriptor.BackendId);
         Assert.Equal("windows.directshow", registry.Resolve("windows.directshow").Descriptor.BackendId);
+        Assert.IsType<DirectShowWorkspaceModule>(registry.Resolve("windows.directshow"));
+        Assert.IsType<FireWireWorkspaceModule>(registry.Resolve("windows.firewire"));
         Assert.Equal("CaptureRack.Probe.exe directshow list", registry.Resolve("windows.directshow").Descriptor.CliCommandHint);
         Assert.IsType<TestSignalWorkspaceModule>(registry.Resolve(TestSignal.BackendId));
 

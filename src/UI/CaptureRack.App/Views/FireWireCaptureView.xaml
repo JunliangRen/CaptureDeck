@@ -3,31 +3,159 @@
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
     <StackPanel Spacing="8">
-        <Grid ColumnSpacing="10">
-            <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="*" />
-                <ColumnDefinition Width="Auto" />
-            </Grid.ColumnDefinitions>
-            <ComboBox x:Name="DevicePicker" HorizontalAlignment="Stretch"
-                      DisplayMemberPath="Name" SelectionChanged="DeviceChanged" />
-            <Button x:Name="RefreshButton" Grid.Column="1" VerticalAlignment="Bottom" Click="RefreshClicked" />
-        </Grid>
-        <InfoBar x:Name="Notice" />
-        <TextBlock x:Name="InfoHeading" Style="{StaticResource StudioSectionHeadingStyle}" Margin="0,6,0,0" />
-        <TextBlock x:Name="InfoSummary" TextWrapping="Wrap" />
-        <Expander x:Name="DeviceSection" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
-            <TextBlock x:Name="DeviceDetails" TextWrapping="Wrap" IsTextSelectionEnabled="True" />
-        </Expander>
-        <Expander x:Name="ProgramSection" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
-            <TextBlock x:Name="ProgramDetails" TextWrapping="Wrap" IsTextSelectionEnabled="True" />
-        </Expander>
-        <Expander x:Name="StatsSection" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
-            <TextBlock x:Name="StatsDetails" TextWrapping="Wrap" IsTextSelectionEnabled="True" />
-        </Expander>
-        <Expander x:Name="RawSection" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
-            <TextBlock x:Name="RawDetails" TextWrapping="Wrap" IsTextSelectionEnabled="True"
-                       Style="{StaticResource StudioMonoTextStyle}" />
-        </Expander>
-        <Button x:Name="CopyInfoButton" Click="CopyInfoClicked" HorizontalAlignment="Left" />
+        <!-- Card 1: i.LINK / FireWire Device -->
+        <Border Style="{StaticResource StudioInspectorCardStyle}">
+            <StackPanel Spacing="9">
+                <Grid ColumnSpacing="6">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock x:Name="DeviceSectionHeading" Text="i.LINK / FIREWIRE"
+                               Style="{StaticResource StudioSectionHeadingStyle}" VerticalAlignment="Center" />
+                    <Border x:Name="FormatBadge" Grid.Column="1" CornerRadius="2" Padding="6,2"
+                            Background="{ThemeResource StudioPanelSecondaryBrush}"
+                            BorderBrush="{ThemeResource StudioHairlineBrush}" BorderThickness="1"
+                            VerticalAlignment="Center">
+                        <TextBlock x:Name="FormatBadgeText" Style="{StaticResource StudioMonoTextStyle}"
+                                   FontSize="10" Foreground="{ThemeResource StudioAccentBrush}" />
+                    </Border>
+                    <Button x:Name="RefreshButton" Grid.Column="2"
+                            Style="{StaticResource SubtleButtonStyle}" Height="24" Padding="7,0"
+                            CornerRadius="3" Click="RefreshClicked">
+                        <StackPanel Orientation="Horizontal" Spacing="5">
+                            <FontIcon Glyph="&#xE72C;" FontSize="11" />
+                            <TextBlock x:Name="RefreshLabel" FontSize="11" />
+                        </StackPanel>
+                    </Button>
+                </Grid>
+
+                <StackPanel>
+                    <TextBlock x:Name="DeviceLabel" Text="Device" Style="{StaticResource StudioFieldLabelStyle}" />
+                    <ComboBox x:Name="DevicePicker" HorizontalAlignment="Stretch" CornerRadius="3"
+                              DisplayMemberPath="Name" SelectionChanged="DeviceChanged" />
+                </StackPanel>
+
+                <Border x:Name="NoticeBanner" Visibility="Collapsed" CornerRadius="3" Padding="9,7" BorderThickness="1"
+                        Background="{ThemeResource StudioInfoSoftBrush}"
+                        BorderBrush="{ThemeResource StudioInfoBrush}">
+                    <Grid ColumnSpacing="8">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <FontIcon x:Name="NoticeIcon" Glyph="&#xE946;" FontSize="12" VerticalAlignment="Top" Margin="0,2,0,0"
+                                  Foreground="{ThemeResource StudioInfoBrush}" />
+                        <StackPanel Grid.Column="1" Spacing="2">
+                            <TextBlock x:Name="NoticeTitle" FontSize="12" FontWeight="SemiBold" TextWrapping="Wrap"
+                                       Foreground="{ThemeResource StudioTextPrimaryBrush}" />
+                            <TextBlock x:Name="NoticeMessage" FontSize="11" TextWrapping="Wrap" Visibility="Collapsed"
+                                       Foreground="{ThemeResource StudioTextSecondaryBrush}" />
+                        </StackPanel>
+                    </Grid>
+                </Border>
+            </StackPanel>
+        </Border>
+
+        <!-- Card 2: Live Stream & Transport Information -->
+        <Border Style="{StaticResource StudioInspectorCardStyle}">
+            <StackPanel Spacing="8">
+                <Grid>
+                    <TextBlock x:Name="InfoHeading" Style="{StaticResource StudioSectionHeadingStyle}"
+                               VerticalAlignment="Center" />
+                    <Button x:Name="CopyInfoButton" HorizontalAlignment="Right"
+                            Style="{StaticResource SubtleButtonStyle}" Height="24" Padding="7,0"
+                            CornerRadius="3" Click="CopyInfoClicked">
+                        <StackPanel Orientation="Horizontal" Spacing="5">
+                            <FontIcon x:Name="CopyInfoIcon" Glyph="&#xE8C8;" FontSize="11" />
+                            <TextBlock x:Name="CopyInfoLabel" FontSize="11" />
+                        </StackPanel>
+                    </Button>
+                </Grid>
+
+                <Border CornerRadius="3" Padding="9,7"
+                        Background="{ThemeResource StudioPanelSecondaryBrush}"
+                        BorderBrush="{ThemeResource StudioHairlineBrush}" BorderThickness="1">
+                    <TextBlock x:Name="InfoSummary" FontSize="12" TextWrapping="Wrap"
+                               Foreground="{ThemeResource StudioTextPrimaryBrush}" />
+                </Border>
+
+                <!-- Collapsible Subsections -->
+                <StackPanel Spacing="4">
+                    <Button x:Name="DeviceSectionToggle" Style="{StaticResource SubtleButtonStyle}"
+                            HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch"
+                            Padding="4,4" CornerRadius="3" Tag="Device" Click="InfoSectionToggle_Click">
+                        <Grid>
+                            <TextBlock x:Name="DeviceSectionTitle" FontSize="12" FontWeight="SemiBold"
+                                       Foreground="{ThemeResource StudioTextPrimaryBrush}" VerticalAlignment="Center" />
+                            <FontIcon x:Name="DeviceSectionChevron" HorizontalAlignment="Right" Glyph="&#xE70D;" FontSize="10"
+                                      Foreground="{ThemeResource StudioTextSecondaryBrush}" VerticalAlignment="Center" />
+                        </Grid>
+                    </Button>
+                    <Border x:Name="DeviceSectionBody" Visibility="Collapsed" CornerRadius="3" Padding="9,7"
+                            Background="{ThemeResource StudioPanelSecondaryBrush}"
+                            BorderBrush="{ThemeResource StudioSubtleBorderBrush}" BorderThickness="1">
+                        <TextBlock x:Name="DeviceDetails" Style="{StaticResource StudioMonoTextStyle}"
+                                   FontSize="11" TextWrapping="Wrap" IsTextSelectionEnabled="True"
+                                   Foreground="{ThemeResource StudioTextSecondaryBrush}" />
+                    </Border>
+
+                    <Button x:Name="ProgramSectionToggle" Style="{StaticResource SubtleButtonStyle}"
+                            HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch"
+                            Padding="4,4" CornerRadius="3" Tag="Program" Click="InfoSectionToggle_Click">
+                        <Grid>
+                            <TextBlock x:Name="ProgramSectionTitle" FontSize="12" FontWeight="SemiBold"
+                                       Foreground="{ThemeResource StudioTextPrimaryBrush}" VerticalAlignment="Center" />
+                            <FontIcon x:Name="ProgramSectionChevron" HorizontalAlignment="Right" Glyph="&#xE70D;" FontSize="10"
+                                      Foreground="{ThemeResource StudioTextSecondaryBrush}" VerticalAlignment="Center" />
+                        </Grid>
+                    </Button>
+                    <Border x:Name="ProgramSectionBody" Visibility="Collapsed" CornerRadius="3" Padding="9,7"
+                            Background="{ThemeResource StudioPanelSecondaryBrush}"
+                            BorderBrush="{ThemeResource StudioSubtleBorderBrush}" BorderThickness="1">
+                        <TextBlock x:Name="ProgramDetails" Style="{StaticResource StudioMonoTextStyle}"
+                                   FontSize="11" TextWrapping="Wrap" IsTextSelectionEnabled="True"
+                                   Foreground="{ThemeResource StudioTextSecondaryBrush}" />
+                    </Border>
+
+                    <Button x:Name="StatsSectionToggle" Style="{StaticResource SubtleButtonStyle}"
+                            HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch"
+                            Padding="4,4" CornerRadius="3" Tag="Stats" Click="InfoSectionToggle_Click">
+                        <Grid>
+                            <TextBlock x:Name="StatsSectionTitle" FontSize="12" FontWeight="SemiBold"
+                                       Foreground="{ThemeResource StudioTextPrimaryBrush}" VerticalAlignment="Center" />
+                            <FontIcon x:Name="StatsSectionChevron" HorizontalAlignment="Right" Glyph="&#xE70D;" FontSize="10"
+                                      Foreground="{ThemeResource StudioTextSecondaryBrush}" VerticalAlignment="Center" />
+                        </Grid>
+                    </Button>
+                    <Border x:Name="StatsSectionBody" Visibility="Collapsed" CornerRadius="3" Padding="9,7"
+                            Background="{ThemeResource StudioPanelSecondaryBrush}"
+                            BorderBrush="{ThemeResource StudioSubtleBorderBrush}" BorderThickness="1">
+                        <TextBlock x:Name="StatsDetails" Style="{StaticResource StudioMonoTextStyle}"
+                                   FontSize="11" TextWrapping="Wrap" IsTextSelectionEnabled="True"
+                                   Foreground="{ThemeResource StudioTextSecondaryBrush}" />
+                    </Border>
+
+                    <Button x:Name="RawSectionToggle" Style="{StaticResource SubtleButtonStyle}"
+                            HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch"
+                            Padding="4,4" CornerRadius="3" Tag="Raw" Click="InfoSectionToggle_Click">
+                        <Grid>
+                            <TextBlock x:Name="RawSectionTitle" FontSize="12" FontWeight="SemiBold"
+                                       Foreground="{ThemeResource StudioTextPrimaryBrush}" VerticalAlignment="Center" />
+                            <FontIcon x:Name="RawSectionChevron" HorizontalAlignment="Right" Glyph="&#xE70D;" FontSize="10"
+                                      Foreground="{ThemeResource StudioTextSecondaryBrush}" VerticalAlignment="Center" />
+                        </Grid>
+                    </Button>
+                    <Border x:Name="RawSectionBody" Visibility="Collapsed" CornerRadius="3" Padding="9,7"
+                            Background="{ThemeResource StudioPanelSecondaryBrush}"
+                            BorderBrush="{ThemeResource StudioSubtleBorderBrush}" BorderThickness="1">
+                        <TextBlock x:Name="RawDetails" Style="{StaticResource StudioMonoTextStyle}"
+                                   FontSize="11" TextWrapping="Wrap" IsTextSelectionEnabled="True"
+                                   Foreground="{ThemeResource StudioTextSecondaryBrush}" />
+                    </Border>
+                </StackPanel>
+            </StackPanel>
+        </Border>
     </StackPanel>
 </UserControl>

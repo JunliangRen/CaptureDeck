@@ -1,5 +1,6 @@
 using CaptureRack.DirectShow.Windows.Capture;
 using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Controls;
 
 namespace CaptureRack.App.Views;
@@ -11,14 +12,34 @@ public sealed partial class DirectShowCapabilitiesView : UserControl, ILiveMedia
     private DirectShowCaptureResult? negotiated;
     private DirectShowCaptureResult? sampled;
     private CancellationTokenSource? operation;
+    private DirectShowSettings savedSelection = new();
+    private bool deviceSelectionIsFallback;
+    private InfoBarSeverity? activeNoticeSeverity;
     private bool populated;
     private bool updatingPickers;
+    private bool cameraControlsExpanded;
+    private bool detailsExpanded;
+
+    public bool HasOpenDropdown =>
+        DevicePicker.IsDropDownOpen ||
+        ResolutionPicker.IsDropDownOpen ||
+        FrameRatePicker.IsDropDownOpen ||
+        ColorSpacePicker.IsDropDownOpen ||
+        CameraControlPicker.IsDropDownOpen ||
+        CameraControlChoices.IsDropDownOpen ||
+        VideoStreamPicker.IsDropDownOpen ||
+        VideoFormatPicker.IsDropDownOpen ||
+        AudioPicker.IsDropDownOpen;
+
+    public event EventHandler? SettingsPersistenceRequested;
 
     public DirectShowCapabilitiesView()
     {
         InitializeComponent();
+        ActualThemeChanged += (_, _) => RefreshTheme();
         Loaded += (_, _) =>
         {
+            RefreshTheme();
             if (!populated)
                 _ = RefreshAsync();
         };
@@ -29,29 +50,79 @@ public sealed partial class DirectShowCapabilitiesView : UserControl, ILiveMedia
         };
     }
 
+    internal void RestoreSettings(DirectShowSettings settings) =>
+        savedSelection = settings ?? new();
+
+    internal DirectShowSettings ExportSettings()
+    {
+        var device = DevicePicker.SelectedItem as DirectShowDevice;
+        var video = VideoFormat;
+        var snapshot = video is null ? null : new DirectShowFormatSnapshot(
+            video.PinId,
+            video.IsInfrared,
+            video.Width,
+            video.Height,
+            FrameRate(video),
+            Encoding(video),
+            video.Index);
+        return DirectShowSettingsResolver.Export(
+            savedSelection,
+            device?.Id,
+            deviceSelectionIsFallback,
+            capabilities?.Device.Id,
+            snapshot,
+            AudioFormat?.Index);
+    }
+
     internal void Bind(Func<string, string> translate)
     {
         localize = translate;
-        DevicePicker.Header = L("Device");
+        DeviceSectionHeading.Text = L("DsDeviceSectionHeading");
+        DeviceLabel.Text = L("Device");
+        AutomationProperties.SetName(DevicePicker, L("Device"));
         DevicePicker.PlaceholderText = L("DsSelectDevice");
-        ResolutionPicker.Header = L("DsResolution");
-        FrameRatePicker.Header = L("DsFrameRate");
-        ColorSpacePicker.Header = L("DsColorSpace");
-        DetailsSection.Header = L("DsFormatDetails");
-        VideoStreamPicker.Header = L("DsVideoStream");
-        VideoFormatPicker.Header = L("DsVideoFormat");
-        AudioPicker.Header = L("DsAudioFormat");
-        RefreshButton.Content = L("DsRefresh");
+        ResolutionLabel.Text = L("DsResolution");
+        AutomationProperties.SetName(ResolutionPicker, L("DsResolution"));
+        FrameRateLabel.Text = L("DsFrameRate");
+        AutomationProperties.SetName(FrameRatePicker, L("DsFrameRate"));
+        ColorSpaceLabel.Text = L("DsColorSpace");
+        AutomationProperties.SetName(ColorSpacePicker, L("DsColorSpace"));
+        DetailsHeading.Text = L("DsFormatDetails");
+        VideoStreamLabel.Text = L("DsVideoStream");
+        AutomationProperties.SetName(VideoStreamPicker, L("DsVideoStream"));
+        VideoFormatLabel.Text = L("DsVideoFormat");
+        AutomationProperties.SetName(VideoFormatPicker, L("DsVideoFormat"));
+        AudioLabel.Text = L("DsAudioFormat");
+        AutomationProperties.SetName(AudioPicker, L("DsAudioFormat"));
+        RefreshLabel.Text = L("DsRefresh");
+        AutomationProperties.SetName(RefreshButton, L("DsRefresh"));
         NegotiateButton.Content = L("DsNegotiate");
         SampleButton.Content = L("DsSample");
         AdvertisedHeading.Text = L("DsDriverReported");
         NegotiatedHeading.Text = L("DsNegotiated");
         SampleHeading.Text = L("DsSampleResult");
-        CopyDiagnosticsButton.Content = L("DsCopyDiagnostics");
+        CopyDiagnosticsLabel.Text = L("DsCopyDiagnostics");
+        AutomationProperties.SetName(CopyDiagnosticsButton, L("DsCopyDiagnostics"));
         BindCameraControls();
         if (capabilities is not null)
             PopulateFormats();
         RenderEvidence();
+    }
+
+    internal void RefreshTheme()
+    {
+        UpdateCameraControlState();
+        if (NoticeBanner.Visibility == Visibility.Visible && activeNoticeSeverity is { } severity)
+            ApplyNoticeTheme(severity);
+    }
+
+    private void DetailsToggle_Click(object sender, RoutedEventArgs e)
+    {
+        detailsExpanded = !detailsExpanded;
+        DetailsBody.Visibility = detailsExpanded ? Visibility.Visible : Visibility.Collapsed;
+        DetailsChevron.Glyph = detailsExpanded ? "\uE70E" : "\uE70D";
+        if (detailsExpanded)
+            Controls.StudioFeedback.RevealSubtle(DetailsBody, offsetY: 4f, durationMs: 120);
     }
 
     private string L(string key) => localize(key);
@@ -62,16 +133,22 @@ public sealed partial class DirectShowCapabilitiesView : UserControl, ILiveMedia
     {
         await RunAsync(async token =>
         {
-            var previous = (DevicePicker.SelectedItem as DirectShowDevice)?.Id;
-            var video = VideoFormat;
-            var audio = AudioFormat;
+            var wasFallback = deviceSelectionIsFallback;
+            var previous = DirectShowSettingsResolver.ResolveRefreshTargetDeviceId(
+                savedSelection, (DevicePicker.SelectedItem as DirectShowDevice)?.Id, wasFallback);
+            var video = wasFallback ? null : VideoFormat;
+            var audio = wasFallback ? null : AudioFormat;
             var devices = await DirectShowInspectionClient.RunAsync<DirectShowDevice[]>(
                 new(DirectShowInspectionOperation.List), token);
             token.ThrowIfCancellationRequested();
             ResetDeviceEvidence();
+            var matched = string.IsNullOrWhiteSpace(previous)
+                ? null
+                : devices.FirstOrDefault(device => string.Equals(device.Id, previous, StringComparison.OrdinalIgnoreCase));
+            deviceSelectionIsFallback = matched is null && !string.IsNullOrWhiteSpace(previous);
             updatingPickers = true;
             DevicePicker.ItemsSource = devices;
-            DevicePicker.SelectedItem = devices.FirstOrDefault(device => device.Id == previous);
+            DevicePicker.SelectedItem = matched ?? devices.FirstOrDefault();
             updatingPickers = false;
             populated = true;
             if (DevicePicker.SelectedItem is DirectShowDevice selected)
@@ -85,8 +162,11 @@ public sealed partial class DirectShowCapabilitiesView : UserControl, ILiveMedia
     {
         if (updatingPickers || DevicePicker.SelectedItem is not DirectShowDevice selected)
             return;
+        deviceSelectionIsFallback = false;
         ResetDeviceEvidence();
         await RunAsync(token => InspectAsync(selected, token));
+        savedSelection = ExportSettings();
+        SettingsPersistenceRequested?.Invoke(this, EventArgs.Empty);
     }
 
     private async Task InspectAsync(DirectShowDevice device, CancellationToken token,
@@ -116,6 +196,21 @@ public sealed partial class DirectShowCapabilitiesView : UserControl, ILiveMedia
     {
         updatingPickers = true;
         var formats = capabilities!.Formats;
+        var matchesSaved = string.Equals(capabilities.Device.Id, savedSelection.DeviceId, StringComparison.OrdinalIgnoreCase);
+        if (previousVideo is null && matchesSaved)
+        {
+            var videoCandidates = formats.Where(f => f.Kind == "video").ToArray();
+            var snapshots = videoCandidates.Select(f => new DirectShowFormatSnapshot(
+                f.PinId, f.IsInfrared, f.Width, f.Height, FrameRate(f), Encoding(f), f.Index)).ToArray();
+            var matchedIndex = DirectShowSettingsResolver.FindMatchingVideoFormatIndex(savedSelection, snapshots);
+            if (matchedIndex is { } idx)
+                previousVideo = videoCandidates.FirstOrDefault(f => f.Index == idx);
+        }
+        if (previousAudio is null && matchesSaved && savedSelection.AudioFormatIndex is { } savedAudioIdx)
+        {
+            previousAudio = formats.FirstOrDefault(f => f.Kind == "audio" && f.Index == savedAudioIdx);
+        }
+
         var video = formats.Where(format => format.Kind == "video")
             .GroupBy(format => new { format.PinId, format.IsInfrared })
             .Select(group => new FormatGroup<(string PinId, bool IsInfrared)>((group.Key.PinId, group.Key.IsInfrared), group.ToArray(),
@@ -198,10 +293,13 @@ public sealed partial class DirectShowCapabilitiesView : UserControl, ILiveMedia
     {
         if (updatingPickers)
             return;
+        deviceSelectionIsFallback = false;
         updatingPickers = true;
         PopulateVideoFormats(VideoFormat, (ComboBox)sender);
         updatingPickers = false;
         ClearTests();
+        savedSelection = ExportSettings();
+        SettingsPersistenceRequested?.Invoke(this, EventArgs.Empty);
         RenderEvidence();
     }
 
@@ -209,7 +307,10 @@ public sealed partial class DirectShowCapabilitiesView : UserControl, ILiveMedia
     {
         if (updatingPickers)
             return;
+        deviceSelectionIsFallback = false;
         ClearTests();
+        savedSelection = ExportSettings();
+        SettingsPersistenceRequested?.Invoke(this, EventArgs.Empty);
         RenderEvidence();
     }
 
@@ -271,7 +372,7 @@ public sealed partial class DirectShowCapabilitiesView : UserControl, ILiveMedia
         sampled = null;
         negotiationCheck = sampleCheck = null;
         previewDiagnostic = null;
-        Notice.IsOpen = false;
+        HideNotice();
     }
 
     private void RenderEvidence()
@@ -280,10 +381,10 @@ public sealed partial class DirectShowCapabilitiesView : UserControl, ILiveMedia
         var audio = AudioFormat;
         var visible = video is not null;
         FormatPanel.Visibility = visible ? Visibility.Visible : Visibility.Collapsed;
-        DetailsSection.Visibility = DevicePicker.SelectedItem is DirectShowDevice ? Visibility.Visible : Visibility.Collapsed;
-        VideoStreamPicker.Visibility = VideoStreamPicker.Items.Count > 1 ? Visibility.Visible : Visibility.Collapsed;
-        VideoFormatPicker.Visibility = VideoFormatPicker.Items.Count > 1 ? Visibility.Visible : Visibility.Collapsed;
-        AudioPicker.Visibility = capabilities?.Formats.Any(format => format.Kind == "audio") == true
+        DetailsCard.Visibility = DevicePicker.SelectedItem is DirectShowDevice ? Visibility.Visible : Visibility.Collapsed;
+        VideoStreamGroup.Visibility = VideoStreamPicker.Items.Count > 1 ? Visibility.Visible : Visibility.Collapsed;
+        VideoFormatGroup.Visibility = VideoFormatPicker.Items.Count > 1 ? Visibility.Visible : Visibility.Collapsed;
+        AudioGroup.Visibility = capabilities?.Formats.Any(format => format.Kind == "audio") == true
             ? Visibility.Visible : Visibility.Collapsed;
         ResultPanel.Visibility = visible ? Visibility.Visible : Visibility.Collapsed;
         var idle = operation is null && !IsCapturing && !IsRecording;
@@ -324,7 +425,7 @@ public sealed partial class DirectShowCapabilitiesView : UserControl, ILiveMedia
             return;
         using var stop = new CancellationTokenSource();
         operation = stop;
-        Notice.IsOpen = false;
+        HideNotice();
         RenderEvidence();
         try { await action(stop.Token); }
         catch (OperationCanceledException) when (stop.IsCancellationRequested) { }
@@ -341,12 +442,35 @@ public sealed partial class DirectShowCapabilitiesView : UserControl, ILiveMedia
         }
     }
 
+    private void HideNotice()
+    {
+        activeNoticeSeverity = null;
+        NoticeBanner.Visibility = Visibility.Collapsed;
+    }
+
     private void ShowNotice(string key, InfoBarSeverity severity, string? detail = null)
     {
-        Notice.Title = L(key);
-        Notice.Message = detail ?? "";
-        Notice.Severity = severity;
-        Notice.IsOpen = true;
+        activeNoticeSeverity = severity;
+        NoticeTitle.Text = L(key);
+        NoticeMessage.Text = detail ?? "";
+        NoticeMessage.Visibility = string.IsNullOrWhiteSpace(detail) ? Visibility.Collapsed : Visibility.Visible;
+        ApplyNoticeTheme(severity);
+        NoticeBanner.Visibility = Visibility.Visible;
+    }
+
+    private void ApplyNoticeTheme(InfoBarSeverity severity)
+    {
+        var (bgKey, borderKey, glyph) = severity switch
+        {
+            InfoBarSeverity.Error => ("StudioDangerSoftBrush", "StudioDangerBrush", "\uE783"),
+            InfoBarSeverity.Warning => ("StudioCautionSoftBrush", "StudioCautionBrush", "\uE7BA"),
+            InfoBarSeverity.Success => ("StudioSignalLockSoftBrush", "StudioSignalLockBrush", "\uE73E"),
+            _ => ("StudioInfoSoftBrush", "StudioInfoBrush", "\uE946")
+        };
+        NoticeBanner.Background = StudioBrushes.Resolve(this, bgKey);
+        NoticeBanner.BorderBrush = StudioBrushes.Resolve(this, borderKey);
+        NoticeIcon.Foreground = StudioBrushes.Resolve(this, borderKey);
+        NoticeIcon.Glyph = glyph;
     }
 
     public sealed record FormatGroup<TKey>(TKey Key, DirectShowFormat[] Formats, string Label);

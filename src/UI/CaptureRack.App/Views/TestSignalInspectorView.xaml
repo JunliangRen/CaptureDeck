@@ -1,0 +1,22 @@
+<UserControl
+    x:Class="CaptureRack.App.Views.TestSignalInspectorView"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <Border Style="{StaticResource StudioInspectorCardStyle}">
+        <StackPanel Spacing="9">
+            <TextBlock x:Name="SectionHeading" Text="TEST SIGNAL GENERATOR"
+                       Style="{StaticResource StudioSectionHeadingStyle}" />
+            <StackPanel>
+                <TextBlock x:Name="ScenarioLabel" Style="{StaticResource StudioFieldLabelStyle}" />
+                <ComboBox x:Name="ScenarioPicker" SelectedIndex="0" CornerRadius="3"
+                          HorizontalAlignment="Stretch"
+                          SelectionChanged="ScenarioPicker_SelectionChanged">
+                    <ComboBoxItem x:Name="NormalItem" Tag="Normal" />
+                    <ComboBoxItem x:Name="FaultsItem" Tag="TimingFaults" />
+                </ComboBox>
+            </StackPanel>
+            <TextBlock x:Name="ScenarioHint" FontSize="12" TextWrapping="Wrap"
+                       Foreground="{ThemeResource StudioTextSecondaryBrush}" />
+        </StackPanel>
+    </Border>
+</UserControl>

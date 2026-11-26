@@ -38,6 +38,7 @@ public sealed partial class MainWindow : Window
     private readonly Views.PlannedBackendStageView plannedStageView = new();
     private readonly Views.DirectShowCapabilitiesView directShowCapabilitiesView = new();
     private readonly Views.FireWireCaptureView fireWireView = new();
+    private readonly Views.TestSignalInspectorView testSignalInspector = new();
     private bool IsFireWireActive => activeModule.Descriptor.BackendId == CaptureRack.DirectShow.Windows.FireWire.MsTape.FireWireCapture.BackendId;
     private bool IsDirectShowActive => activeModule.Descriptor.BackendId == CaptureRack.DirectShow.Windows.Capture.DirectShowBackend.BackendId;
     private readonly Views.PlannedBackendInspectorView plannedInspectorView = new();
@@ -92,6 +93,11 @@ public sealed partial class MainWindow : Window
     private SplitSecondaryInstrument splitSecondary = SplitSecondaryInstrument.Vector;
     private bool inspectorPinned = true;
     private bool inspectorOverlayOpen;
+    private bool inspectorClosing;
+    private int inspectorAnimationGeneration;
+    private CompositionAnimation? inspectorSlideAnimation;
+    private CompositionAnimation? inspectorOpacityAnimation;
+    private bool IsInspectorOpen => !previewFullscreen && ((lastWindowWidth >= 1180 && inspectorPinned) || inspectorOverlayOpen);
     private bool showSafeArea;
     private double lastWindowWidth = 1320;
 
@@ -154,7 +160,17 @@ public sealed partial class MainWindow : Window
     private void WireModularViews()
     {
         directShowCapabilitiesView.StateChanged += DecodedMediaStateChanged;
+        directShowCapabilitiesView.SettingsPersistenceRequested += (_, _) => SettingsChanged();
         fireWireView.StateChanged += DecodedMediaStateChanged;
+        fireWireView.SettingsPersistenceRequested += (_, _) => SettingsChanged();
+        testSignalInspector.ScenarioChanged += (_, _) =>
+        {
+            if (settingsReady && IsTestSignalActive)
+            {
+                UpdateConfigurationStatus();
+                SettingsChanged();
+            }
+        };
         QcCenterPage.CheckFileRequested += async (_, _) => await PickAndCheckMediaFileAsync();
         QcCenterPage.CancelQcRequested += (_, _) => CancelActiveQc();
         QcCenterPage.FileDropped += async (_, path) =>
@@ -169,6 +185,16 @@ public sealed partial class MainWindow : Window
         {
             if (qcHistory.Find(id) is { } entry)
                 QcCenterPage.RenderEntry(entry);
+        };
+        QcCenterPage.ClearHistoryRequested += (_, _) =>
+        {
+            qcHistory.Clear();
+            latestQcEntry = null;
+            QcCenterPage.ClearDisplayedEntry();
+            QcCenterPage.RenderHistory(qcHistory.Entries, null);
+            RenderQcSummaryBadge();
+            UpdateQcNavBadge();
+            UpdateControls();
         };
 
         SettingsPage.BackRequested += (_, _) => TryBackFromSettings();
@@ -271,7 +297,7 @@ public sealed partial class MainWindow : Window
 
     private void UpdateSourceSummaryWidth()
     {
-        const double buttonChrome = 54, draggableSpace = 48, leftSpacing = 20;
+        const double buttonChrome = 74, draggableSpace = 48, leftSpacing = 20;
         var reserved = TitleBarGrid.Padding.Left + TitleBarBrand.ActualWidth + TitleBarBrand.Margin.Right +
             TitleBarModeSwitcher.ActualWidth + leftSpacing + TitleBarActions.ActualWidth +
             TitleBarActions.Margin.Right + TitleBarRightInset.Width.Value + buttonChrome + draggableSpace;
@@ -304,7 +330,10 @@ public sealed partial class MainWindow : Window
         UpdateNavigationStyles();
         ApplyWorkspaceLayout();
         deckLinkInspector.RefreshTheme();
+        directShowCapabilitiesView.RefreshTheme();
+        fireWireView.RefreshTheme();
         monitorOptionsBar.RefreshTheme();
+        RefreshMonitoringTheme();
         UpdateScopeModeButtons();
         UpdateInspectorLayout();
         ApplySafeAreaOverlay();
@@ -324,27 +353,45 @@ public sealed partial class MainWindow : Window
 
     private void MountActiveModuleSlots()
     {
-        TestSignalInspector.Visibility = IsTestSignalActive ? Visibility.Visible : Visibility.Collapsed;
-        if (IsDirectShowActive)
-        {
-            directShowCapabilitiesView.SetRecordingTarget(() => OutputPath.Text.Trim(), GetRecordingLabel);
-            directShowCapabilitiesView.Bind(L);
-        }
-        if (IsFireWireActive)
-            fireWireView.Bind(L, () => OutputPath.Text.Trim(), GetRecordingLabel);
-        if (!HasLiveCapture)
-        {
-            plannedInspectorView.Bind(activeModule.Descriptor, L);
-            plannedStageView.Bind(activeModule.Descriptor, L);
-        }
-
         InspectorSlot.Content = LiveMediaSource as UserControl ?? (IsDeckLinkActive ? deckLinkInspector :
-            HasLiveCapture ? null : plannedInspectorView);
+            IsTestSignalActive ? testSignalInspector : plannedInspectorView);
         MonitorBarSlot.Content = HasLiveCapture ? monitorOptionsBar : null;
         MonitorBarSlot.Visibility = HasLiveCapture ? Visibility.Visible : Visibility.Collapsed;
         MonitorViewport.Visibility = HasLiveCapture ? Visibility.Visible : Visibility.Collapsed;
         StageSlot.Content = HasLiveCapture ? null : plannedStageView;
         StageSlot.Visibility = HasLiveCapture ? Visibility.Collapsed : Visibility.Visible;
+
+        if (IsDirectShowActive)
+        {
+            directShowCapabilitiesView.SetRecordingTarget(() => OutputPath.Text.Trim(), GetRecordingLabel);
+            directShowCapabilitiesView.Bind(L);
+            directShowCapabilitiesView.RefreshTheme();
+        }
+        else if (IsFireWireActive)
+        {
+            fireWireView.Bind(L, () => OutputPath.Text.Trim(), GetRecordingLabel);
+            fireWireView.RefreshTheme();
+        }
+        else if (IsDeckLinkActive)
+        {
+            deckLinkInspector.RefreshTheme();
+        }
+        else if (!HasLiveCapture)
+        {
+            plannedInspectorView.Bind(activeModule.Descriptor, L);
+            plannedStageView.Bind(activeModule.Descriptor, L);
+        }
+
+        if (LiveMediaSource is null)
+        {
+            PreviewPlaceholderText.Text = L("WaitingPreview");
+            PreviewPlaceholderHint.Text = L("PreviewBeforeRecording");
+        }
+        else
+        {
+            PreviewPlaceholderText.Text = L(LiveMediaSource.PreviewHint ?? "WaitingPreview");
+            PreviewPlaceholderHint.Text = "";
+        }
     }
 
     private void SelectBackendModule(string backendId, bool persist)
@@ -385,6 +432,8 @@ public sealed partial class MainWindow : Window
         if (changed && IsDeckLinkActive && !deckLinkScanned)
             _ = RefreshDevicesAsync();
     }
+
+    private void SourceRackFlyout_Opening(object sender, object e) => RenderSourceRackList();
 
     private void SourceRackItem_Click(object sender, RoutedEventArgs e)
     {
@@ -478,13 +527,37 @@ public sealed partial class MainWindow : Window
         Grid.SetColumnSpan(TelemetryStrip, compact ? 3 : 1);
         TelemetryStrip.HorizontalAlignment = compact ? HorizontalAlignment.Left : HorizontalAlignment.Center;
         FooterStorageButton.Visibility = narrow ? Visibility.Collapsed : Visibility.Visible;
-        QuickSourceButton.Visibility = width < 820 ? Visibility.Collapsed : Visibility.Visible;
+        ConfigurationSummary.Visibility = width < 820 ? Visibility.Collapsed : Visibility.Visible;
         StereoMeter.Visibility = !previewFullscreen && HasLiveCapture && ActiveWorkspaceCapabilities.SupportsAudioMeters && width >= 680
             ? Visibility.Visible : Visibility.Collapsed;
     }
 
+    private void StopInspectorAnimations()
+    {
+        inspectorAnimationGeneration++;
+        inspectorClosing = false;
+        if (inspectorSlideAnimation is not null)
+        {
+            InspectorPanel.StopAnimation(inspectorSlideAnimation);
+            inspectorSlideAnimation = null;
+        }
+        if (inspectorOpacityAnimation is not null)
+        {
+            InspectorPanel.StopAnimation(inspectorOpacityAnimation);
+            inspectorOpacityAnimation = null;
+        }
+        InspectorPanel.Translation = Vector3.Zero;
+        InspectorPanel.Opacity = 1;
+        var scrimVisual = ElementCompositionPreview.GetElementVisual(InspectorScrim);
+        scrimVisual.StopAnimation(nameof(Visual.Opacity));
+        scrimVisual.Opacity = 1f;
+    }
+
     private void UpdateInspectorLayout()
     {
+        if (inspectorClosing || inspectorSlideAnimation is not null || inspectorOpacityAnimation is not null)
+            StopInspectorAnimations();
+
         if (previewFullscreen)
         {
             InspectorPanel.Visibility = Visibility.Collapsed;
@@ -542,33 +615,93 @@ public sealed partial class MainWindow : Window
         if (activePage != ActiveAppPage.Capture)
             NavigateToPage(ActiveAppPage.Capture);
 
+        var wasOpen = IsInspectorOpen;
         var canDock = lastWindowWidth >= 1180;
         if (canDock)
         {
-            if (inspectorPinned)
-            {
-                inspectorPinned = false;
-                inspectorOverlayOpen = false;
-            }
-            else
-            {
-                inspectorPinned = true;
-                inspectorOverlayOpen = false;
-            }
+            inspectorPinned = !inspectorPinned;
+            inspectorOverlayOpen = false;
             SettingsChanged();
         }
         else
         {
             inspectorOverlayOpen = !inspectorOverlayOpen;
         }
+
+        var willBeOpen = IsInspectorOpen;
+        if (wasOpen && !willBeOpen)
+        {
+            AnimateInspectorCloseAndHide();
+            return;
+        }
+
+        inspectorClosing = false;
+        inspectorAnimationGeneration++;
         UpdateInspectorLayout();
         if (InspectorPanel.Visibility == Visibility.Visible)
             AnimateInspectorSlideIn();
     }
 
+    private void AnimateInspectorCloseAndHide()
+    {
+        if (inspectorClosing)
+            return;
+
+        if (!Controls.StudioFeedback.AnimationsEnabled || InspectorPanel.Visibility != Visibility.Visible)
+        {
+            StopInspectorAnimations();
+            UpdateInspectorLayout();
+            return;
+        }
+
+        StopInspectorAnimations();
+        inspectorClosing = true;
+        var generation = ++inspectorAnimationGeneration;
+        var compositor = CompositionTarget.GetCompositorForCurrentThread();
+        var easing = compositor.CreateCubicBezierEasingFunction(new Vector2(0.4f, 0.0f), new Vector2(1.0f, 1.0f));
+        var batch = compositor.CreateScopedBatch(CompositionBatchTypes.Animation);
+
+        var slide = compositor.CreateVector3KeyFrameAnimation();
+        slide.Target = nameof(UIElement.Translation);
+        slide.InsertKeyFrame(0f, Vector3.Zero);
+        slide.InsertKeyFrame(1f, new Vector3(24f, 0f, 0f), easing);
+        slide.Duration = TimeSpan.FromMilliseconds(140);
+
+        var opacity = compositor.CreateScalarKeyFrameAnimation();
+        opacity.Target = nameof(UIElement.Opacity);
+        opacity.InsertKeyFrame(0f, 1f);
+        opacity.InsertKeyFrame(1f, 0f, easing);
+        opacity.Duration = TimeSpan.FromMilliseconds(140);
+
+        inspectorSlideAnimation = slide;
+        inspectorOpacityAnimation = opacity;
+        InspectorPanel.StartAnimation(slide);
+        InspectorPanel.StartAnimation(opacity);
+
+        if (InspectorScrim.Visibility == Visibility.Visible)
+        {
+            var scrimVisual = ElementCompositionPreview.GetElementVisual(InspectorScrim);
+            var scrimFade = compositor.CreateScalarKeyFrameAnimation();
+            scrimFade.InsertKeyFrame(0f, 1f);
+            scrimFade.InsertKeyFrame(1f, 0f, easing);
+            scrimFade.Duration = TimeSpan.FromMilliseconds(140);
+            scrimVisual.StartAnimation(nameof(Visual.Opacity), scrimFade);
+        }
+
+        batch.Completed += (_, _) =>
+        {
+            if (closing || generation != inspectorAnimationGeneration)
+                return;
+            StopInspectorAnimations();
+            UpdateInspectorLayout();
+        };
+        batch.End();
+    }
+
     private void AnimateInspectorSlideIn()
     {
-        if (!new Windows.UI.ViewManagement.UISettings().AnimationsEnabled)
+        StopInspectorAnimations();
+        if (!Controls.StudioFeedback.AnimationsEnabled)
             return;
 
         var compositor = CompositionTarget.GetCompositorForCurrentThread();
@@ -586,8 +719,20 @@ public sealed partial class MainWindow : Window
         opacity.InsertKeyFrame(1f, 1f, easing);
         opacity.Duration = TimeSpan.FromMilliseconds(180);
 
+        inspectorSlideAnimation = slide;
+        inspectorOpacityAnimation = opacity;
         InspectorPanel.StartAnimation(slide);
         InspectorPanel.StartAnimation(opacity);
+
+        if (InspectorScrim.Visibility == Visibility.Visible)
+        {
+            var scrimVisual = ElementCompositionPreview.GetElementVisual(InspectorScrim);
+            var scrimFade = compositor.CreateScalarKeyFrameAnimation();
+            scrimFade.InsertKeyFrame(0f, 0f);
+            scrimFade.InsertKeyFrame(1f, 1f, easing);
+            scrimFade.Duration = TimeSpan.FromMilliseconds(180);
+            scrimVisual.StartAnimation(nameof(Visual.Opacity), scrimFade);
+        }
     }
 
     private void OpenInspectorFromFooter_Click(object sender, RoutedEventArgs e)
@@ -595,7 +740,7 @@ public sealed partial class MainWindow : Window
         if (activePage != ActiveAppPage.Capture)
             NavigateToPage(ActiveAppPage.Capture);
 
-        if (InspectorPanel.Visibility != Visibility.Visible)
+        if (!IsInspectorOpen)
             ToggleInspector();
     }
 
@@ -614,13 +759,13 @@ public sealed partial class MainWindow : Window
         inspectorPinned = false;
         inspectorOverlayOpen = false;
         SettingsChanged();
-        UpdateInspectorLayout();
+        AnimateInspectorCloseAndHide();
     }
 
     private void InspectorScrim_Tapped(object sender, TappedRoutedEventArgs e)
     {
         inspectorOverlayOpen = false;
-        UpdateInspectorLayout();
+        AnimateInspectorCloseAndHide();
     }
 
     private void CaptureModeButton_Click(object sender, RoutedEventArgs e) => NavigateToPage(ActiveAppPage.Capture);
@@ -667,7 +812,10 @@ public sealed partial class MainWindow : Window
 
     private void UpdateNavigationStyles()
     {
-        QcModeButton.IsEnabled = OpenSettingsButton.IsEnabled = LiveMediaSource?.IsRecording != true;
+        var locked = LiveMediaSource?.IsRecording == true;
+        QcModeButton.IsEnabled = OpenSettingsButton.IsEnabled = !locked;
+        ToolTipService.SetToolTip(QcModeButton, locked ? L("NavigationLockedRecording") : null);
+        ToolTipService.SetToolTip(OpenSettingsButton, locked ? L("NavigationLockedRecording") : L("Settings"));
         ApplySegmentState(CaptureModeButton, activePage == ActiveAppPage.Capture);
         ApplySegmentState(QcModeButton, activePage == ActiveAppPage.QcCenter);
         OpenSettingsButton.Background = activePage == ActiveAppPage.Settings
@@ -805,6 +953,10 @@ public sealed partial class MainWindow : Window
 
     private void ApplySecondaryInstrument(SplitSecondaryInstrument instrument)
     {
+        var previousVisible = VectorBody.Visibility == Visibility.Visible ? SplitSecondaryInstrument.Vector
+            : SpectrumBody.Visibility == Visibility.Visible ? SplitSecondaryInstrument.Spectrum
+            : SplitSecondaryInstrument.Events;
+
         ApplySegmentState(SplitVectorBtn, instrument == SplitSecondaryInstrument.Vector);
         ApplySegmentState(SplitSpectrumBtn, instrument == SplitSecondaryInstrument.Spectrum);
         ApplySegmentState(SplitEventsBtn, instrument == SplitSecondaryInstrument.Events);
@@ -814,6 +966,17 @@ public sealed partial class MainWindow : Window
         EventsBody.Visibility = instrument == SplitSecondaryInstrument.Events ? Visibility.Visible : Visibility.Collapsed;
         EventsToolbar.Visibility = instrument == SplitSecondaryInstrument.Events && EffectiveWorkspaceLayout == WorkspaceLayoutMode.Events
             ? Visibility.Visible : Visibility.Collapsed;
+
+        if (previousVisible != instrument)
+        {
+            UIElement activeBody = instrument switch
+            {
+                SplitSecondaryInstrument.Spectrum => SpectrumBody,
+                SplitSecondaryInstrument.Events => EventsBody,
+                _ => VectorBody
+            };
+            Controls.StudioFeedback.RevealSubtle(activeBody, offsetY: 4f, durationMs: 130);
+        }
 
         UpdateSecondaryInstrumentHeader(instrument);
     }
@@ -1019,6 +1182,8 @@ public sealed partial class MainWindow : Window
 
     private void OutputPath_TextChanged(object sender, TextChangedEventArgs e)
     {
+        LiveMediaSource?.NotifyOutputFolderChanged();
+        UpdateRecordingFilenamePreview();
         UpdateControls();
         SettingsChanged();
     }
@@ -1041,17 +1206,20 @@ public sealed partial class MainWindow : Window
     private void UpdateRecordingFilenamePreview()
     {
         var label = GetRecordingLabel();
-        if (IsFireWireActive)
+        if (LiveMediaSource is { } media)
         {
-            RecordingFilenamePreview.Text = RecordingFileNaming.BuildFireWireName(label, localTime: null, fireWireView.ExpectedFormat);
+            RecordingFilenamePreview.Text = media.BuildFilenamePreview(label)
+                ?? (RecordingFileNaming.SanitizeLabel(label) is { Length: > 0 } sanitizedLabel
+                    ? $"{sanitizedLabel}_CaptureRack_YYYYMMDD_HHmmss"
+                    : "CaptureRack_YYYYMMDD_HHmmss");
             return;
         }
 
         var sanitized = RecordingFileNaming.SanitizeLabel(label);
         var samplePrefix = sanitized.Length == 0 ? "CaptureRack_YYYYMMDD_HHmmss" : $"{sanitized}_CaptureRack_YYYYMMDD_HHmmss";
-        if (!HasLiveCapture || LiveMediaSource is not null)
+        if (!HasLiveCapture)
         {
-            RecordingFilenamePreview.Text = IsDirectShowActive ? $"{samplePrefix}_DirectShow" : samplePrefix;
+            RecordingFilenamePreview.Text = samplePrefix;
             return;
         }
         var videoTag = RecordingVideoFormat == CapturePixelFormat.Uyvy ? "8bit-Uncompressed" : "10bit-Uncompressed";
@@ -1214,11 +1382,47 @@ public sealed partial class MainWindow : Window
 
     private void LayoutScopes_Invoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
     {
-        if (activePage == ActiveAppPage.Capture && !previewFullscreen)
+        if (activePage == ActiveAppPage.Capture && !previewFullscreen && ActiveWorkspaceCapabilities.SupportsVideoScopes)
         {
             SetWorkspaceLayout(WorkspaceLayoutMode.Scopes, saveIfDefaultable: false);
             args.Handled = true;
         }
+    }
+
+    private void LayoutSpectrum_Invoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
+    {
+        if (activePage == ActiveAppPage.Capture && !previewFullscreen && ActiveWorkspaceCapabilities.SupportsAudioSpectrum)
+        {
+            SetWorkspaceLayout(WorkspaceLayoutMode.Spectrum, saveIfDefaultable: false);
+            args.Handled = true;
+        }
+    }
+
+    private void LayoutEvents_Invoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
+    {
+        if (activePage == ActiveAppPage.Capture && !previewFullscreen && ActiveWorkspaceCapabilities.SupportsEvents)
+        {
+            SetWorkspaceLayout(WorkspaceLayoutMode.Events, saveIfDefaultable: false);
+            args.Handled = true;
+        }
+    }
+
+    private void ToggleAudioMonitor_Invoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
+    {
+        if (activePage != ActiveAppPage.Capture || !HasLiveCapture || !ActiveWorkspaceCapabilities.SupportsLocalAudioMonitor || AnyDropdownOpen())
+            return;
+
+        if (RootShell.XamlRoot is { } root)
+        {
+            if (VisualTreeHelper.GetOpenPopupsForXamlRoot(root).Any(popup => popup.Child is not ToolTip))
+                return;
+            var focused = FocusManager.GetFocusedElement(root);
+            if (focused is TextBox or NumberBox or RichEditBox or PasswordBox or AutoSuggestBox or ComboBox or ComboBoxItem)
+                return;
+        }
+
+        ToggleAudioMonitor();
+        args.Handled = true;
     }
 
     private void ToggleInspector_Invoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
@@ -1243,7 +1447,7 @@ public sealed partial class MainWindow : Window
             holdRecordingStatus = true;
             UpdateLivePreviewStatus();
             SetStatus("ChooseOutput", "ExistingOutput", InfoBarSeverity.Warning);
-            if (InspectorPanel.Visibility != Visibility.Visible)
+            if (!IsInspectorOpen)
                 ToggleInspector();
             return;
         }
@@ -1708,6 +1912,7 @@ public sealed partial class MainWindow : Window
             {
                 "video" => output,
                 "log" => entry.MovResult?.CaptureLog,
+                "recording-report" => NativeCaptureReport.PathFor(output),
                 "hash" => entry.MovResult?.FrameMd5,
                 "report" => entry.MovResult?.QcToolsReport,
                 _ => null
@@ -1874,7 +2079,7 @@ public sealed partial class MainWindow : Window
     {
         var beamVisual = ElementCompositionPreview.GetElementVisual(RecordingSweepBeam);
         beamVisual.StopAnimation(nameof(Visual.Offset));
-        if (!recordingClock.IsRunning || !new Windows.UI.ViewManagement.UISettings().AnimationsEnabled)
+        if (!recordingClock.IsRunning || !Controls.StudioFeedback.AnimationsEnabled)
         {
             beamVisual.Offset = Vector3.Zero;
             return;
@@ -1894,7 +2099,7 @@ public sealed partial class MainWindow : Window
 
     private void UpdateRecordingIndicator(bool active)
     {
-        var animationsEnabled = new Windows.UI.ViewManagement.UISettings().AnimationsEnabled;
+        var animationsEnabled = Controls.StudioFeedback.AnimationsEnabled;
 
         foreach (var dot in new UIElement[] { RecordingIndicator, PreviewRecTallyDot })
         {
@@ -1973,7 +2178,7 @@ public sealed partial class MainWindow : Window
 
     private static void RevealWorkspacePanel(UIElement panel)
     {
-        if (!new Windows.UI.ViewManagement.UISettings().AnimationsEnabled)
+        if (!Controls.StudioFeedback.AnimationsEnabled)
             return;
 
         var visual = ElementCompositionPreview.GetElementVisual(panel);
@@ -1996,7 +2201,7 @@ public sealed partial class MainWindow : Window
 
     private static void PulseWarningChip(UIElement element)
     {
-        if (!new Windows.UI.ViewManagement.UISettings().AnimationsEnabled)
+        if (!Controls.StudioFeedback.AnimationsEnabled)
             return;
 
         var visual = ElementCompositionPreview.GetElementVisual(element);
@@ -2065,6 +2270,9 @@ public sealed partial class MainWindow : Window
         if (PreviewPlaceholder.Visibility == Visibility.Visible)
         {
             PreviewPlaceholder.Visibility = Visibility.Collapsed;
+            PreviewPlaceholderSpinner.IsActive = false;
+            PreviewPlaceholderSpinner.Visibility = Visibility.Collapsed;
+            PreviewPlaceholderIcon.Visibility = Visibility.Visible;
             PreviewHudPill.Visibility = previewFullscreen ? Visibility.Collapsed : Visibility.Visible;
             ApplySafeAreaOverlay();
         }
@@ -2101,7 +2309,7 @@ public sealed partial class MainWindow : Window
             !IsCaptureRecording && !recordingTransition && qcStop is null && (idle || media is not null);
         deckLinkInspector.UpdateEnabledState(idle && IsDeckLinkActive, canChangePreviewFormat,
             canChangePreviewFormat ? displayedStats?.InputAudioFormat : null);
-        TestSignalScenarioPicker.IsEnabled = idle && !recordingTransition;
+        testSignalInspector.SetEnabled(idle && !recordingTransition);
         var canStart = HasLiveCapture && idle && !recordingTransition &&
             (media?.CanStart ?? (IsTestSignalActive || deckLinkInspector.HasCompleteSelection));
         var changingRecording = IsCaptureRecording || recordingTransition;
@@ -2116,6 +2324,10 @@ public sealed partial class MainWindow : Window
         StartButton.IsEnabled = active ? previewCanStop : canStart;
         PlaceholderStartButton.IsEnabled = canStart;
         PlaceholderStartButton.Visibility = HasLiveCapture && !active && canStart ? Visibility.Visible : Visibility.Collapsed;
+        var waitingForFirstFrame = active && PreviewPlaceholder.Visibility == Visibility.Visible && (media?.HasPreview ?? true);
+        PreviewPlaceholderSpinner.IsActive = waitingForFirstFrame;
+        PreviewPlaceholderSpinner.Visibility = waitingForFirstFrame ? Visibility.Visible : Visibility.Collapsed;
+        PreviewPlaceholderIcon.Visibility = waitingForFirstFrame ? Visibility.Collapsed : Visibility.Visible;
         var recordEnabled = media is not null
             ? qcStop is null && !closing && !finishingMediaForClose && (media.IsRecording
                 ? !media.IsFinalizing : !pickingOutput && media.CanRecord && !string.IsNullOrWhiteSpace(OutputPath.Text))
@@ -2135,7 +2347,6 @@ public sealed partial class MainWindow : Window
         FullscreenClockText.Visibility = recordingClock.IsRunning ? Visibility.Visible : Visibility.Collapsed;
         QcResultsButton.Visibility = !changingRecording && qcStop is null && latestQcEntry is not null
             ? Visibility.Visible : Visibility.Collapsed;
-        RenderSourceRackList();
         UpdateQcNavBadge();
         UpdateCaptureFooter();
         UpdateLivePreviewStatus();

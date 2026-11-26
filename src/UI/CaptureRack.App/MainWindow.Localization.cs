@@ -25,7 +25,6 @@ public sealed partial class MainWindow
         CaptureModeLabel.Text = L("CaptureModeTab");
         QcModeLabel.Text = L("QcCenterTab");
         SourceRackHeading.Text = L("SourceRackHeading");
-        SourceRackConfigureButton.Content = L("SourceRackConfigure");
         LayoutFocusLabel.Text = L("LayoutFocus");
         LayoutSplitLabel.Text = L("LayoutSplit");
         LayoutScopesLabel.Text = L("ScopesTab");

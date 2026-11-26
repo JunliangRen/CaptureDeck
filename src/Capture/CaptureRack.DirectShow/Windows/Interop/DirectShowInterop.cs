@@ -53,7 +53,7 @@ internal static unsafe partial class DirectShowInterop
     internal static void Check(int status, string operation)
     {
         if (status < 0)
-            throw new DirectShowException($"{operation} failed (0x{status:X8}).");
+            throw new DirectShowException($"{operation} failed (0x{status:X8}).", status);
     }
 
     internal static nint Method(nint instance, int index) => (*(nint**)instance)[index];
@@ -258,4 +258,14 @@ internal unsafe partial interface IDirectShowEnumMediaTypes
     [PreserveSig] int Clone(nint* result);
 }
 
-internal sealed class DirectShowException(string message) : Exception(message);
+internal sealed class DirectShowException : Exception
+{
+    internal DirectShowException(string message, int? status = null) : base(message)
+    {
+        NativeStatus = status;
+        if (status.HasValue)
+            HResult = status.Value;
+    }
+
+    internal int? NativeStatus { get; }
+}

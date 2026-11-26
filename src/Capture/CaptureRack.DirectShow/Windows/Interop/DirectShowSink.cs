@@ -13,6 +13,7 @@ internal sealed unsafe partial class DirectShowSink :
     private const int NoStopTime = 0x00040270; // VFW_S_NO_STOP_TIME
     private readonly CaptureSampleHandler receive;
     private readonly Action<string> reportFailure;
+    private readonly Func<DirectShowMediaType, bool>? compatibleType;
     private readonly object gate = new();
     private DirectShowMediaType expected;
     private DirectShowMediaType connectedType;
@@ -26,10 +27,12 @@ internal sealed unsafe partial class DirectShowSink :
     private bool ended;
     private bool disposed;
 
-    internal DirectShowSink(DirectShowMediaType* media, CaptureSampleHandler receive, Action<string> reportFailure)
+    internal DirectShowSink(DirectShowMediaType* media, CaptureSampleHandler receive, Action<string> reportFailure,
+        Func<DirectShowMediaType, bool>? compatibleType = null)
     {
         this.receive = receive;
         this.reportFailure = reportFailure;
+        this.compatibleType = compatibleType;
         expected = media->Clone();
     }
 
@@ -154,7 +157,7 @@ internal sealed unsafe partial class DirectShowSink :
             var hr = IntOut(pin, 9, &direction); // IPin::QueryDirection
             if (hr < 0) return hr;
             if (direction != 1) return InvalidDirection;
-            if (!type->Matches(expected)) return TypeNotAccepted;
+            if (!Accepts(*type, expected)) return TypeNotAccepted;
             connectedType = type->Clone();
             peer = AddRef(pin);
             flushing = false;
@@ -222,8 +225,11 @@ internal sealed unsafe partial class DirectShowSink :
     public int QueryAccept(DirectShowMediaType* type)
     {
         if (type == null) return Pointer;
-        lock (gate) return !disposed && type->Matches(expected) ? Ok : False;
+        lock (gate) return !disposed && Accepts(*type, expected) ? Ok : False;
     }
+
+    private bool Accepts(in DirectShowMediaType candidate, in DirectShowMediaType baseline) =>
+        candidate.Matches(baseline) || compatibleType?.Invoke(candidate) == true;
 
     public int EnumMediaTypes(nint* types)
     {
@@ -343,7 +349,7 @@ internal sealed unsafe partial class DirectShowSink :
                 if (hr < 0)
                     return SampleError(hr, "Cannot read sample media type");
                 if ((hr == Ok && dynamicType == 0) ||
-                    (dynamicType != 0 && !((DirectShowMediaType*)dynamicType)->Matches(connectedType)))
+                    (dynamicType != 0 && !Accepts(*(DirectShowMediaType*)dynamicType, connectedType)))
                     return SampleError(TypeNotAccepted, "Capture media type changed during recording");
             }
             finally { DirectShowMediaType.Free((DirectShowMediaType*)dynamicType); }

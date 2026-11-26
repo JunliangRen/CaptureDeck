@@ -985,7 +985,7 @@
     <value>Crossbar 入力ルーティング対応の汎用 Windows DirectShow デバイス。</value>
   </data>
   <data name="BackendFireWireName" xml:space="preserve">
-    <value>FireWire / i.LINK (MSTape)</value>
+    <value>FireWire / i.LINK</value>
   </data>
   <data name="FwPreviewName" xml:space="preserve">
     <value>i.LINK プレビュー</value>
@@ -1008,8 +1008,11 @@
   <data name="FwReacquiringVideo" xml:space="preserve">
     <value>i.LINK データ受信中。映像ストリームを検出しています…</value>
   </data>
+  <data name="FwGeneratingSimulation" xml:space="preserve">
+    <value>i.LINK シミュレーションを起動しています。</value>
+  </data>
   <data name="FwWaitForData" xml:space="preserve">
-    <value>i.LINK MPEG-TS を待機しています。デッキで再生してください。</value>
+    <value>i.LINK データを待機しています。デッキで再生してください。</value>
   </data>
   <data name="FwDecodeFailed" xml:space="preserve">
     <value>i.LINK プレビューをデコードできませんでした。</value>
@@ -1026,6 +1029,60 @@
   <data name="FwRecordFailed" xml:space="preserve">
     <value>i.LINK 録画を保存できませんでした。</value>
   </data>
+  <data name="FwSimulatedName" xml:space="preserve">
+    <value>シミュレーション {0}</value>
+  </data>
+  <data name="FwSavedDvRecording" xml:space="preserve">
+    <value>{0} を保存しました · DV {1:N0} フレーム。</value>
+  </data>
+  <data name="DvInfoMetadata" xml:space="preserve">
+    <value>DV フレームのメタデータ</value>
+  </data>
+  <data name="DvInfoFrames" xml:space="preserve">
+    <value>DV フレーム</value>
+  </data>
+  <data name="DvInfoInvalidFrames" xml:space="preserve">
+    <value>不正な DIF フレーム</value>
+  </data>
+  <data name="DvInfoFormatChanges" xml:space="preserve">
+    <value>形式の変更</value>
+  </data>
+  <data name="DvInfoDiscontinuities" xml:space="preserve">
+    <value>サンプルの不連続</value>
+  </data>
+  <data name="DvInfoTimecode" xml:space="preserve">
+    <value>DV タイムコード</value>
+  </data>
+  <data name="DvInfoRecordingDate" xml:space="preserve">
+    <value>記録日</value>
+  </data>
+  <data name="DvInfoRecordingTime" xml:space="preserve">
+    <value>記録時刻</value>
+  </data>
+  <data name="DvInfoAudio" xml:space="preserve">
+    <value>DV オーディオ</value>
+  </data>
+  <data name="DvInfoAspect" xml:space="preserve">
+    <value>アスペクト比</value>
+  </data>
+  <data name="DvChecking" xml:space="preserve">
+    <value>DV を確認中</value>
+  </data>
+  <data name="DvCheckingDetail" xml:space="preserve">
+    <value>元の DV フレーム構造とメタデータを確認しています。</value>
+  </data>
+  <data name="DvCheckPassed" xml:space="preserve">
+    <value>DV 構造チェックに合格</value>
+  </data>
+  <data name="DvCheckPassedDetail" xml:space="preserve">
+    <value>構造チェックは DIF フレーム境界と埋め込みメタデータを確認します。映像と音声のデコードは別途必要です。</value>
+  </data>
+  <data name="DvCheckFailed" xml:space="preserve">
+    <value>DV 構造チェックに失敗</value>
+  </data>
+  <data name="DvCheckFailedDetail" xml:space="preserve">
+    <value>不正なフレーム数と末尾のバイト数を確認してください。</value>
+  </data>
   <data name="FwSavedRecording" xml:space="preserve">
     <value>保存済み {0} · TS パケット {1:N0} 個</value>
   </data>
@@ -1033,7 +1090,7 @@
     <value>TS 録画を検査…</value>
   </data>
   <data name="BackendFireWireDesc" xml:space="preserve">
-    <value>i.LINK テープデバイスからの元の MPEG-TS をプレビューして録画します。</value>
+    <value>i.LINK デバイスからの DV または HDV／D-VHS MPEG-TS をプレビューして録画します。</value>
   </data>
   <data name="BackendRfName" xml:space="preserve">
     <value>RF / ベースバンド信号キャプチャ</value>
@@ -1049,9 +1106,6 @@
   </data>
   <data name="SourceRackHeading" xml:space="preserve">
     <value>キャプチャソースラック</value>
-  </data>
-  <data name="SourceRackConfigure" xml:space="preserve">
-    <value>キャプチャ設定を開く</value>
   </data>
   <data name="SourceStatusActive" xml:space="preserve">
     <value>稼働中</value>
@@ -1078,13 +1132,13 @@
     <value>例: Tape04_SideA</value>
   </data>
   <data name="QcCenterSubtitleMulti" xml:space="preserve">
-    <value>MOV または MKV をデコードして品質レポートを作成するか、188 / 192 バイト MPEG-TS をオフラインで解析します。</value>
+    <value>MOV または MKV をデコードして品質レポートを作成するか、DV の生データや 188 / 192 バイト MPEG-TS をオフラインで解析します。</value>
   </data>
   <data name="CheckMediaFile" xml:space="preserve">
     <value>MOV / MKV / TS を検査</value>
   </data>
   <data name="QcDropPromptMulti" xml:space="preserve">
-    <value>MOV、MKV、TS ファイルをドロップするか、検査するファイルを選択</value>
+    <value>MOV、MKV、DV、TS ファイルをドロップするか、検査するファイルを選択</value>
   </data>
   <data name="QcHistoryHeading" xml:space="preserve">
     <value>セッション検査履歴</value>
@@ -1150,13 +1204,13 @@
     <value>有効な 188 / 192 バイト MPEG-TS ストリームとして検証できませんでした。</value>
   </data>
   <data name="TsSaveDifferentFile" xml:space="preserve">
-    <value>元の TS ファイルを上書きしないよう、別の保存先を指定してください。</value>
+    <value>元の収録ファイルを保持するため、別の保存先を指定してください。</value>
   </data>
   <data name="TsJsonSaved" xml:space="preserve">
-    <value>TS JSON レポートを保存しました</value>
+    <value>JSON レポートを保存しました</value>
   </data>
   <data name="TsJsonSaveFailed" xml:space="preserve">
-    <value>TS JSON レポートを保存できませんでした</value>
+    <value>JSON レポートを保存できませんでした</value>
   </data>
   <data name="SourceRackStatusLabel" xml:space="preserve">
     <value>状態</value>
@@ -1260,8 +1314,113 @@
   <data name="DsVideoStream" xml:space="preserve">
     <value>映像ストリーム</value>
   </data>
+  <data name="DsCameraChoice" xml:space="preserve">
+    <value>値</value>
+  </data>
+  <data name="DsCameraOff" xml:space="preserve">
+    <value>オフ</value>
+  </data>
+  <data name="DsCameraOn" xml:space="preserve">
+    <value>オン</value>
+  </data>
+  <data name="DsCameraFieldOfView" xml:space="preserve">
+    <value>画角</value>
+  </data>
+  <data name="DsCameraControls" xml:space="preserve">
+    <value>カメラ設定</value>
+  </data>
+  <data name="DsCameraProperty" xml:space="preserve">
+    <value>設定項目</value>
+  </data>
+  <data name="DsCameraAutomatic" xml:space="preserve">
+    <value>自動</value>
+  </data>
+  <data name="DsCameraApply" xml:space="preserve">
+    <value>適用</value>
+  </data>
+  <data name="DsCameraNoControls" xml:space="preserve">
+    <value>ドライバーから利用可能なカメラ設定が報告されませんでした。</value>
+  </data>
+  <data name="DsCameraValue" xml:space="preserve">
+    <value>値 {0:0} · 既定値 {1}</value>
+  </data>
+  <data name="DsCameraExposure" xml:space="preserve">
+    <value>露出</value>
+  </data>
+  <data name="DsCameraLowLightCompensation" xml:space="preserve">
+    <value>低照度補正</value>
+  </data>
+  <data name="DsCameraFocus" xml:space="preserve">
+    <value>フォーカス</value>
+  </data>
+  <data name="DsCameraZoom" xml:space="preserve">
+    <value>ズーム</value>
+  </data>
+  <data name="DsCameraPan" xml:space="preserve">
+    <value>パン</value>
+  </data>
+  <data name="DsCameraTilt" xml:space="preserve">
+    <value>チルト</value>
+  </data>
+  <data name="DsCameraRoll" xml:space="preserve">
+    <value>ロール</value>
+  </data>
+  <data name="DsCameraIris" xml:space="preserve">
+    <value>絞り</value>
+  </data>
+  <data name="DsCameraWhiteBalance" xml:space="preserve">
+    <value>ホワイトバランス</value>
+  </data>
+  <data name="DsCameraBrightness" xml:space="preserve">
+    <value>明るさ</value>
+  </data>
+  <data name="DsCameraContrast" xml:space="preserve">
+    <value>コントラスト</value>
+  </data>
+  <data name="DsCameraSaturation" xml:space="preserve">
+    <value>彩度</value>
+  </data>
+  <data name="DsCameraSharpness" xml:space="preserve">
+    <value>シャープネス</value>
+  </data>
+  <data name="DsCameraHue" xml:space="preserve">
+    <value>色相</value>
+  </data>
+  <data name="DsCameraGamma" xml:space="preserve">
+    <value>ガンマ</value>
+  </data>
+  <data name="DsCameraColorEnable" xml:space="preserve">
+    <value>カラー有効</value>
+  </data>
+  <data name="DsCameraBacklightCompensation" xml:space="preserve">
+    <value>逆光補正</value>
+  </data>
+  <data name="DsCameraGain" xml:space="preserve">
+    <value>ゲイン</value>
+  </data>
+  <data name="DsResolution" xml:space="preserve">
+    <value>解像度</value>
+  </data>
+  <data name="DsFrameRate" xml:space="preserve">
+    <value>フレームレート</value>
+  </data>
+  <data name="DsColorSpace" xml:space="preserve">
+    <value>色空間</value>
+  </data>
+  <data name="DsCopyDiagnostics" xml:space="preserve">
+    <value>デバイス診断をコピー</value>
+  </data>
+  <data name="DsDiagnosticsCopied" xml:space="preserve">
+    <value>デバイス診断をコピーしました。</value>
+  </data>
+  <data name="DsFormatDetails" xml:space="preserve">
+    <value>形式の詳細</value>
+  </data>
+  <data name="DsUnspecified" xml:space="preserve">
+    <value>未指定</value>
+  </data>
   <data name="DsVideoFormat" xml:space="preserve">
-    <value>映像形式</value>
+    <value>ドライバー形式</value>
   </data>
   <data name="DsAudioFormat" xml:space="preserve">
     <value>音声ピンと形式</value>

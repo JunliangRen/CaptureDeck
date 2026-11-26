@@ -11,7 +11,7 @@ namespace CaptureRack.App.Views;
 
 public sealed partial class QcCenterView : UserControl
 {
-    private static readonly string[] SupportedExtensions = [".mov", ".mkv", ".ts", ".ts192", ".m2t"];
+    private static readonly string[] SupportedExtensions = [".mov", ".mkv", ".ts", ".ts192", ".m2t", ".dv"];
     private Func<string, string> localize = key => key;
     private CultureInfo culture = CultureInfo.InvariantCulture;
     private QcSessionHistoryEntry? displayedEntry;
@@ -31,6 +31,7 @@ public sealed partial class QcCenterView : UserControl
     public event EventHandler<string>? FileDropped;
     public event EventHandler<string>? OpenArtifactRequested;
     public event EventHandler<TsFileReport>? SaveTsReportRequested;
+    public event EventHandler<DvFileReport>? SaveDvReportRequested;
     public event EventHandler<Guid>? HistoryEntrySelected;
 
     public QcCenterView() => InitializeComponent();
@@ -68,7 +69,7 @@ public sealed partial class QcCenterView : UserControl
             QcFileName.Text = localize("QcDropPromptMulti");
             QcFilePathText.Text = localize("QcDropHint");
         }
-        else if (displayedEntry is not null)
+        else if (displayedEntry is not null && !running)
         {
             RenderEntry(displayedEntry);
         }
@@ -165,6 +166,7 @@ public sealed partial class QcCenterView : UserControl
             QcPipelineCard.Visibility = Visibility.Collapsed;
             MovResultSection.Visibility = Visibility.Collapsed;
             TsResultSection.Visibility = Visibility.Visible;
+            TsDecodeNoteText.Text = localize("TsDecodeNote");
 
             var stats = ts.Analysis;
             TsFormatText.Text = string.Format(culture, "{0} · {1:N0} {2} · {3:N0} B",
@@ -195,6 +197,28 @@ public sealed partial class QcCenterView : UserControl
                 ? $"{localize("TsFirstAffectedHeading")}\n{string.Join("\n", firstErrors)}" : "";
             TsFirstErrorsCard.Visibility = firstErrors.Length > 0 ? Visibility.Visible : Visibility.Collapsed;
         }
+        else if (entry.DvReport is { } dv)
+        {
+            QcPipelineCard.Visibility = MovResultSection.Visibility = TsFirstErrorsCard.Visibility = Visibility.Collapsed;
+            TsResultSection.Visibility = Visibility.Visible;
+            TsDecodeNoteText.Text = localize(dv.Success ? "DvCheckPassedDetail" : "DvCheckFailedDetail");
+            var stats = dv.Analysis;
+            var format = stats.LastFrame is { } frame ? $"{frame.Encoding.DisplayName()} · {frame.Width} × {frame.Height} · {frame.FramesPerSecond:0.###} fps" : "DV";
+            TsFormatText.Text = $"{format} · {stats.InputBytes:N0} B";
+            TsMetricsList.ItemsSource = new TsMetricRow[]
+            {
+                new(localize("DvInfoFrames"), stats.Frames.ToString("N0", culture)),
+                new(localize("DvInfoInvalidFrames"), stats.InvalidFrames.ToString("N0", culture)),
+                new(localize("TsMetricTrailing"), stats.TrailingBytes.ToString("N0", culture)),
+                new(localize("DvInfoFormatChanges"), stats.FormatChanges.ToString("N0", culture)),
+                new(localize("DvInfoTimecode"), $"{stats.FirstFrame?.Timecode ?? "—"} → {stats.LastFrame?.Timecode ?? "—"}"),
+                new(localize("DvInfoRecordingDate"), stats.FirstFrame?.RecordingDate ?? "—")
+            };
+        }
+        else
+        {
+            QcPipelineCard.Visibility = MovResultSection.Visibility = TsResultSection.Visibility = Visibility.Collapsed;
+        }
     }
 
     public void RenderHistory(IReadOnlyList<QcSessionHistoryEntry> entries, Guid? selectedId)
@@ -213,7 +237,7 @@ public sealed partial class QcCenterView : UserControl
                 item.Id,
                 item.FileName,
                 $"{item.CheckedAt.ToLocalTime():HH:mm:ss} · {localize(item.TitleKey)}",
-                item.Kind == QcEntryKind.Mov ? Path.GetExtension(item.FilePath).TrimStart('.').ToUpperInvariant() : "TS",
+                item.Kind == QcEntryKind.TransportStream ? "TS" : Path.GetExtension(item.FilePath).TrimStart('.').ToUpperInvariant(),
                 StudioBrushes.Resolve(this, item.Severity switch
                 {
                     TelemetrySeverity.Normal => "StudioSignalLockBrush",
@@ -319,6 +343,8 @@ public sealed partial class QcCenterView : UserControl
     {
         if (displayedEntry?.TsReport is { } report)
             SaveTsReportRequested?.Invoke(this, report);
+        else if (displayedEntry?.DvReport is { } dv)
+            SaveDvReportRequested?.Invoke(this, dv);
     }
 
     private void QcHistoryList_SelectionChanged(object sender, SelectionChangedEventArgs e)

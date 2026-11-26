@@ -27,7 +27,7 @@ internal sealed unsafe class CaptureSource : IDisposable
         return result;
     }
 
-    internal static CaptureSource Open(string selector, out DirectShowDevice device)
+    internal static CaptureSource Open(string selector, out DirectShowDevice device, bool readFormats = true)
     {
         DirectShowDevice? selected = null;
         CaptureSource? opened = null;
@@ -40,7 +40,8 @@ internal sealed unsafe class CaptureSource : IDisposable
             opened = new CaptureSource(BindMoniker(moniker, 8, BaseFilter, $"Bind {candidate.Name}"));
             try
             {
-                opened.ReadFormats();
+                if (readFormats)
+                    opened.ReadFormats();
             }
             catch
             {
@@ -67,17 +68,22 @@ internal sealed unsafe class CaptureSource : IDisposable
             if (Guid.TryParse(ReadProperty(bag.Value, "DeviceClassGUID") as string, out var classId) &&
                 classId == MsTapeClass)
                 continue;
+            var id = DisplayName(pointer);
+            if (DirectShowDriverInfo.IsMsdv(id))
+                continue;
 
             var name = ReadProperty(bag.Value, "FriendlyName") as string ??
                 ReadProperty(bag.Value, "Description") as string ?? "Video capture device";
-            if (!name.StartsWith("[DirectShow] ", StringComparison.Ordinal))
-                name = $"[DirectShow] {name}";
-            if (visitor(new(index++, DisplayName(pointer), name), pointer))
+            if (visitor(new(index++, id, name), pointer))
                 return;
         }
     }
 
-    internal IReadOnlyList<DirectShowFormat> Descriptions => formats.Select(entry => entry.Format).ToArray();
+    internal IReadOnlyList<DirectShowFormat> DescribeFormats(string deviceId) =>
+        formats.Select(entry => ResolveScanMode(entry.Format, deviceId)).ToArray();
+
+    internal DirectShowFormat ResolveScanMode(DirectShowFormat format, string deviceId) =>
+        CaptureMediaType.ResolveScanMode(format, deviceId, formats.Select(entry => entry.Format));
 
     internal bool HasDroppedFrameCounter
     {

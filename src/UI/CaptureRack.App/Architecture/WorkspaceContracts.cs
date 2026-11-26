@@ -279,11 +279,22 @@ public static class RecordingFileNaming
         return cleaned;
     }
 
-    public static string BuildPrefix(string? rawLabel, DateTime localTime)
+    public static string BuildPrefix(string? rawLabel, DateTime localTime) =>
+        BuildPrefix(rawLabel, localTime, "CaptureRack");
+
+    public static string BuildFireWireName(string? rawLabel, DateTime? localTime) =>
+        BuildFireWireName(rawLabel, localTime, new(TsLayout.Ts192));
+
+    public static string BuildFireWireName(string? rawLabel, DateTime? localTime,
+        CaptureRack.DirectShow.Windows.FireWire.MsTape.FireWireMediaFormat format) =>
+        BuildPrefix(rawLabel, localTime, $"CaptureRack_{format.FilePrefix}") + format.Extension;
+
+    private static string BuildPrefix(string? rawLabel, DateTime? localTime, string capturePrefix)
     {
-        var timestamp = localTime.ToString("yyyyMMdd_HHmmss_fff", System.Globalization.CultureInfo.InvariantCulture);
+        var timestamp = localTime?.ToString("yyyyMMdd_HHmmss_fff", System.Globalization.CultureInfo.InvariantCulture)
+            ?? "YYYYMMDD_HHmmss_fff";
         var label = SanitizeLabel(rawLabel);
-        return label.Length == 0 ? $"CaptureRack_{timestamp}" : $"{label}_CaptureRack_{timestamp}";
+        return label.Length == 0 ? $"{capturePrefix}_{timestamp}" : $"{label}_{capturePrefix}_{timestamp}";
     }
 
     public static string BuildMovPath(string directory, string? rawLabel, DateTime localTime,
@@ -299,7 +310,7 @@ public static class RecordingFileNaming
     }
 }
 
-public enum QcEntryKind { Mov, TransportStream }
+public enum QcEntryKind { Mov, TransportStream, Dv }
 
 public sealed record QcSessionHistoryEntry(
     Guid Id,
@@ -315,7 +326,8 @@ public sealed record QcSessionHistoryEntry(
     QcStage? LastStage = null,
     QcResult? MovResult = null,
     QcCaptureLog? CaptureLog = null,
-    TsFileReport? TsReport = null);
+    TsFileReport? TsReport = null,
+    DvFileReport? DvReport = null);
 
 public static class QcWarningFormatter
 {

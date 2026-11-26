@@ -163,7 +163,8 @@ public sealed partial class MainWindow : Window
                 await RunMediaQcFileAsync(path);
         };
         QcCenterPage.OpenArtifactRequested += async (_, tag) => await OpenQcArtifactAsync(tag);
-        QcCenterPage.SaveTsReportRequested += async (_, report) => await SaveTsReportAsync(report);
+        QcCenterPage.SaveTsReportRequested += async (_, report) => await SaveStreamReportAsync(report.InputPath, ".ts-qc.json", report.ToJson(indented: true));
+        QcCenterPage.SaveDvReportRequested += async (_, report) => await SaveStreamReportAsync(report.InputPath, ".dv-qc.json", report.ToJson());
         QcCenterPage.HistoryEntrySelected += (_, id) =>
         {
             if (qcHistory.Find(id) is { } entry)
@@ -587,12 +588,6 @@ public sealed partial class MainWindow : Window
 
         InspectorPanel.StartAnimation(slide);
         InspectorPanel.StartAnimation(opacity);
-    }
-
-    private void SourceRackConfigure_Click(object sender, RoutedEventArgs e)
-    {
-        SourceRackFlyout.Hide();
-        OpenInspectorFromFooter_Click(sender, e);
     }
 
     private void OpenInspectorFromFooter_Click(object sender, RoutedEventArgs e)
@@ -1045,12 +1040,18 @@ public sealed partial class MainWindow : Window
 
     private void UpdateRecordingFilenamePreview()
     {
-        var sanitized = RecordingFileNaming.SanitizeLabel(GetRecordingLabel());
+        var label = GetRecordingLabel();
+        if (IsFireWireActive)
+        {
+            RecordingFilenamePreview.Text = RecordingFileNaming.BuildFireWireName(label, localTime: null, fireWireView.ExpectedFormat);
+            return;
+        }
+
+        var sanitized = RecordingFileNaming.SanitizeLabel(label);
         var samplePrefix = sanitized.Length == 0 ? "CaptureRack_YYYYMMDD_HHmmss" : $"{sanitized}_CaptureRack_YYYYMMDD_HHmmss";
         if (!HasLiveCapture || LiveMediaSource is not null)
         {
-            RecordingFilenamePreview.Text = IsFireWireActive ? $"{samplePrefix}_iLINK.ts192" :
-                IsDirectShowActive ? $"{samplePrefix}_DirectShow" : samplePrefix;
+            RecordingFilenamePreview.Text = IsDirectShowActive ? $"{samplePrefix}_DirectShow" : samplePrefix;
             return;
         }
         var videoTag = RecordingVideoFormat == CapturePixelFormat.Uyvy ? "8bit-Uncompressed" : "10bit-Uncompressed";
@@ -1523,6 +1524,7 @@ public sealed partial class MainWindow : Window
             picker.FileTypeFilter.Add(".ts");
             picker.FileTypeFilter.Add(".ts192");
             picker.FileTypeFilter.Add(".m2t");
+            picker.FileTypeFilter.Add(".dv");
             file = await picker.PickSingleFileAsync();
         }
         catch (Exception ex) when (IsSessionError(ex))
@@ -1551,38 +1553,44 @@ public sealed partial class MainWindow : Window
         if (QcReports.SupportsFile(path))
             await RunMovQcAsync(path, null);
         else
-            await RunTsQcAsync(path);
+            await RunStreamQcAsync(path);
     }
 
-    private async Task RunTsQcAsync(string path)
+    private async Task RunStreamQcAsync(string path)
     {
+        var dv = Path.GetExtension(path).Equals(".dv", StringComparison.OrdinalIgnoreCase);
+        var kind = dv ? QcEntryKind.Dv : QcEntryKind.TransportStream;
+        var checking = dv ? "DvChecking" : "TsChecking";
+        var checkFailed = dv ? "DvCheckFailed" : "TsCheckFailed";
+        var checkPassed = dv ? "DvCheckPassed" : "TsCheckPassed";
         using var cancellation = new CancellationTokenSource();
         qcStop = cancellation;
         activeQcStage = null;
         statusFilePath = path;
-        QcCenterPage.BeginRunning(path, QcEntryKind.TransportStream);
-        FooterQcStageText.Text = L("TsChecking");
-        SetStatus("TsChecking", "TsCheckingDetail");
+        QcCenterPage.BeginRunning(path, kind);
+        FooterQcStageText.Text = L(checking);
+        SetStatus(checking, checking + "Detail");
         UpdateControls();
 
         try
         {
-            var report = await Task.Run(() => TsFile.Analyze(path, cancellation: cancellation.Token), cancellation.Token);
-            var (titleKey, detailKey, severity, barSeverity) = !report.Success
-                ? ("TsCheckFailed", "TsCheckFailedDetail", TelemetrySeverity.Danger, InfoBarSeverity.Error)
-                : report.Analysis.HasTransportWarnings
+            var dvReport = dv ? await Task.Run(() => DvFile.Analyze(path, cancellation.Token), cancellation.Token) : null;
+            var report = !dv ? await Task.Run(() => TsFile.Analyze(path, cancellation: cancellation.Token), cancellation.Token) : null;
+            var (titleKey, detailKey, severity, barSeverity) = !(dvReport?.Analysis.Success ?? report!.Success)
+                ? (checkFailed, checkFailed + "Detail", TelemetrySeverity.Danger, InfoBarSeverity.Error)
+                : report?.Analysis.HasTransportWarnings == true
                     ? ("TsCheckWarnings", "TsCheckWarningsDetail", TelemetrySeverity.Caution, InfoBarSeverity.Warning)
-                    : ("TsCheckPassed", "TsCheckPassedDetail", TelemetrySeverity.Normal, InfoBarSeverity.Success);
+                    : (checkPassed, checkPassed + "Detail", TelemetrySeverity.Normal, InfoBarSeverity.Success);
             var entry = new QcSessionHistoryEntry(
-                Guid.NewGuid(), path, Path.GetFileName(path), QcEntryKind.TransportStream,
-                DateTimeOffset.UtcNow, titleKey, L(detailKey), severity, [], SummaryKey: detailKey, TsReport: report);
+                Guid.NewGuid(), path, Path.GetFileName(path), kind,
+                DateTimeOffset.UtcNow, titleKey, L(detailKey), severity, [], SummaryKey: detailKey, TsReport: report, DvReport: dvReport);
             RecordAndDisplayQcEntry(entry);
             SetStatus(titleKey, detailKey, barSeverity);
         }
         catch (OperationCanceledException) when (cancellation.IsCancellationRequested)
         {
             var entry = new QcSessionHistoryEntry(
-                Guid.NewGuid(), path, Path.GetFileName(path), QcEntryKind.TransportStream,
+                Guid.NewGuid(), path, Path.GetFileName(path), kind,
                 DateTimeOffset.UtcNow, "QcCancelled", L("QcCancelledDetail"), TelemetrySeverity.Caution, [], SummaryKey: "QcCancelledDetail");
             RecordAndDisplayQcEntry(entry);
             SetStatus("QcCancelled", "QcCancelledDetail", InfoBarSeverity.Warning);
@@ -1590,10 +1598,10 @@ public sealed partial class MainWindow : Window
         catch (Exception ex) when (IsSessionError(ex) || ex is InvalidDataException)
         {
             var entry = new QcSessionHistoryEntry(
-                Guid.NewGuid(), path, Path.GetFileName(path), QcEntryKind.TransportStream,
-                DateTimeOffset.UtcNow, "TsCheckFailed", ex.Message, TelemetrySeverity.Danger, []);
+                Guid.NewGuid(), path, Path.GetFileName(path), kind,
+                DateTimeOffset.UtcNow, checkFailed, ex.Message, TelemetrySeverity.Danger, []);
             RecordAndDisplayQcEntry(entry);
-            SetStatus("TsCheckFailed", () => ex.Message, InfoBarSeverity.Error);
+            SetStatus(checkFailed, () => ex.Message, InfoBarSeverity.Error);
         }
         finally
         {
@@ -1732,7 +1740,7 @@ public sealed partial class MainWindow : Window
         }
     }
 
-    private async Task SaveTsReportAsync(TsFileReport report)
+    private async Task SaveStreamReportAsync(string inputPath, string suffix, string json)
     {
         pickingOutput = true;
         UpdateControls();
@@ -1740,16 +1748,28 @@ public sealed partial class MainWindow : Window
         {
             var picker = new FileSavePicker(AppWindow.Id)
             {
-                SuggestedFileName = Path.GetFileNameWithoutExtension(report.InputPath) + ".ts-qc.json"
+                SuggestedFileName = Path.GetFileNameWithoutExtension(inputPath) + suffix
             };
             picker.FileTypeChoices.Add("JSON report", [".json"]);
             var file = await picker.PickSaveFileAsync();
             if (file is null || closing)
                 return;
-            if (string.Equals(Path.GetFullPath(file.Path), report.InputPath, StringComparison.OrdinalIgnoreCase))
+            if (string.Equals(Path.GetFullPath(file.Path), inputPath, StringComparison.OrdinalIgnoreCase))
                 throw new IOException(L("TsSaveDifferentFile"));
 
-            await File.WriteAllTextAsync(file.Path, report.ToJson(indented: true));
+            var temporary = Path.Combine(Path.GetDirectoryName(file.Path)!, $".CaptureRack-{Guid.NewGuid():N}.json.tmp");
+            try
+            {
+                await using (var output = new FileStream(temporary, FileMode.CreateNew, FileAccess.Write, FileShare.None))
+                await using (var writer = new StreamWriter(output))
+                    await writer.WriteAsync(json);
+                File.Move(temporary, file.Path, overwrite: true);
+            }
+            finally
+            {
+                try { File.Delete(temporary); }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
+            }
             QcCenterPage.ShowTsSaveStatus(L("TsJsonSaved"), file.Path, InfoBarSeverity.Success);
         }
         catch (Exception ex) when (IsSessionError(ex))

@@ -1,9 +1,9 @@
 using System.Runtime.InteropServices;
-using System.Runtime.InteropServices.Marshalling;
 using CaptureRack.Core;
 using CaptureRack.DirectShow.Windows.FireWire.MsTape;
 using CaptureRack.DirectShow.Windows.Interop;
 using CaptureRack.QualityControl;
+using CaptureRack.Recording;
 using CaptureRack.Recording.TransportStream;
 using Xunit;
 using static CaptureRack.DirectShow.Windows.FireWire.MsTape.MsTapeMediaTypes;
@@ -35,10 +35,76 @@ public sealed unsafe class FireWireTests
         Assert.Equal(stride - 1, analyzer.Statistics.TrailingBytes);
     }
 
+    [Fact]
+    public void TruncatedDvRetainsTheExactPartialBytes()
+    {
+        var directory = Directory.CreateTempSubdirectory("capturerack-dv-partial-");
+        try
+        {
+            var path = Path.Combine(directory.FullName, "incomplete.dv");
+            var bytes = new byte[640];
+            bytes[0] = 0x1f;
+            bytes[1] = 0x07;
+            using var writer = new DvRecording(path);
+            Assert.True(writer.TryReceive(new CaptureSample(bytes.AsSpan(0, 3), false)));
+            Assert.True(writer.TryReceive(new CaptureSample(bytes.AsSpan(3), false)));
+            writer.Complete();
+            Assert.Equal(4, writer.Failure?.Code);
+            Assert.False(File.Exists(path));
+            Assert.Equal(bytes, File.ReadAllBytes(writer.PartialPath));
+            Assert.Equal(bytes.Length, writer.Analysis.TrailingBytes);
+        }
+        finally { directory.Delete(recursive: true); }
+    }
+
+    [Fact]
+    public void DvGraphAcceptsMetadataChangesWithinTheNegotiatedSubtype()
+    {
+        if (!FireWireCapture.IsSupported)
+            return;
+
+        using var apartment = new ComApartment();
+        uint* info = stackalloc uint[8];
+        new Span<uint>(info, 8).Clear();
+        var type = new DirectShowMediaType
+        {
+            Major = Interleaved, Subtype = Dv50, FormatType = DvInfo,
+            Format = (byte*)info, FormatSize = 32
+        };
+        using var descriptor = new DirectShowSink(&type, _ => true, _ => { });
+        using var replay = new FireWireReplayFilter(descriptor);
+        using var source = new ComReference(Export(replay, BaseFilter));
+        using var selected = MsTapeDevices.SelectOutput(source.Value, dv: true);
+        List<byte> received = [];
+        List<string> failures = [];
+        using var sink = FireWireGraph.CreateSink(selected, sample =>
+        {
+            received.AddRange(sample.Bytes.ToArray());
+            return true;
+        }, failures.Add);
+        using var graph = new FireWireGraph();
+        graph.Connect(source.Value, selected, sink);
+        graph.Start();
+        try
+        {
+            byte[] bytes = [1, 2, 3, 4];
+            info[0] = 1; // Simulate an updated DVINFO pack.
+            Assert.Equal(Ok, replay.Send(bytes, false, media: &type));
+            Assert.Equal(bytes, received);
+            Assert.Empty(failures);
+
+            type.Subtype = Dvh1;
+            Assert.Equal(TypeNotAccepted, replay.Send(bytes, false, media: &type));
+            Assert.Single(failures);
+            Assert.Equal(bytes, received);
+        }
+        finally { graph.Stop(sink, failures.Add); }
+    }
+
     [Theory]
     [InlineData(188)]
     [InlineData(192)]
-    public void LiveGraphRequires192AndDrainsEveryByte(int stride)
+    public void LiveGraphNegotiatesBothTsLayoutsAndDrainsEveryByte(int stride)
     {
         if (!FireWireCapture.IsSupported)
             return;
@@ -48,7 +114,7 @@ public sealed unsafe class FireWireTests
         var directory = Directory.CreateTempSubdirectory("capturerack-firewire-");
         try
         {
-            var path = Path.Combine(directory.FullName, layout.Format);
+            var path = Path.Combine(directory.FullName, $"{layout.Format}_sample.ts");
             using var apartment = new ComApartment();
             using var writer = new TsRecording(path, layout);
             uint* format = stackalloc uint[] { (uint)layout.Offset, 188, (uint)layout.Stride };
@@ -67,15 +133,10 @@ public sealed unsafe class FireWireTests
             void ReportFailure(string message) => writer.Fail(6, message);
 
             using var sink = new DirectShowSink(&type, Receive, ReportFailure);
-            using var source = new TestTsSource(sink);
+            using var source = new FireWireReplayFilter(sink);
             using var filter = new ComReference(Export(source, BaseFilter));
-            if (stride == 188)
-            {
-                Assert.Equal(4, Assert.Throws<FireWireException>(() => MsTapeDevices.SelectOutput(filter.Value)).ExitCode);
-                return;
-            }
             using var selected = MsTapeDevices.SelectOutput(filter.Value);
-            Assert.Equal(TsLayout.Ts192, selected.Layout);
+            Assert.Equal(layout, selected.Layout);
             using (var graph = new FireWireGraph())
             {
                 graph.Connect(filter.Value, selected, sink);
@@ -107,8 +168,9 @@ public sealed unsafe class FireWireTests
                 finally { graph.Stop(sink, ReportFailure); }
                 Assert.Equal(WrongState, source.Send(bytes, discontinuity: false));
             }
-            writer.Complete();
+            Parallel.Invoke(writer.Complete, writer.Complete);
             Assert.True(writer.Finalized, writer.Failure?.Message);
+            Assert.Null(writer.Failure);
             Assert.Equal(bytes, File.ReadAllBytes(path));
             Assert.False(File.Exists(writer.PartialPath));
             Assert.Equal(bytes.Length, writer.ReceivedBytes);
@@ -192,151 +254,5 @@ public sealed unsafe class FireWireTests
             bytes[header + 3] = (byte)(0x10 | index);
         }
         return bytes;
-    }
-}
-
-[GeneratedComClass]
-internal sealed unsafe partial class TestTsSource(DirectShowSink typeSource) : IDirectShowFilter, IDirectShowPin, IDisposable
-{
-    private int state;
-    private nint graph;
-    private nint peer;
-    private nint allocator;
-    private nint receiver;
-    private DirectShowMediaType type;
-
-    public int GetClassID(Guid* result) { *result = new Guid("16595445-233a-4133-9941-31376530811a"); return Ok; }
-    public int Stop() { state = 0; return Ok; }
-    public int Pause() { state = 1; return Ok; }
-    public int Run(long start) { state = 2; return Ok; }
-    public int GetState(uint timeout, int* result) { *result = state; return Ok; }
-    public int SetSyncSource(nint clock) => Ok;
-    public int GetSyncSource(nint* clock) { *clock = 0; return Ok; }
-    public int EnumPins(nint* pins) { *pins = Export(new TestPinEnumerator(this), DirectShowInterop.EnumPins); return Ok; }
-    public int FindPin(char* id, nint* pin)
-    {
-        *pin = id != null && new string(id) == "Output" ? Export(this, Pin) : 0;
-        return *pin != 0 ? Ok : NotFound;
-    }
-    public int QueryFilterInfo(DirectShowFilterInfo* info)
-    {
-        *info = default;
-        info->Graph = graph;
-        if (graph != 0)
-            Marshal.AddRef(graph);
-        "Synthetic TS source".AsSpan().CopyTo(new Span<char>(info->Name, 128));
-        return Ok;
-    }
-    public int JoinFilterGraph(nint owner, char* name) { graph = owner; return Ok; }
-    public int QueryVendorInfo(nint* vendor) { *vendor = 0; return NotImplemented; }
-
-    public int Connect(nint pin, DirectShowMediaType* media)
-    {
-        var hr = ((delegate* unmanaged[Stdcall]<nint, nint, DirectShowMediaType*, int>)Method(pin, 4))(
-            pin, ExportOutput(), media);
-        if (hr != Ok) return hr;
-        Marshal.AddRef(pin);
-        peer = pin;
-        type = media->Clone();
-        var memInput = MemInputPin;
-        hr = Marshal.QueryInterface(pin, in memInput, out receiver);
-        if (hr < 0) return hr;
-        nint value = 0;
-        hr = PointerOut(receiver, 3, &value);
-        allocator = value;
-        if (hr < 0) return hr;
-        int* request = stackalloc int[] { 1, 4096, 1, 0 };
-        int* properties = stackalloc int[4];
-        hr = ((delegate* unmanaged[Stdcall]<nint, int*, int*, int>)Method(allocator, 3))(
-            allocator, request, properties);
-        if (hr < 0) return hr;
-        hr = ((delegate* unmanaged[Stdcall]<nint, nint, int, int>)Method(receiver, 4))(receiver, allocator, 0);
-        return hr < 0 ? hr : NoArgs(allocator, 5);
-    }
-
-    private nint exportedPin;
-    private nint ExportOutput() => exportedPin != 0 ? exportedPin : exportedPin = Export(this, Pin);
-
-    public int Send(ReadOnlySpan<byte> bytes, bool discontinuity, long? start = null, long? end = null)
-    {
-        nint sample = 0;
-        Check(((delegate* unmanaged[Stdcall]<nint, nint*, nint, nint, uint, int>)Method(allocator, 7))(
-            allocator, &sample, 0, 0, 0), "Get synthetic media sample");
-        using var sampleRef = new ComReference(sample);
-        var startTicks = start.GetValueOrDefault();
-        var endTicks = end.GetValueOrDefault();
-        Check(((delegate* unmanaged[Stdcall]<nint, long*, long*, int>)Method(sample, 6))(
-            sample, start.HasValue ? &startTicks : null, end.HasValue ? &endTicks : null), "Set synthetic sample times");
-        nint data = 0;
-        Check(PointerOut(sample, 3, &data), "Read synthetic sample buffer");
-        bytes.CopyTo(new Span<byte>((void*)data, bytes.Length));
-        Check(((delegate* unmanaged[Stdcall]<nint, int, int>)Method(sample, 12))(
-            sample, bytes.Length), "Set synthetic sample length");
-        Check(((delegate* unmanaged[Stdcall]<nint, int, int>)Method(sample, 16))(
-            sample, discontinuity ? 1 : 0), "Set synthetic sample discontinuity");
-        return ((delegate* unmanaged[Stdcall]<nint, nint, int>)Method(receiver, 6))(receiver, sample);
-    }
-
-    public int ReceiveConnection(nint pin, DirectShowMediaType* media) => InvalidDirection;
-    public int Disconnect()
-    {
-        if (allocator != 0) { NoArgs(allocator, 6); Release(ref allocator); }
-        Release(ref receiver);
-        Release(ref peer);
-        fixed (DirectShowMediaType* media = &type) DirectShowMediaType.Clear(media);
-        return Ok;
-    }
-    public int ConnectedTo(nint* pin)
-    {
-        *pin = peer;
-        if (peer == 0) return NotConnected;
-        Marshal.AddRef(peer);
-        return Ok;
-    }
-    public int ConnectionMediaType(DirectShowMediaType* media)
-    {
-        *media = peer == 0 ? default : type.Clone();
-        return peer == 0 ? NotConnected : Ok;
-    }
-    public int QueryPinInfo(DirectShowPinInfo* info)
-    {
-        *info = default;
-        info->Filter = Export(this, BaseFilter);
-        info->Direction = 1;
-        "Output".AsSpan().CopyTo(new Span<char>(info->Name, 128));
-        return Ok;
-    }
-    public int QueryDirection(int* direction) { *direction = 1; return Ok; }
-    public int QueryId(nint* id) { *id = Marshal.StringToCoTaskMemUni("Output"); return Ok; }
-    public int QueryAccept(DirectShowMediaType* media) => typeSource.QueryAccept(media);
-    public int EnumMediaTypes(nint* enumeration) => typeSource.EnumMediaTypes(enumeration);
-    public int QueryInternalConnections(nint* pins, uint* count) => NotImplemented;
-    public int EndOfStream() => Unexpected;
-    public int BeginFlush() => Unexpected;
-    public int EndFlush() => Unexpected;
-    public int NewSegment(long start, long stop, double rate) => Unexpected;
-
-    private static void Release(ref nint pointer)
-    {
-        if (pointer != 0) Marshal.Release(pointer);
-        pointer = 0;
-    }
-
-    public void Dispose()
-    {
-        Disconnect();
-        Release(ref exportedPin);
-    }
-}
-
-[GeneratedComClass]
-internal sealed unsafe partial class TestPinEnumerator(TestTsSource source) : SingleComItem, IDirectShowEnumPins
-{
-    protected override nint CreateItem() => Export(source, Pin);
-    public int Next(uint count, nint* pins, uint* fetched) => NextItem(count, pins, fetched);
-    public int Clone(nint* result)
-    {
-        *result = Export(new TestPinEnumerator(source) { consumed = consumed }, DirectShowInterop.EnumPins);
-        return Ok;
     }
 }

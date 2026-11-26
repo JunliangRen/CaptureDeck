@@ -16,38 +16,65 @@
         <ProgressBar x:Name="BusyBar" IsIndeterminate="True" Visibility="Collapsed" />
         <InfoBar x:Name="Notice" IsClosable="False" />
         <StackPanel x:Name="FormatPanel" Visibility="Collapsed" Spacing="8">
-            <ComboBox x:Name="VideoStreamPicker" HorizontalAlignment="Stretch"
-                      DisplayMemberPath="Label" SelectionChanged="VideoStreamChanged" />
-            <ComboBox x:Name="VideoFormatPicker" HorizontalAlignment="Stretch"
-                      DisplayMemberPath="Label" SelectionChanged="FormatChanged" />
-            <ComboBox x:Name="AudioPicker" HorizontalAlignment="Stretch"
-                      DisplayMemberPath="Label" SelectionChanged="FormatChanged" />
-            <StackPanel Orientation="Horizontal" Spacing="8" Margin="0,4,0,0">
-                <Button x:Name="NegotiateButton" Click="NegotiateClicked" />
-                <Button x:Name="SampleButton" Click="SampleClicked" />
-            </StackPanel>
+            <ComboBox x:Name="ResolutionPicker" HorizontalAlignment="Stretch"
+                      DisplayMemberPath="Label" SelectionChanged="VideoOptionsChanged" />
+            <ComboBox x:Name="FrameRatePicker" HorizontalAlignment="Stretch"
+                      DisplayMemberPath="Label" SelectionChanged="VideoOptionsChanged" />
+            <ComboBox x:Name="ColorSpacePicker" HorizontalAlignment="Stretch"
+                      DisplayMemberPath="Label" SelectionChanged="VideoOptionsChanged" />
         </StackPanel>
+        <Expander x:Name="CameraControlsSection" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch"
+                  Expanding="CameraControlsExpanding">
+            <StackPanel Spacing="8">
+                <TextBlock x:Name="CameraControlsStatus" TextWrapping="Wrap" Visibility="Collapsed"
+                           Foreground="{ThemeResource StudioTextSecondaryBrush}" />
+                <ComboBox x:Name="CameraControlPicker" HorizontalAlignment="Stretch" Visibility="Collapsed"
+                          DisplayMemberPath="Label" SelectionChanged="CameraControlChanged" />
+                <CheckBox x:Name="CameraControlAuto" Visibility="Collapsed" Checked="CameraControlAutoChanged"
+                          Unchecked="CameraControlAutoChanged" />
+                <ComboBox x:Name="CameraControlChoices" HorizontalAlignment="Stretch" Visibility="Collapsed"
+                          DisplayMemberPath="Label" />
+                <Slider x:Name="CameraControlValue" Visibility="Collapsed" SnapsTo="StepValues"
+                        ValueChanged="CameraControlValueChanged" />
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                    <Button x:Name="ApplyCameraControlButton" Click="ApplyCameraControlClicked" Visibility="Collapsed" />
+                    <Button x:Name="RefreshCameraControlsButton" Click="RefreshCameraControlsClicked" />
+                </StackPanel>
+            </StackPanel>
+        </Expander>
+        <Expander x:Name="DetailsSection" Visibility="Collapsed" HorizontalAlignment="Stretch" HorizontalContentAlignment="Stretch">
+            <StackPanel Spacing="8">
+                <ComboBox x:Name="VideoStreamPicker" HorizontalAlignment="Stretch"
+                          DisplayMemberPath="Label" SelectionChanged="VideoOptionsChanged" />
+                <ComboBox x:Name="VideoFormatPicker" HorizontalAlignment="Stretch"
+                          DisplayMemberPath="Label" SelectionChanged="FormatChanged" />
+                <ComboBox x:Name="AudioPicker" HorizontalAlignment="Stretch"
+                          DisplayMemberPath="Label" SelectionChanged="FormatChanged" />
+                <StackPanel x:Name="ResultPanel" Spacing="10">
+                    <StackPanel Orientation="Horizontal" Spacing="8">
+                        <Button x:Name="NegotiateButton" Click="NegotiateClicked" />
+                        <Button x:Name="SampleButton" Click="SampleClicked" />
+                    </StackPanel>
+                    <StackPanel Spacing="3">
+                        <TextBlock x:Name="AdvertisedHeading" FontWeight="SemiBold" />
+                        <TextBlock x:Name="AdvertisedText" TextWrapping="Wrap" IsTextSelectionEnabled="True" />
+                    </StackPanel>
+                    <StackPanel Spacing="3">
+                        <TextBlock x:Name="NegotiatedHeading" FontWeight="SemiBold" />
+                        <TextBlock x:Name="NegotiatedText" TextWrapping="Wrap" IsTextSelectionEnabled="True" />
+                    </StackPanel>
+                    <StackPanel Spacing="3">
+                        <TextBlock x:Name="SampleHeading" FontWeight="SemiBold" />
+                        <TextBlock x:Name="SampleText" TextWrapping="Wrap" IsTextSelectionEnabled="True" />
+                    </StackPanel>
+                </StackPanel>
+                <Button x:Name="CopyDiagnosticsButton" Click="CopyDiagnosticsClicked" />
+            </StackPanel>
+        </Expander>
         <TextBlock x:Name="RecordingHint" Visibility="Collapsed" TextWrapping="Wrap"
                    Foreground="{ThemeResource StudioTextSecondaryBrush}" />
         <Button x:Name="OpenRecordingReportButton" Visibility="Collapsed" Click="OpenRecordingReportClicked" />
         <TextBlock x:Name="PreviewUnavailable" Visibility="Collapsed" TextWrapping="Wrap"
                    Foreground="{ThemeResource StudioTextSecondaryBrush}" />
-        <Border x:Name="ResultPanel" Visibility="Collapsed" Padding="14"
-                Style="{StaticResource StudioInstrumentCardStyle}">
-            <StackPanel Spacing="10">
-                <StackPanel Spacing="3">
-                    <TextBlock x:Name="AdvertisedHeading" FontWeight="SemiBold" />
-                    <TextBlock x:Name="AdvertisedText" TextWrapping="Wrap" IsTextSelectionEnabled="True" />
-                </StackPanel>
-                <StackPanel Spacing="3">
-                    <TextBlock x:Name="NegotiatedHeading" FontWeight="SemiBold" />
-                    <TextBlock x:Name="NegotiatedText" TextWrapping="Wrap" IsTextSelectionEnabled="True" />
-                </StackPanel>
-                <StackPanel Spacing="3">
-                    <TextBlock x:Name="SampleHeading" FontWeight="SemiBold" />
-                    <TextBlock x:Name="SampleText" TextWrapping="Wrap" IsTextSelectionEnabled="True" />
-                </StackPanel>
-            </StackPanel>
-        </Border>
     </StackPanel>
 </UserControl>

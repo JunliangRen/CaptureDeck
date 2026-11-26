@@ -1,7 +1,9 @@
 using System.Runtime.InteropServices;
 using System.Text.Json;
+using CaptureRack.Core;
 using CaptureRack.DirectShow.Windows.Interop;
 using CaptureRack.QualityControl;
+using CaptureRack.Recording;
 using CaptureRack.Recording.TransportStream;
 using CaptureRack.Recording.Windows;
 using static CaptureRack.DirectShow.Windows.Interop.DirectShowInterop;
@@ -13,7 +15,8 @@ public sealed class FireWireException(int exitCode, string message) : Exception(
     public int ExitCode { get; } = exitCode;
 }
 
-public sealed record FireWireRequest(string DeviceId, string OutputPath, TimeSpan Duration, TimeSpan NoDataTimeout);
+public sealed record FireWireRequest(string DeviceId, string OutputPath, TimeSpan Duration, TimeSpan NoDataTimeout,
+    FireWireMediaFormat? Format = null);
 
 public sealed record FireWireProgress(double ElapsedSeconds, long ReceivedBytes, long WrittenBytes);
 
@@ -21,7 +24,7 @@ public sealed record FireWireResult
 {
     public int SchemaVersion => 1;
     public string Type => "capture_result";
-    public string SourceKind => "mstape";
+    public string SourceKind => OutputFormat is "dv" or "dv25" or "dv50" or "dvh1" ? "msdv" : "mstape";
     public int ExitCode { get; init; }
     public bool Success => ExitCode == 0;
     public string? Error { get; init; }
@@ -49,10 +52,12 @@ public sealed record FireWireResult
     public long SinkZeroLengthSamples { get; init; }
     public long SinkRejectedSamples { get; init; }
     public bool AnalysisComplete { get; init; }
-    public bool StructuralValidationOk => Analysis.StructuralValidationOk;
-    public bool QualityWarning => Analysis.SyncErrors != 0 || Analysis.MalformedPackets != 0 ||
-        Analysis.TrailingBytes != 0 || Analysis.HasTransportWarnings || SampleDiscontinuitiesAfterFirst != 0;
+    public bool StructuralValidationOk => DvAnalysis?.Success ?? Analysis.StructuralValidationOk;
+    public bool QualityWarning => SampleDiscontinuitiesAfterFirst != 0 || (DvAnalysis is { } dv
+        ? dv.InvalidFrames != 0 || dv.TrailingBytes != 0 || dv.FormatChanges != 0
+        : Analysis.SyncErrors != 0 || Analysis.MalformedPackets != 0 || Analysis.TrailingBytes != 0 || Analysis.HasTransportWarnings);
     public required TsStatistics Analysis { get; init; }
+    public DvStatistics? DvAnalysis { get; init; }
 }
 
 public static unsafe class FireWireCapture
@@ -63,28 +68,43 @@ public static unsafe class FireWireCapture
 
     public static bool IsSupported => OperatingSystem.IsWindows() && RuntimeInformation.ProcessArchitecture == Architecture.X64;
 
-    public static IReadOnlyList<FireWireDevice> List()
+    public static IReadOnlyList<FireWireDevice> SimulatedDevices => FireWireSimulation.All.Select(source => source.Device).ToArray();
+
+    public static IReadOnlyList<FireWireDevice> List(bool includeSimulated = false)
     {
         CheckPlatform();
         try
         {
             using var apartment = new ComApartment();
             using var devices = MsTapeDevices.Scan();
-            return devices.Descriptions;
+            return includeSimulated ? [.. devices.Descriptions, .. SimulatedDevices] : devices.Descriptions;
         }
         catch (DirectShowException ex) { throw new FireWireException(3, ex.Message); }
     }
 
-    public static IReadOnlyList<TsLayout> GetFormats(string deviceId)
+    public static IReadOnlyList<FireWireMediaFormat> GetMediaFormats(string deviceId)
     {
         CheckPlatform();
         try
         {
             using var apartment = new ComApartment();
             using var devices = MsTapeDevices.Scan();
+            var device = devices.Find(deviceId) ?? throw new FireWireException(3, $"Tape device not found: {deviceId}.");
             using var source = devices.Bind(deviceId);
-            using var output = MsTapeDevices.SelectOutput(source.Value);
-            return [output.Layout];
+            FireWireMediaFormat[] candidates = device.IsDv
+                ? Enum.GetValues<DvEncoding>().Select(encoding => new FireWireMediaFormat(null, encoding)).ToArray()
+                : [new(TsLayout.Ts192), new(TsLayout.Ts188)];
+            List<FireWireMediaFormat> formats = [];
+            foreach (var candidate in candidates)
+            {
+                try
+                {
+                    using var output = MsTapeDevices.SelectOutput(source.Value, device.IsDv, candidate);
+                    formats.Add(output.Format);
+                }
+                catch (FireWireException error) when (error.ExitCode == 4) { }
+            }
+            return formats;
         }
         catch (FireWireException ex) when (ex.ExitCode == 4)
         {
@@ -93,10 +113,13 @@ public static unsafe class FireWireCapture
         catch (DirectShowException ex) { throw new FireWireException(3, ex.Message); }
     }
 
+    public static IReadOnlyList<TsLayout> GetFormats(string deviceId) => GetMediaFormats(deviceId)
+        .Where(format => format.Transport.HasValue).Select(format => format.Transport!.Value).ToArray();
+
     internal static void CheckPlatform()
     {
         if (!IsSupported)
-            throw new FireWireException(3, "MSTape capture requires Windows x64.");
+            throw new FireWireException(3, "i.LINK capture requires Windows x64.");
     }
 
     public static FireWireResult Run(FireWireRequest request, Action<FireWireProgress>? progress,
@@ -110,7 +133,7 @@ public static unsafe class FireWireCapture
         var endReason = "error";
         var streamStarted = false;
         string? outputFormat = null;
-        TsRecording? recording = null;
+        RawSampleRecording? recording = null;
         (int Code, string Message)? error = null;
         (long Calls, long Empty, long Rejected) diagnostics = default;
         FileStream? reportStream = null;
@@ -124,32 +147,15 @@ public static unsafe class FireWireCapture
             reportStream = new FileStream(reportPartial, FileMode.CreateNew, FileAccess.Write, FileShare.Read);
             using var apartment = new ComApartment();
             using var devices = MsTapeDevices.Scan();
+            var device = devices.Find(request.DeviceId) ?? throw new FireWireException(3, $"Tape device not found: {request.DeviceId}.");
             using var source = devices.Bind(request.DeviceId);
-            using var selected = MsTapeDevices.SelectOutput(source.Value);
-            outputFormat = selected.Layout.Format;
-            recording = new TsRecording(path, selected.Layout);
-            Action<string> reportFailure = message => recording.Fail(6, message);
-            using var sink = new DirectShowSink(selected.MediaType, recording.TryReceive, reportFailure);
-            using var graph = new FireWireGraph();
-            try
+            using var selected = MsTapeDevices.SelectOutput(source.Value, device.IsDv, request.Format);
+            try { CaptureSelected(source.Value, selected); }
+            catch (FireWireException ex) when (ex.ExitCode == 4 && recording is null &&
+                request.Format is null && selected.Format.Transport == TsLayout.Ts192)
             {
-                graph.Connect(source.Value, selected, sink);
-                if (cancellationToken.IsCancellationRequested)
-                {
-                    endReason = "cancelled";
-                }
-                else
-                {
-                    graph.Start();
-                    streamStarted = true;
-                    started?.Invoke();
-                    endReason = Monitor(graph, sink, recording, request, progress, reportFailure, cancellationToken);
-                }
-            }
-            finally
-            {
-                graph.Stop(sink, reportFailure);
-                diagnostics = (sink.ReceiveCalls, sink.ZeroLengthSamples, sink.RejectedSamples);
+                using var fallback = MsTapeDevices.SelectOutput(source.Value, requested: new(TsLayout.Ts188));
+                CaptureSelected(source.Value, fallback);
             }
         }
         catch (FireWireException ex) { error = (ex.ExitCode, ex.Message); }
@@ -173,7 +179,7 @@ public static unsafe class FireWireCapture
             ExitCode = error?.Code ?? 0,
             Error = error?.Message,
             StopReason = error is null ? endReason : "error",
-            RequestedFormat = TsLayout.Ts192.Format,
+            RequestedFormat = request.Format?.Id ?? "auto",
             OutputFormat = outputFormat,
             OutputPath = path,
             DataPath = recording?.Finalized == true ? path : path + ".partial",
@@ -197,7 +203,8 @@ public static unsafe class FireWireCapture
             SinkZeroLengthSamples = diagnostics.Empty,
             SinkRejectedSamples = diagnostics.Rejected,
             AnalysisComplete = recording is not null && error is null && recording.ProcessedBytes == recording.ReceivedBytes,
-            Analysis = recording?.Analysis ?? new TsStatistics()
+            Analysis = (recording as TsRecording)?.Analysis ?? new TsStatistics(),
+            DvAnalysis = (recording as DvRecording)?.Analysis
         };
         if (reportStream is not null)
         {
@@ -219,9 +226,36 @@ public static unsafe class FireWireCapture
             }
         }
         return result;
+
+        void CaptureSelected(nint source, MsTapeOutput selected)
+        {
+            void ReportFailure(string message) => recording?.Fail(6, message);
+            using var sink = FireWireGraph.CreateSink(selected, sample => recording?.TryReceive(sample) == true, ReportFailure);
+            using var graph = new FireWireGraph();
+            try
+            {
+                graph.Connect(source, selected, sink);
+                outputFormat = selected.Format.Id;
+                recording = selected.Format.Transport is { } layout ? new TsRecording(path, layout) : new DvRecording(path, selected.Format.Encoding);
+                if (cancellationToken.IsCancellationRequested)
+                {
+                    endReason = "cancelled";
+                    return;
+                }
+                graph.Start();
+                streamStarted = true;
+                started?.Invoke();
+                endReason = Monitor(graph, sink, recording, request, progress, ReportFailure, cancellationToken);
+            }
+            finally
+            {
+                graph.Stop(sink, ReportFailure);
+                diagnostics = (sink.ReceiveCalls, sink.ZeroLengthSamples, sink.RejectedSamples);
+            }
+        }
     }
 
-    private static string Monitor(FireWireGraph graph, DirectShowSink sink, TsRecording recording,
+    private static string Monitor(FireWireGraph graph, DirectShowSink sink, RawSampleRecording recording,
         FireWireRequest request, Action<FireWireProgress>? progress, Action<string> reportFailure, CancellationToken cancellationToken)
     {
         var startup = recording.Elapsed;
@@ -260,14 +294,23 @@ internal sealed unsafe class FireWireGraph : IDisposable
 {
     private readonly DirectShowGraph graph = new();
 
+    internal static DirectShowSink CreateSink(MsTapeOutput selected, CaptureSampleHandler receive,
+        Action<string> failure)
+    {
+        var format = selected.Format;
+        // DVINFO can change on a tape while the payload remains native DIF in the same subtype.
+        return new(selected.MediaType, receive, failure,
+            format.IsDv ? media => MsTapeMediaTypes.GetFormat(media) == format : null);
+    }
+
     internal void Connect(nint source, MsTapeOutput selected, DirectShowSink sink)
     {
-        graph.AddSource(source, "MSTape Source");
+        graph.AddSource(source, "i.LINK source");
         var hr = graph.Connect(selected.Pin, selected.MediaType, sink, "CaptureRack FireWire Sink");
         if (hr is TypeNotAccepted or unchecked((int)0x80040207) or unchecked((int)0x80040217) or
             unchecked((int)0x80040200) or unchecked((int)0x80040248))
-            throw new FireWireException(4, $"MSTape rejected the selected TS format (0x{hr:X8}).");
-        Check(hr, "Connect MSTape directly to the sink");
+            throw new FireWireException(4, $"i.LINK driver rejected the selected {selected.Format.Id} format (0x{hr:X8}).");
+        Check(hr, "Connect i.LINK directly to the sink");
     }
 
     internal void Start() => graph.Start();

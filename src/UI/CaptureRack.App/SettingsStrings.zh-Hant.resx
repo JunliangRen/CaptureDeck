@@ -985,7 +985,7 @@
     <value>通用 Windows DirectShow 擷取卡與 USB 擷取裝置，支援 Crossbar 路由。</value>
   </data>
   <data name="BackendFireWireName" xml:space="preserve">
-    <value>FireWire / i.LINK (MSTape)</value>
+    <value>FireWire / i.LINK</value>
   </data>
   <data name="FwPreviewName" xml:space="preserve">
     <value>i.LINK 預覽</value>
@@ -1008,8 +1008,11 @@
   <data name="FwReacquiringVideo" xml:space="preserve">
     <value>已收到 i.LINK 資料，正在辨識視訊串流…</value>
   </data>
+  <data name="FwGeneratingSimulation" xml:space="preserve">
+    <value>正在啟動 i.LINK 模擬來源。</value>
+  </data>
   <data name="FwWaitForData" xml:space="preserve">
-    <value>正在等待 i.LINK MPEG-TS。請在錄影機上播放。</value>
+    <value>正在等待 i.LINK 資料。請在裝置上開始播放。</value>
   </data>
   <data name="FwDecodeFailed" xml:space="preserve">
     <value>無法解碼 i.LINK 預覽。</value>
@@ -1026,6 +1029,60 @@
   <data name="FwRecordFailed" xml:space="preserve">
     <value>無法儲存 i.LINK 錄製。</value>
   </data>
+  <data name="FwSimulatedName" xml:space="preserve">
+    <value>模擬 {0}</value>
+  </data>
+  <data name="FwSavedDvRecording" xml:space="preserve">
+    <value>已儲存 {0} · {1:N0} 影格 DV。</value>
+  </data>
+  <data name="DvInfoMetadata" xml:space="preserve">
+    <value>DV 影格中繼資料</value>
+  </data>
+  <data name="DvInfoFrames" xml:space="preserve">
+    <value>DV 影格</value>
+  </data>
+  <data name="DvInfoInvalidFrames" xml:space="preserve">
+    <value>異常 DIF 影格</value>
+  </data>
+  <data name="DvInfoFormatChanges" xml:space="preserve">
+    <value>格式變更</value>
+  </data>
+  <data name="DvInfoDiscontinuities" xml:space="preserve">
+    <value>樣本不連續</value>
+  </data>
+  <data name="DvInfoTimecode" xml:space="preserve">
+    <value>DV 時間碼</value>
+  </data>
+  <data name="DvInfoRecordingDate" xml:space="preserve">
+    <value>錄製日期</value>
+  </data>
+  <data name="DvInfoRecordingTime" xml:space="preserve">
+    <value>錄製時間</value>
+  </data>
+  <data name="DvInfoAudio" xml:space="preserve">
+    <value>DV 音訊</value>
+  </data>
+  <data name="DvInfoAspect" xml:space="preserve">
+    <value>畫面比例</value>
+  </data>
+  <data name="DvChecking" xml:space="preserve">
+    <value>正在檢查 DV</value>
+  </data>
+  <data name="DvCheckingDetail" xml:space="preserve">
+    <value>正在檢查原始 DV 影格結構與中繼資料。</value>
+  </data>
+  <data name="DvCheckPassed" xml:space="preserve">
+    <value>DV 結構檢查通過</value>
+  </data>
+  <data name="DvCheckPassedDetail" xml:space="preserve">
+    <value>結構檢查讀取 DIF 影格邊界與內嵌中繼資料。畫面和音訊需另行解碼檢查。</value>
+  </data>
+  <data name="DvCheckFailed" xml:space="preserve">
+    <value>DV 結構檢查失敗</value>
+  </data>
+  <data name="DvCheckFailedDetail" xml:space="preserve">
+    <value>請查看異常影格數與尾端殘留位元組數。</value>
+  </data>
   <data name="FwSavedRecording" xml:space="preserve">
     <value>已儲存 {0} · {1:N0} 個 TS 封包</value>
   </data>
@@ -1033,7 +1090,7 @@
     <value>檢查 TS 錄製…</value>
   </data>
   <data name="BackendFireWireDesc" xml:space="preserve">
-    <value>預覽並錄製 i.LINK 磁帶裝置輸出的原始 MPEG-TS。</value>
+    <value>預覽和錄製 i.LINK 裝置輸出的原始 DV 或 HDV／D-VHS MPEG-TS。</value>
   </data>
   <data name="BackendRfName" xml:space="preserve">
     <value>RF / 基頻訊號擷取 (SignalCapture)</value>
@@ -1049,9 +1106,6 @@
   </data>
   <data name="SourceRackHeading" xml:space="preserve">
     <value>擷取來源機架</value>
-  </data>
-  <data name="SourceRackConfigure" xml:space="preserve">
-    <value>開啟擷取設定面板</value>
   </data>
   <data name="SourceStatusActive" xml:space="preserve">
     <value>使用中</value>
@@ -1078,13 +1132,13 @@
     <value>例如 Tape04_SideA</value>
   </data>
   <data name="QcCenterSubtitleMulti" xml:space="preserve">
-    <value>完整解碼 MOV 或 MKV 並產生品質報告，或離線分析 188 / 192 位元組 MPEG-TS。</value>
+    <value>完整解碼 MOV 或 MKV 並產生品質報告，或離線分析原始 DV 與 188 / 192 位元組 MPEG-TS。</value>
   </data>
   <data name="CheckMediaFile" xml:space="preserve">
     <value>檢查 MOV / MKV / TS 檔案</value>
   </data>
   <data name="QcDropPromptMulti" xml:space="preserve">
-    <value>將 MOV、MKV 或 TS 檔案拖到此處，或選取檔案進行檢查</value>
+    <value>將 MOV、MKV、DV 或 TS 檔案拖到此處，或選取檔案進行檢查</value>
   </data>
   <data name="QcHistoryHeading" xml:space="preserve">
     <value>本次工作階段品管紀錄</value>
@@ -1150,13 +1204,13 @@
     <value>無法將此檔案驗證為有效的 188 或 192 位元組 MPEG 傳輸串流。</value>
   </data>
   <data name="TsSaveDifferentFile" xml:space="preserve">
-    <value>請選擇其他儲存路徑，避免覆寫原始 TS 檔案。</value>
+    <value>請選擇其他儲存路徑，以保留原始錄製檔案。</value>
   </data>
   <data name="TsJsonSaved" xml:space="preserve">
-    <value>TS JSON 報告已儲存</value>
+    <value>JSON 報告已儲存</value>
   </data>
   <data name="TsJsonSaveFailed" xml:space="preserve">
-    <value>無法儲存 TS JSON 報告</value>
+    <value>無法儲存 JSON 報告</value>
   </data>
   <data name="SourceRackStatusLabel" xml:space="preserve">
     <value>狀態</value>
@@ -1260,8 +1314,113 @@
   <data name="DsVideoStream" xml:space="preserve">
     <value>視訊串流</value>
   </data>
+  <data name="DsCameraChoice" xml:space="preserve">
+    <value>數值</value>
+  </data>
+  <data name="DsCameraOff" xml:space="preserve">
+    <value>關閉</value>
+  </data>
+  <data name="DsCameraOn" xml:space="preserve">
+    <value>開啟</value>
+  </data>
+  <data name="DsCameraFieldOfView" xml:space="preserve">
+    <value>視野</value>
+  </data>
+  <data name="DsCameraControls" xml:space="preserve">
+    <value>攝影機控制</value>
+  </data>
+  <data name="DsCameraProperty" xml:space="preserve">
+    <value>設定項目</value>
+  </data>
+  <data name="DsCameraAutomatic" xml:space="preserve">
+    <value>自動</value>
+  </data>
+  <data name="DsCameraApply" xml:space="preserve">
+    <value>套用</value>
+  </data>
+  <data name="DsCameraNoControls" xml:space="preserve">
+    <value>驅動程式未回報可用的攝影機控制。</value>
+  </data>
+  <data name="DsCameraValue" xml:space="preserve">
+    <value>目前 {0:0} · 預設 {1}</value>
+  </data>
+  <data name="DsCameraExposure" xml:space="preserve">
+    <value>曝光</value>
+  </data>
+  <data name="DsCameraLowLightCompensation" xml:space="preserve">
+    <value>低光補償</value>
+  </data>
+  <data name="DsCameraFocus" xml:space="preserve">
+    <value>對焦</value>
+  </data>
+  <data name="DsCameraZoom" xml:space="preserve">
+    <value>變焦</value>
+  </data>
+  <data name="DsCameraPan" xml:space="preserve">
+    <value>水平位置</value>
+  </data>
+  <data name="DsCameraTilt" xml:space="preserve">
+    <value>垂直位置</value>
+  </data>
+  <data name="DsCameraRoll" xml:space="preserve">
+    <value>旋轉</value>
+  </data>
+  <data name="DsCameraIris" xml:space="preserve">
+    <value>光圈</value>
+  </data>
+  <data name="DsCameraWhiteBalance" xml:space="preserve">
+    <value>白平衡</value>
+  </data>
+  <data name="DsCameraBrightness" xml:space="preserve">
+    <value>亮度</value>
+  </data>
+  <data name="DsCameraContrast" xml:space="preserve">
+    <value>對比</value>
+  </data>
+  <data name="DsCameraSaturation" xml:space="preserve">
+    <value>飽和度</value>
+  </data>
+  <data name="DsCameraSharpness" xml:space="preserve">
+    <value>銳利度</value>
+  </data>
+  <data name="DsCameraHue" xml:space="preserve">
+    <value>色相</value>
+  </data>
+  <data name="DsCameraGamma" xml:space="preserve">
+    <value>Gamma</value>
+  </data>
+  <data name="DsCameraColorEnable" xml:space="preserve">
+    <value>啟用彩色</value>
+  </data>
+  <data name="DsCameraBacklightCompensation" xml:space="preserve">
+    <value>背光補償</value>
+  </data>
+  <data name="DsCameraGain" xml:space="preserve">
+    <value>增益</value>
+  </data>
+  <data name="DsResolution" xml:space="preserve">
+    <value>解析度</value>
+  </data>
+  <data name="DsFrameRate" xml:space="preserve">
+    <value>影格率</value>
+  </data>
+  <data name="DsColorSpace" xml:space="preserve">
+    <value>色彩空間</value>
+  </data>
+  <data name="DsCopyDiagnostics" xml:space="preserve">
+    <value>複製裝置診斷</value>
+  </data>
+  <data name="DsDiagnosticsCopied" xml:space="preserve">
+    <value>已複製裝置診斷。</value>
+  </data>
+  <data name="DsFormatDetails" xml:space="preserve">
+    <value>格式詳細資訊</value>
+  </data>
+  <data name="DsUnspecified" xml:space="preserve">
+    <value>未指定</value>
+  </data>
   <data name="DsVideoFormat" xml:space="preserve">
-    <value>視訊格式</value>
+    <value>驅動程式格式</value>
   </data>
   <data name="DsAudioFormat" xml:space="preserve">
     <value>音訊接腳與格式</value>

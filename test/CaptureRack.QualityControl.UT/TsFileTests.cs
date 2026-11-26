@@ -8,6 +8,7 @@ public sealed class TsFileTests
 {
     [Theory]
     [InlineData(188, ".ts")]
+    [InlineData(192, ".ts")]
     [InlineData(192, ".ts192")]
     [InlineData(188, ".m2t")]
     public void DetectsLayoutAndExportsReport(int stride, string extension)

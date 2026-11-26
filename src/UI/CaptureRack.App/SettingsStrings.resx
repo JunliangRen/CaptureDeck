@@ -985,7 +985,7 @@
     <value>General Windows DirectShow capture cards and USB devices with crossbar routing.</value>
   </data>
   <data name="BackendFireWireName" xml:space="preserve">
-    <value>FireWire / i.LINK (MSTape)</value>
+    <value>FireWire / i.LINK</value>
   </data>
   <data name="FwPreviewName" xml:space="preserve">
     <value>i.LINK preview</value>
@@ -1008,8 +1008,11 @@
   <data name="FwReacquiringVideo" xml:space="preserve">
     <value>Receiving i.LINK data. Detecting the video stream…</value>
   </data>
+  <data name="FwGeneratingSimulation" xml:space="preserve">
+    <value>Starting the simulated i.LINK source.</value>
+  </data>
   <data name="FwWaitForData" xml:space="preserve">
-    <value>Waiting for i.LINK MPEG-TS. Start playback on the deck.</value>
+    <value>Waiting for i.LINK data. Start playback on the deck.</value>
   </data>
   <data name="FwDecodeFailed" xml:space="preserve">
     <value>Could not decode i.LINK preview.</value>
@@ -1026,6 +1029,60 @@
   <data name="FwRecordFailed" xml:space="preserve">
     <value>Could not save i.LINK recording.</value>
   </data>
+  <data name="FwSimulatedName" xml:space="preserve">
+    <value>Simulated {0}</value>
+  </data>
+  <data name="FwSavedDvRecording" xml:space="preserve">
+    <value>Saved {0} · {1:N0} DV frames.</value>
+  </data>
+  <data name="DvInfoMetadata" xml:space="preserve">
+    <value>DV frame metadata</value>
+  </data>
+  <data name="DvInfoFrames" xml:space="preserve">
+    <value>DV frames</value>
+  </data>
+  <data name="DvInfoInvalidFrames" xml:space="preserve">
+    <value>Invalid DIF frames</value>
+  </data>
+  <data name="DvInfoFormatChanges" xml:space="preserve">
+    <value>Format changes</value>
+  </data>
+  <data name="DvInfoDiscontinuities" xml:space="preserve">
+    <value>Sample discontinuities</value>
+  </data>
+  <data name="DvInfoTimecode" xml:space="preserve">
+    <value>DV timecode</value>
+  </data>
+  <data name="DvInfoRecordingDate" xml:space="preserve">
+    <value>Recording date</value>
+  </data>
+  <data name="DvInfoRecordingTime" xml:space="preserve">
+    <value>Recording time</value>
+  </data>
+  <data name="DvInfoAudio" xml:space="preserve">
+    <value>DV audio</value>
+  </data>
+  <data name="DvInfoAspect" xml:space="preserve">
+    <value>Aspect ratio</value>
+  </data>
+  <data name="DvChecking" xml:space="preserve">
+    <value>Checking DV</value>
+  </data>
+  <data name="DvCheckingDetail" xml:space="preserve">
+    <value>Checking the original DV frame structure and metadata.</value>
+  </data>
+  <data name="DvCheckPassed" xml:space="preserve">
+    <value>DV structure check passed</value>
+  </data>
+  <data name="DvCheckPassedDetail" xml:space="preserve">
+    <value>The structural check reads DIF frame boundaries and embedded metadata. It does not decode the picture or audio.</value>
+  </data>
+  <data name="DvCheckFailed" xml:space="preserve">
+    <value>DV structure check failed</value>
+  </data>
+  <data name="DvCheckFailedDetail" xml:space="preserve">
+    <value>Check the invalid-frame and trailing-byte counts.</value>
+  </data>
   <data name="FwSavedRecording" xml:space="preserve">
     <value>Saved {0} · {1:N0} TS packets</value>
   </data>
@@ -1033,7 +1090,7 @@
     <value>Check TS recording…</value>
   </data>
   <data name="BackendFireWireDesc" xml:space="preserve">
-    <value>Preview and record native MPEG-TS from an i.LINK tape device.</value>
+    <value>Preview and record native DV or HDV / D-VHS MPEG-TS over i.LINK.</value>
   </data>
   <data name="BackendRfName" xml:space="preserve">
     <value>RF / Baseband SignalCapture</value>
@@ -1049,9 +1106,6 @@
   </data>
   <data name="SourceRackHeading" xml:space="preserve">
     <value>CAPTURE SOURCE RACK</value>
-  </data>
-  <data name="SourceRackConfigure" xml:space="preserve">
-    <value>Open capture inspector</value>
   </data>
   <data name="SourceStatusActive" xml:space="preserve">
     <value>Active</value>
@@ -1078,13 +1132,13 @@
     <value>e.g. Tape04_SideA</value>
   </data>
   <data name="QcCenterSubtitleMulti" xml:space="preserve">
-    <value>Decode MOV or MKV and generate QC reports, or analyze 188 / 192-byte MPEG-TS offline.</value>
+    <value>Decode MOV or MKV and generate QC reports, or analyze raw DV and 188 / 192-byte MPEG-TS offline.</value>
   </data>
   <data name="CheckMediaFile" xml:space="preserve">
     <value>Check MOV / MKV / TS file</value>
   </data>
   <data name="QcDropPromptMulti" xml:space="preserve">
-    <value>Drop a MOV, MKV or TS file here, or select one to verify</value>
+    <value>Drop a MOV, MKV, DV or TS file here, or select one to verify</value>
   </data>
   <data name="QcHistoryHeading" xml:space="preserve">
     <value>SESSION QC HISTORY</value>
@@ -1150,13 +1204,13 @@
     <value>The file could not be verified as a valid 188- or 192-byte MPEG transport stream.</value>
   </data>
   <data name="TsSaveDifferentFile" xml:space="preserve">
-    <value>Choose a different destination path so the source TS file is not overwritten.</value>
+    <value>Choose a different destination to preserve the source recording.</value>
   </data>
   <data name="TsJsonSaved" xml:space="preserve">
-    <value>TS JSON report saved</value>
+    <value>JSON report saved</value>
   </data>
   <data name="TsJsonSaveFailed" xml:space="preserve">
-    <value>Could not save TS JSON report</value>
+    <value>Could not save JSON report</value>
   </data>
   <data name="SourceRackStatusLabel" xml:space="preserve">
     <value>Status</value>
@@ -1260,8 +1314,113 @@
   <data name="DsVideoStream" xml:space="preserve">
     <value>Video stream</value>
   </data>
+  <data name="DsCameraChoice" xml:space="preserve">
+    <value>Value</value>
+  </data>
+  <data name="DsCameraOff" xml:space="preserve">
+    <value>Off</value>
+  </data>
+  <data name="DsCameraOn" xml:space="preserve">
+    <value>On</value>
+  </data>
+  <data name="DsCameraFieldOfView" xml:space="preserve">
+    <value>Field of view</value>
+  </data>
+  <data name="DsCameraControls" xml:space="preserve">
+    <value>Camera controls</value>
+  </data>
+  <data name="DsCameraProperty" xml:space="preserve">
+    <value>Setting</value>
+  </data>
+  <data name="DsCameraAutomatic" xml:space="preserve">
+    <value>Automatic</value>
+  </data>
+  <data name="DsCameraApply" xml:space="preserve">
+    <value>Apply</value>
+  </data>
+  <data name="DsCameraNoControls" xml:space="preserve">
+    <value>The driver reports no supported camera controls.</value>
+  </data>
+  <data name="DsCameraValue" xml:space="preserve">
+    <value>Value {0:0} · Default {1}</value>
+  </data>
+  <data name="DsCameraExposure" xml:space="preserve">
+    <value>Exposure</value>
+  </data>
+  <data name="DsCameraLowLightCompensation" xml:space="preserve">
+    <value>Low-light compensation</value>
+  </data>
+  <data name="DsCameraFocus" xml:space="preserve">
+    <value>Focus</value>
+  </data>
+  <data name="DsCameraZoom" xml:space="preserve">
+    <value>Zoom</value>
+  </data>
+  <data name="DsCameraPan" xml:space="preserve">
+    <value>Pan</value>
+  </data>
+  <data name="DsCameraTilt" xml:space="preserve">
+    <value>Tilt</value>
+  </data>
+  <data name="DsCameraRoll" xml:space="preserve">
+    <value>Roll</value>
+  </data>
+  <data name="DsCameraIris" xml:space="preserve">
+    <value>Iris</value>
+  </data>
+  <data name="DsCameraWhiteBalance" xml:space="preserve">
+    <value>White balance</value>
+  </data>
+  <data name="DsCameraBrightness" xml:space="preserve">
+    <value>Brightness</value>
+  </data>
+  <data name="DsCameraContrast" xml:space="preserve">
+    <value>Contrast</value>
+  </data>
+  <data name="DsCameraSaturation" xml:space="preserve">
+    <value>Saturation</value>
+  </data>
+  <data name="DsCameraSharpness" xml:space="preserve">
+    <value>Sharpness</value>
+  </data>
+  <data name="DsCameraHue" xml:space="preserve">
+    <value>Hue</value>
+  </data>
+  <data name="DsCameraGamma" xml:space="preserve">
+    <value>Gamma</value>
+  </data>
+  <data name="DsCameraColorEnable" xml:space="preserve">
+    <value>Color enable</value>
+  </data>
+  <data name="DsCameraBacklightCompensation" xml:space="preserve">
+    <value>Backlight compensation</value>
+  </data>
+  <data name="DsCameraGain" xml:space="preserve">
+    <value>Gain</value>
+  </data>
+  <data name="DsResolution" xml:space="preserve">
+    <value>Resolution</value>
+  </data>
+  <data name="DsFrameRate" xml:space="preserve">
+    <value>Frame rate</value>
+  </data>
+  <data name="DsColorSpace" xml:space="preserve">
+    <value>Color space</value>
+  </data>
+  <data name="DsCopyDiagnostics" xml:space="preserve">
+    <value>Copy device diagnostics</value>
+  </data>
+  <data name="DsDiagnosticsCopied" xml:space="preserve">
+    <value>Device diagnostics copied.</value>
+  </data>
+  <data name="DsFormatDetails" xml:space="preserve">
+    <value>Format details</value>
+  </data>
+  <data name="DsUnspecified" xml:space="preserve">
+    <value>Unspecified</value>
+  </data>
   <data name="DsVideoFormat" xml:space="preserve">
-    <value>Video format</value>
+    <value>Driver format</value>
   </data>
   <data name="DsAudioFormat" xml:space="preserve">
     <value>Audio pin and format</value>

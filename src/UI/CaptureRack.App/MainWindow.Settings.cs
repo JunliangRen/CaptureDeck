@@ -357,7 +357,7 @@ public sealed partial class MainWindow
             var text = IsTestSignalActive
                 ? $"{backendName} · {L(TestSignalScenarioKey)} · {TestSignal.Mode.Description} · " +
                     $"{LocalFormat("ShortVideoFormat", "v210", 10)} / {LocalFormat("ShortPcmFormat", (uint)TestSignal.AudioFormat)}"
-                : IsFireWireActive ? $"{backendName} · MPEG-TS (192 B)"
+                : IsFireWireActive ? $"{backendName} · {fireWireView.FormatSummary}"
                 : IsDirectShowActive ? backendName : $"{backendName} · {L("SourceStatusPlanned")}";
             ConfigurationSummary.Text = text;
             AutomationProperties.SetName(QuickSourceButton, $"{L("Capture")} · {text}");

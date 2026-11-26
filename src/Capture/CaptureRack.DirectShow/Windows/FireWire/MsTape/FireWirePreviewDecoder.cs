@@ -15,7 +15,7 @@ public readonly record struct FireWireFrameInfo(int Width, int Height, bool? Top
     public int PixelHeight => Math.Min(Height, FireWirePreviewDecoder.MaxHeight);
 }
 
-public sealed class FireWirePreviewDecoder
+public sealed class FireWirePreviewDecoder(bool dv = false)
 {
     public const int AudioRate = 48000;
     internal const int MaxWidth = 1920, MaxHeight = 1080;
@@ -120,7 +120,7 @@ public sealed class FireWirePreviewDecoder
             UseShellExecute = false, CreateNoWindow = true, RedirectStandardInput = true,
             RedirectStandardOutput = true, RedirectStandardError = true
         };
-        string[] arguments = ["-hide_banner", "-loglevel", "info", "-nostats", "-nostdin", "-f", "mpegts", "-probesize", "1048576",
+        string[] arguments = ["-hide_banner", "-loglevel", "info", "-nostats", "-nostdin", "-f", dv ? "dv" : "mpegts", "-probesize", "1048576",
             "-analyzeduration", "1000000", "-i", "pipe:0", "-map", "0:v:0", "-map", "0:a:0?",
             "-vf", VideoFilter, "-fps_mode", "passthrough", "-c:v", "rawvideo", "-pix_fmt", "bgra", "-threads:v", "1",
             "-af", "ashowinfo", "-c:a", "pcm_s16le", "-ac", "2", "-ar", "48000", "-flush_packets", "1",

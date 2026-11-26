@@ -21,7 +21,7 @@ public sealed partial class DirectShowCapabilitiesView
     public bool IsRecording => recording is not null;
     public bool IsFinalizing => finalizingRecording;
     public bool SupportsRecording => ActiveVideo is { } video && DirectShowRecording.Supports(video, ActiveAudio);
-    public bool CanRecord => SupportsRecording && IsCapturing && !IsStopping && HasInput;
+    public bool CanRecord => operation is null && SupportsRecording && IsCapturing && !IsStopping && HasInput;
     public string? SavedPath => savedMediaPath;
     public string? RecordingDetail => recordingDetail;
 
@@ -34,6 +34,8 @@ public sealed partial class DirectShowCapabilitiesView
 
     internal void UpdateRecordingControls()
     {
+        UpdateCameraControlState();
+        CopyDiagnosticsButton.IsEnabled = operation is null && !IsStopping && !IsRecording;
         OpenRecordingReportButton.Content = L("DsOpenRecordingReport");
         OpenRecordingReportButton.Visibility = !IsRecording && savedReportPath is not null
             ? Visibility.Visible : Visibility.Collapsed;

@@ -4,8 +4,8 @@ using CaptureRack.Core;
 
 namespace CaptureRack.DirectShow.Windows.FireWire.MsTape;
 
-/// <summary>Re-probes live TS audio and video when tape playback resumes or its mapped streams stop producing video.</summary>
-public sealed class FireWirePreviewRecovery
+/// <summary>Re-probes tape audio and video when playback resumes or the decoder stalls.</summary>
+public sealed class FireWirePreviewRecovery(bool dv = false)
 {
     private static readonly TimeSpan VideoTimeout = TimeSpan.FromSeconds(4);
     private static readonly TimeSpan PollInterval = TimeSpan.FromMilliseconds(200);
@@ -37,7 +37,7 @@ public sealed class FireWirePreviewRecovery
             {
                 var started = Stopwatch.GetTimestamp();
                 var version = Volatile.Read(ref streamVersion);
-                var attempt = new FireWirePreviewDecoder();
+                var attempt = new FireWirePreviewDecoder(dv);
                 long lastVideo = 0;
                 using var cancelAttempt = CancellationTokenSource.CreateLinkedTokenSource(stop);
                 Volatile.Write(ref decoder, attempt);

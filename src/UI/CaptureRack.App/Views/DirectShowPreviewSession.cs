@@ -14,10 +14,13 @@ internal sealed class DirectShowPreviewSession(PreviewFeed feed)
     private readonly Channel<RawFrame> frames = Channel.CreateBounded<RawFrame>(
         new BoundedChannelOptions(1) { SingleReader = true, FullMode = BoundedChannelFullMode.DropOldest },
         frame => frame.Dispose());
+    private readonly Channel<ControlRequest> controlRequests = Channel.CreateUnbounded<ControlRequest>(
+        new UnboundedChannelOptions { SingleReader = true });
     private DirectShowFormat? videoFormat;
     private readonly object recordingGate = new();
     private DirectShowRecording? recording;
     private bool ended;
+    private string stage = "Open device";
 
     internal DirectShowRecording StartRecording(string path, string? device = null,
         Action<NativeContainerAttempt>? progress = null)
@@ -65,6 +68,7 @@ internal sealed class DirectShowPreviewSession(PreviewFeed feed)
     internal long Received => Interlocked.Read(ref received);
     internal long Decoded => Interlocked.Read(ref decoded);
     internal long Unreadable => Interlocked.Read(ref unreadable);
+    internal string DiagnosticStage => Volatile.Read(ref stage);
     internal StereoLevels? ReadAudioLevels()
     {
         StereoMonitor.AudioWindow? window;
@@ -92,7 +96,12 @@ internal sealed class DirectShowPreviewSession(PreviewFeed feed)
         var decoder = Task.Run(() => DecodeAsync(stop));
         try
         {
-            var result = await Task.Run(() => new DirectShowBackend().RunPreview(request, SetFormats, ReceiveVideo, ReceiveAudio, stop))
+            var result = await Task.Run(() => new DirectShowBackend().RunPreview(request, SetFormats, ReceiveVideo, ReceiveAudio,
+                stop, ServiceControls, step =>
+                {
+                    if (step != "Stop the DirectShow graph.")
+                        Volatile.Write(ref stage, step);
+                }))
                 .ConfigureAwait(false);
             EndRecording(result.Error is { } error ? new IOException(error) : null);
             return result;
@@ -104,6 +113,9 @@ internal sealed class DirectShowPreviewSession(PreviewFeed feed)
         }
         finally
         {
+            controlRequests.Writer.TryComplete();
+            while (controlRequests.Reader.TryRead(out var pendingControl))
+                pendingControl.Completion.TrySetException(new InvalidOperationException("The DirectShow preview ended."));
             frames.Writer.TryComplete();
             try { await decoder.ConfigureAwait(false); }
             finally
@@ -118,6 +130,30 @@ internal sealed class DirectShowPreviewSession(PreviewFeed feed)
             }
         }
     }
+
+    internal async Task<DirectShowControl[]> AccessCameraControlsAsync(DirectShowControlChange? change, CancellationToken cancellation)
+    {
+        var completion = new TaskCompletionSource<DirectShowControl[]>(TaskCreationOptions.RunContinuationsAsynchronously);
+        if (!controlRequests.Writer.TryWrite(new(change, cancellation, completion)))
+            throw new InvalidOperationException("The DirectShow preview ended.");
+        return await completion.Task.WaitAsync(cancellation).ConfigureAwait(false);
+    }
+
+    private void ServiceControls(Func<DirectShowControlChange?, DirectShowControl[]> access)
+    {
+        if (!controlRequests.Reader.TryRead(out var request))
+            return;
+        if (request.Cancellation.IsCancellationRequested)
+        {
+            request.Completion.TrySetCanceled(request.Cancellation);
+            return;
+        }
+        try { request.Completion.TrySetResult(access(request.Change)); }
+        catch (Exception error) { request.Completion.TrySetException(error); }
+    }
+
+    private sealed record ControlRequest(DirectShowControlChange? Change, CancellationToken Cancellation,
+        TaskCompletionSource<DirectShowControl[]> Completion);
 
     private void SetFormats(DirectShowFormat video, DirectShowFormat? audio)
     {

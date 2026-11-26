@@ -45,6 +45,20 @@ Capture backends that call a capture-card vendor SDK live under `src/Capture/Cap
 
 FireWire / i.LINK and general DirectShow devices are separate capture sources. The Windows MSTape implementation lives under `CaptureRack.DirectShow/Windows/FireWire/MsTape/`. Reusable COM bindings and DirectShow media-type structures live in `CaptureRack.DirectShow/Windows/Interop/`. The general DirectShow probe uses the same COM bindings and managed sink.
 
+### DirectShow camera controls
+
+Expand **Camera controls** in the DirectShow inspector to read the selected device's settings. The panel uses the driver's legal values and automatic/manual modes. **Apply** writes the selected setting and reads the device back. With preview running, requests use the active capture filter. Camera changes are unavailable while recording.
+
+```powershell
+& $probe directshow list
+& $probe directshow controls '<device-id>' --json
+& $probe directshow controls '<device-id>' Focus auto
+```
+
+The controls report includes the interface, current value and mode, supported modes, and the driver's range, step and default where available. To investigate a new device, query `IAMCameraControl` and `IAMVideoProcAmp`, then call `GetRange` and `Get` for each documented property. Use `IKsControl` for documented KS properties such as auto-exposure priority (low-light compensation). For a vendor UVC Extension Unit, verify the USB device ID, the extension GUID, the control selector, the payload size and value mapping, and get/set support before enabling a setting. CaptureRack uses that path for 65°/78°/90° on Logitech BRIO USB `046d:085e`.
+
+Under **Format details**, **Copy device diagnostics** copies a JSON report with the device model and installed driver version when Windows exposes them, the selected formats, camera controls, and the latest negotiation, sample and preview evidence for the current selection. Failures include the stage and HRESULT when available. Copying reads metadata and controls. Run **Test samples** separately to collect samples. The report omits the device instance path and does not include captured media.
+
 Capture backends discover devices, negotiate formats, and receive samples. Downstream processing is organized by media format so multiple backends can use the same writer or analyzer. MSTape negotiates its supported packet layout and passes the original bytes to `Processing/CaptureRack.Recording/TransportStream/`. The writer handles buffering, byte-preserving output, and file finalization. It has no dependency on DirectShow or MSTape. `CaptureRack.QualityControl` provides the TS parser for both recording-time validation and offline file checks. Tape transport controls belong to `CaptureRack.DeviceControl`.
 
 The shared recording project currently contains the Windows TS writer. Future sources that deliver TS can use it with their own packet layout. DV handling, shared frame and PCM processing, and CVBS/RF preview decoding can be added as separate paths when their sources are connected.
@@ -131,31 +145,34 @@ Negotiate connects the selected pins directly to managed sinks, reads the negoti
 
 ## Windows x64 FireWire / i.LINK
 
-Choose **FireWire / i.LINK (MSTape)** from the source selector, select the device in the right capture panel, and use the shared bottom bar to start preview. Start playback on the deck. FFmpeg decodes video and audio for the shared preview, Bob-Weave controls, scopes, stereo meter, spectrum, and optional speaker monitoring. Choose an output folder, then start recording after TS data arrives. The .ts192 file preserves the original transport bytes. Recording can run with FFmpeg unavailable. Stopping a recording runs the shared TS check and opens its results from the bottom bar.
+Choose **FireWire / i.LINK** from the source selector, select a device in the right capture panel, and use the shared bottom bar to start preview. Start playback on the deck. FFmpeg decodes the monitoring copy for the common preview, Bob-Weave, scopes, meters, and optional speaker monitoring. Choose an output folder and record after data arrives. MSDV devices can supply consumer DV25 (including MiniDV in DV mode), DVCPRO 25, DVCPRO50, or DVCPRO HD when their drivers expose the native format. CaptureRack saves them as raw `.dv` with a format tag before the timestamp. HDV and D-VHS MPEG-TS are saved as `.ts`, with `iLINK188` or `iLINK192` before the timestamp. The writer preserves the driver payload, including all embedded audio, metadata, and any four-byte TS packet prefix. Hardware recording can run with FFmpeg unavailable. Stop recording to run structural QC and open its result from the bottom bar.
 
-The i.LINK inspector shows the tape counter and deck state when the driver returns them. It also shows MPEG-TS programs, tracks, available broadcast metadata, per-PID statistics, and a copyable diagnostic snapshot. During a tape gap or program change, preview re-probes the stream and updates the displayed format and tracks. TS192 recording continues to preserve the incoming bytes.
+The i.LINK inspector shows the tape counter and deck state when the driver returns them. For DV it reads the profile, frame size and rate, embedded timecode, recording date/time, audio sampling rate, quantization and channel count, aspect ratio, and DIF frame statistics. DV audio monitoring uses the first stereo pair. MPEG-TS shows programs, tracks, available broadcast metadata and per-PID statistics. Preview re-probes when playback resumes after a gap or stream content changes. The copy button includes the live diagnostics.
+
+Without a deck, choose a **Simulated** device from the same i.LINK device list. The inputs cover MiniDV, DVCPRO 25, and DVCPRO50 in NTSC/PAL, DVCPRO HD in 1080i50/59.94 and 720p50/59.94, HDV 720p TS188, and HDV 1080i TS188/TS192. FFmpeg generates a short test clip for the selected format, and an in-process DirectShow source loops the original encoded bytes at capture speed. The simulator exercises media negotiation and sample delivery inside CaptureRack. Physical 1394 discovery and AV/C tape commands require hardware.
 
 ### Command-line probe
 
-The .NET 11 probe includes a FireWire command group. It calls MSTape/DirectShow on Windows x64 and can analyze TS files without a deck.
+The .NET 11 probe includes a FireWire command group. It uses MSDV/MSTape through DirectShow on Windows x64 and analyzes `.dv` and TS files offline.
 
 ```powershell
 dotnet build src/CaptureRack.Probe -c Release
 $probe = '.\src\CaptureRack.Probe\bin\Release\net11.0-windows\win-x64\CaptureRack.Probe.exe'
 & $probe firewire list
 & $probe firewire probe --device '<device-id>'
-& $probe firewire capture --device '<device-id>' --output 'D:\Captures\tape.ts192' --format ts192
-& $probe firewire analyze --input 'D:\Captures\tape.ts192' --json
+& $probe firewire capture --device '<device-id>' --output 'D:\Captures\iLINK192_tape.ts' --format ts192
+& $probe firewire capture --device '<dv-device-id>' --output 'D:\Captures\iLINK_DV_tape.dv' --format dv
+& $probe firewire analyze --input 'D:\Captures\iLINK192_tape.ts' --json
 ```
 
 Copy the device ID from `list`. Use an existing output directory. Once the graph starts, play the tape manually. Ctrl+C stops PC capture, drains queued samples, and finalizes the file. `--duration` limits capture from the first sample. `--no-data-timeout` sets the idle timeout in seconds (default 30).
 
-- Live capture requires MSTape to deliver native 192-byte packets. Omitting `--format` and specifying `--format ts192` select the same layout. Offline `analyze` accepts both 188- and 192-byte files.
-- Files contain the bytes delivered by MSTape, including the four-byte prefix in the 192-byte layout. Capture writes to `<output>.partial` before finalization and retains the partial file on failure. Existing files are protected from overwrites.
+- Live capture accepts MSDV interleaved `dv`, `dv25` (DVCPRO 25), `dv50`, and `dvh1` (DVCPRO HD), plus MSTape `ts188` and `ts192`. Omitting `--format` chooses the native DV output or prefers TS192 when the driver offers both TS layouts.
+- Files contain the bytes delivered by the capture driver, including the four-byte prefix in the 192-byte layout. Capture writes to `<output>.partial` before finalization and retains the partial file on failure. Existing files are protected from overwrites.
 - The sidecar `<output>.report.json` records file and queue accounting, transport sync, malformed packets, TEI, continuity, PCR and PTS statistics. It includes zero-based packet indexes for the first error of each reported kind. PCR checks account for wraparound and signaled discontinuities. The report covers transport integrity, and separate playback is needed to verify decoding.
-- `analyze` inspects an existing recording and prints a summary or JSON with `--json`. It auto-detects aligned input with at least five valid packets at the beginning. Specify `--format` for short files or files with a damaged beginning. Structural errors and a truncated tail return exit code 4. TEI, continuity, and backward PCR counts are quality diagnostics.
+- `analyze` inspects an existing recording and prints a summary or JSON with `--json`. It recognizes raw DV by `.dv`, or auto-detects a TS layout with at least five valid aligned packets at the beginning. Use `--format dv` to analyze raw DV under another extension. `dv25`, `dv50`, and `dvh1` check for the requested profile. A raw NTSC 25 Mb/s file can require the original device subtype or the CaptureRack filename to distinguish DVCPRO 25 from consumer DV. DV reports include frame counts, structural errors, and the first and last frame metadata. TS reports cover sync, TEI, continuity, and backward PCR. Structural errors, profile mismatches and a truncated tail return exit code 4.
 
-The .NET tests use generated packets and an in-process DirectShow source. Live TS192 capture from the HM-DHX2 has been verified.
+The .NET tests use the app's selectable simulations for DirectShow negotiation, FFmpeg A/V preview, live metadata, byte-identical recording and offline QC. A VICTOR HM-DHX2 previously verified live TS192 capture. Physical MiniDV, HDV, and DVCPRO capture remain unverified.
 
 ## Native Windows desktop app
 

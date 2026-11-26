@@ -39,6 +39,7 @@ public sealed partial class DirectShowCapabilitiesView
             return;
         if (recording is { } writer && !IsFinalizing)
             FinishRecording(writer);
+        operation?.Cancel();
         stop.Cancel();
         RenderEvidence();
     }
@@ -77,6 +78,7 @@ public sealed partial class DirectShowCapabilitiesView
         previewStop = stop;
         var session = new DirectShowPreviewSession(feed);
         preview = session;
+        previewDiagnostic = null;
         Notice.IsOpen = false;
         PreviewFailure = null;
         RenderEvidence();
@@ -89,6 +91,8 @@ public sealed partial class DirectShowCapabilitiesView
             }, stop.Token);
             negotiated = report;
             sampled = report;
+            previewDiagnostic = SnapshotPreview(session, report.StopReason,
+                report.Error is { } captureError ? DirectShowDiagnosticFailure.FromCaptureError(captureError) : null);
             if (report.Error is { } error)
             {
                 PreviewFailure = error;
@@ -98,6 +102,8 @@ public sealed partial class DirectShowCapabilitiesView
         catch (OperationCanceledException) when (stop.IsCancellationRequested) { }
         catch (Exception error)
         {
+            previewDiagnostic = SnapshotPreview(session, "error",
+                DirectShowDiagnosticFailure.FromException(session.DiagnosticStage, error));
             PreviewFailure = error.Message;
             ShowNotice("PreviewFailed", InfoBarSeverity.Error, error.Message);
         }

@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using CaptureRack.DirectShow.Windows.FireWire.MsTape;
+using CaptureRack.QualityControl;
 using Microsoft.UI.Xaml;
 using Windows.ApplicationModel.DataTransfer;
 
@@ -26,7 +27,7 @@ public sealed partial class FireWireCaptureView
         get
         {
             if (session?.TransportInfo is not { } info)
-                return null;
+                return session?.DvInfo?.LastFrame?.Timecode is { } timecode ? $"DV · TC {timecode}" : null;
             var mode = info.ModeKey is { } key ? L(key) : L("FwInfoUnavailable");
             return info.Counter is { } counter ? $"i.LINK · {mode} · {L("FwInfoCounter")} {counter}" : $"i.LINK · {mode}";
         }
@@ -40,11 +41,13 @@ public sealed partial class FireWireCaptureView
         lastInfoRender = now;
         var live = session;
         var stream = live?.StreamInfo;
+        var dv = live?.DvInfo;
         var transport = live?.TransportInfo;
+        ProgramSection.Header = L(ExpectedFormat.IsDv ? "DvInfoMetadata" : "FwInfoProgramSection");
         InfoSummary.Text = string.Join(" · ", new[]
         {
             PreviewTransportSummary ?? L(live?.SupportsTransportInfo == false ? "FwInfoUnsupported" : "FwInfoWaiting"),
-            stream is not null ? Volatile.Read(ref videoDetails) : null
+            stream is not null || dv is not null ? Volatile.Read(ref videoDetails) : null
         }.OfType<string>());
 
         var fields = new List<string>();
@@ -71,7 +74,15 @@ public sealed partial class FireWireCaptureView
         }
         DeviceDetails.Text = string.Join("\n", fields);
 
-        if (stream is null)
+        if (dv is not null)
+        {
+            ProgramDetails.Text = FormatDvMetadata(dv.LastFrame);
+            StatsDetails.Text = string.Join("\n", Row("DvInfoFrames", dv.Frames.ToString("N0")),
+                Row("DvInfoInvalidFrames", dv.InvalidFrames.ToString("N0")),
+                Row("DvInfoFormatChanges", dv.FormatChanges.ToString("N0")),
+                Row("DvInfoDiscontinuities", dv.Discontinuities.ToString("N0")));
+        }
+        else if (stream is null)
         {
             ProgramDetails.Text = StatsDetails.Text = L("FwInfoWaiting");
         }
@@ -90,8 +101,26 @@ public sealed partial class FireWireCaptureView
             raw.Add(Row("FwInfoServicePids", string.Join(", ", stream.ServiceTablePids.Select(Pid))));
             raw.Add(Row("FwInfoReadAt", stream.ReadAt.ToString("HH:mm:ss")));
         }
+        if (dv?.LastFrame is { } frame)
+            raw.Add($"DIF · {frame.FrameBytes:N0} B · {dv.InputBytes:N0} B");
         RawDetails.Text = raw.Count == 0 ? L("FwInfoWaiting") : string.Join("\n", raw);
-        CopyInfoButton.IsEnabled = stream is not null || transport is not null;
+        CopyInfoButton.IsEnabled = stream is not null || dv is not null || transport is not null;
+    }
+
+    private string FormatDvMetadata(CaptureRack.QualityControl.DvFrameInfo? frame)
+    {
+        if (frame is null)
+            return L("FwInfoWaiting");
+        var unknown = L("FwInfoNotSeen");
+        return string.Join("\n", $"{frame.Encoding.DisplayName()} · {frame.Width} × {frame.Height} · {frame.FramesPerSecond:0.###} fps",
+            Row("DvInfoTimecode", frame.Timecode ?? unknown),
+            Row("DvInfoRecordingDate", frame.RecordingDate ?? unknown),
+            Row("DvInfoRecordingTime", frame.RecordingTime ?? unknown),
+            Row("DvInfoAudio", frame.AudioRate is { } rate
+                ? $"{rate / 1000d:0.###} kHz · {frame.AudioBits?.ToString() ?? "—"} bit" +
+                    (frame.AudioChannels is { } channels ? $" · {channels} ch" : "")
+                : unknown),
+            Row("DvInfoAspect", frame.Widescreen switch { true => "16:9", false => "4:3", null => unknown }));
     }
 
     private string FormatPrograms(FireWireTsInfo stream)

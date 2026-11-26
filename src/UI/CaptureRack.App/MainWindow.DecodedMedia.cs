@@ -96,6 +96,11 @@ public sealed partial class MainWindow
         PreviewPlaceholderText.Text = L(media.PreviewHint ?? "WaitingPreview");
         PreviewPlaceholderHint.Text = "";
         RenderCounts(null);
+        if (IsFireWireActive)
+        {
+            UpdateRecordingFilenamePreview();
+            UpdateConfigurationStatus();
+        }
         UpdateNavigationStyles();
         UpdateControls();
     }
@@ -107,7 +112,7 @@ public sealed partial class MainWindow
         var skipped = (preview?.SkippedFrames ?? 0).ToString("N0", settingsCulture);
         return
         [
-            new("input", L(IsFireWireActive ? "TsMetricPackets" : "DsVideo"), received),
+            new("input", L(IsFireWireActive && !fireWireView.ExpectedFormat.IsDv ? "TsMetricPackets" : "DsVideo"), received),
             new("decoded", L("MetricValidFrames"), presented),
             new("skipped", L("MetricSkipped"), skipped)
         ];

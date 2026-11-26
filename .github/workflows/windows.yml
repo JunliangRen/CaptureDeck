@@ -36,7 +36,7 @@ jobs:
           architecture: ${{ matrix.arch }}
       - name: Run .NET unit tests
         run: dotnet test test/CaptureRack.UT/CaptureRack.UT.csproj -c Release
-      - name: Run offline TS QC tests
+      - name: Run offline stream QC tests
         run: dotnet test test/CaptureRack.QualityControl.UT/CaptureRack.QualityControl.UT.csproj -c Release
       - name: Publish App and Probe
         run: |
@@ -97,7 +97,7 @@ jobs:
             if (!(Test-Path -LiteralPath (Join-Path $env:RUNNER_TEMP $file))) { throw "Missing QC artifact: $file" }
           }
           $env:CAPTURERACK_TEST_SIGNAL_QC = '1'
-          dotnet test test/CaptureRack.UT/CaptureRack.UT.csproj -c Release --no-build --filter "FullyQualifiedName~TestSignalTests|FullyQualifiedName~DirectShowRecordingTests"
+          dotnet test test/CaptureRack.UT/CaptureRack.UT.csproj -c Release --no-build --filter "FullyQualifiedName~TestSignalTests|FullyQualifiedName~DirectShowRecordingTests|FullyQualifiedName~FireWireSimulationTests"
       - uses: actions/upload-artifact@v4
         with:
           name: CaptureRack-${{ env.RID }}

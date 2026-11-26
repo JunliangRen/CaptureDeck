@@ -39,7 +39,49 @@ public sealed unsafe class DirectShowBackend : ICaptureBackend<DirectShowDevice,
         CheckPlatform();
         using var apartment = new ComApartment();
         using var source = CaptureSource.Open(selector, out var device);
-        return new(device, source.HasDroppedFrameCounter, source.Descriptions);
+        return new(device, source.HasDroppedFrameCounter, source.DescribeFormats(device.Id));
+    }
+
+    public DirectShowControl[] CameraControls(string selector, DirectShowControlChange? change = null)
+    {
+        CheckPlatform();
+        using var apartment = new ComApartment();
+        using var source = CaptureSource.Open(selector, out var device, readFormats: false);
+        return change is null ? DirectShowControls.Read(source.Filter, device.Id) : DirectShowControls.Apply(source.Filter, device.Id, change);
+    }
+
+    public DirectShowDiagnosticDevice DescribeDeviceForDiagnostics(string selector, bool includeControls)
+    {
+        CheckPlatform();
+        var (hardwareId, version) = DirectShowDriverInfo.Read(selector);
+        try
+        {
+            return new(hardwareId, version, includeControls ? CameraControls(selector) : null, null);
+        }
+        catch (Exception error)
+        {
+            return new(hardwareId, version, null, DirectShowDiagnosticFailure.FromException("Read camera controls", error));
+        }
+    }
+
+    public DirectShowDiagnosticCheck CheckCaptureForDiagnostics(DirectShowCaptureRequest request, CancellationToken cancellation)
+    {
+        var stage = "Open device";
+        DirectShowFormat? video = null, audio = null;
+        try
+        {
+            var result = RunCore(request, _ => { }, cancellation, step =>
+            {
+                if (step != "Stop the DirectShow graph.")
+                    stage = step;
+            }, (activeVideo, activeAudio) => (video, audio) = (activeVideo, activeAudio), null, null, null);
+            var failure = result.Error is { } error ? DirectShowDiagnosticFailure.FromCaptureError(error) : null;
+            return new(video, audio, result, failure);
+        }
+        catch (Exception error) when (error is not OperationCanceledException)
+        {
+            return new(video, audio, null, DirectShowDiagnosticFailure.FromException(stage, error));
+        }
     }
 
     public DirectShowCaptureResult Run(DirectShowCaptureRequest request, Action<DirectShowCaptureResult> progress,
@@ -47,16 +89,18 @@ public sealed unsafe class DirectShowBackend : ICaptureBackend<DirectShowDevice,
 
     public DirectShowCaptureResult Run(DirectShowCaptureRequest request, Action<DirectShowCaptureResult> progress,
         CancellationToken cancellation, Action<string>? trace) =>
-        RunCore(request, progress, cancellation, trace, null, null, null);
+        RunCore(request, progress, cancellation, trace, null, null, null, null);
 
     public DirectShowCaptureResult RunPreview(DirectShowCaptureRequest request,
         Action<DirectShowFormat, DirectShowFormat?> onFormats, CaptureSampleHandler video,
-        CaptureSampleHandler audio, CancellationToken cancellation) =>
-        RunCore(request with { Duration = TimeSpan.MaxValue }, _ => { }, cancellation, null, onFormats, video, audio);
+        CaptureSampleHandler audio, CancellationToken cancellation,
+        Action<Func<DirectShowControlChange?, DirectShowControl[]>>? serviceControls = null, Action<string>? trace = null) =>
+        RunCore(request with { Duration = TimeSpan.MaxValue }, _ => { }, cancellation, trace, onFormats, video, audio, serviceControls);
 
     private static DirectShowCaptureResult RunCore(DirectShowCaptureRequest request,
         Action<DirectShowCaptureResult> progress, CancellationToken cancellation, Action<string>? trace,
-        Action<DirectShowFormat, DirectShowFormat?>? onFormats, CaptureSampleHandler? onVideo, CaptureSampleHandler? onAudio)
+        Action<DirectShowFormat, DirectShowFormat?>? onFormats, CaptureSampleHandler? onVideo, CaptureSampleHandler? onAudio,
+        Action<Func<DirectShowControlChange?, DirectShowControl[]>>? serviceControls)
     {
         CheckPlatform();
         if (onFormats is not null)
@@ -69,12 +113,13 @@ public sealed unsafe class DirectShowBackend : ICaptureBackend<DirectShowDevice,
         using var source = CaptureSource.Open(request.Device, out var device);
         var video = source.Select(request.VideoFormat, "video");
         var audio = request.AudioFormat is { } audioIndex ? source.Select(audioIndex, "audio") : null;
-        if ((request.ExpectedVideo is { } expectedVideo && video.Format != expectedVideo) ||
+        if ((request.ExpectedVideo is { } expectedVideo && source.ResolveScanMode(video.Format, device.Id) != expectedVideo) ||
             (request.ExpectedAudio is { } expectedAudio && audio?.Format != expectedAudio))
             throw new InvalidOperationException("The requested device formats changed. Refresh the device and try again.");
         if (audio is not null && audio.Pin == video.Pin)
             throw new InvalidOperationException("The selected video and audio formats must be on separate output pins.");
 
+        trace?.Invoke("Create DirectShow capture graph.");
         string? error = null;
         void ReportFailure(string message) => Interlocked.CompareExchange(ref error, message, null);
 
@@ -94,7 +139,7 @@ public sealed unsafe class DirectShowBackend : ICaptureBackend<DirectShowDevice,
         }
 
         trace?.Invoke("Connect video pin to the managed sink.");
-        var videoFormat = Connect(graph, video, videoSink);
+        var videoFormat = source.ResolveScanMode(Connect(graph, video, videoSink), device.Id);
         if (audio is not null)
             trace?.Invoke("Connect audio pin to the managed sink.");
         var audioFormat = audio is null ? null : Connect(graph, audio, audioSink!);
@@ -113,6 +158,8 @@ public sealed unsafe class DirectShowBackend : ICaptureBackend<DirectShowDevice,
             {
                 graph.Start(useSystemClock: true, trace);
                 trace?.Invoke("Receive samples.");
+                Func<DirectShowControlChange?, DirectShowControl[]> accessControls = change => change is null
+                    ? DirectShowControls.Read(source.Filter, device.Id) : DirectShowControls.Apply(source.Filter, device.Id, change);
                 var clock = Stopwatch.StartNew();
                 while (clock.Elapsed < request.Duration)
                 {
@@ -128,6 +175,7 @@ public sealed unsafe class DirectShowBackend : ICaptureBackend<DirectShowDevice,
                         reason = "end_of_stream";
                         break;
                     }
+                    serviceControls?.Invoke(accessControls);
                     var remaining = request.Duration - clock.Elapsed;
                     if (remaining > TimeSpan.Zero)
                         cancellation.WaitHandle.WaitOne(remaining < TimeSpan.FromMilliseconds(50)

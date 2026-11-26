@@ -47,6 +47,21 @@ public sealed class WorkspaceArchitectureTests
     }
 
     [Fact]
+    public void FireWireRecordingUsesTsExtensionAndMarks192InThePrefix()
+    {
+        var time = new DateTime(2026, 11, 25, 9, 30, 45, 123);
+        Assert.Equal("CaptureRack_iLINK192_20261125_093045_123.ts", RecordingFileNaming.BuildFireWireName(null, time));
+        Assert.Equal("Tape04_SideA_CaptureRack_iLINK192_20261125_093045_123.ts",
+            RecordingFileNaming.BuildFireWireName("Tape04/SideA", time));
+        Assert.Equal("Tape04_SideA_CaptureRack_iLINK192_YYYYMMDD_HHmmss_fff.ts",
+            RecordingFileNaming.BuildFireWireName("Tape04/SideA", localTime: null));
+        Assert.Equal("CaptureRack_iLINK188_20261125_093045_123.ts",
+            RecordingFileNaming.BuildFireWireName(null, time, new(TsLayout.Ts188)));
+        Assert.Equal("CaptureRack_iLINK_DV_20261125_093045_123.dv",
+            RecordingFileNaming.BuildFireWireName(null, time, CaptureRack.DirectShow.Windows.FireWire.MsTape.FireWireMediaFormat.Dv));
+    }
+
+    [Fact]
     public void DeckLinkWorkspaceModuleBuildsSeverityCodedTelemetry()
     {
         var module = new DeckLinkWorkspaceModule();

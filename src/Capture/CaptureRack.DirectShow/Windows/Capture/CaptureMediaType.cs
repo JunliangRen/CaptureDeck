@@ -18,7 +18,9 @@ public sealed record DirectShowFormat(int Index, string PinId, string PinName, s
     public double? FramesPerSecond => FrameInterval100ns is > 0 ? 10_000_000d / FrameInterval100ns : null;
     public double? DisplayAspectRatio { get; init; }
     public uint? InterlaceFlags { get; init; }
-    public string? FieldOrder => InterlaceFlags is { } flags
+    public uint? FallbackInterlaceFlags { get; init; }
+    internal uint? EffectiveInterlaceFlags => InterlaceFlags ?? FallbackInterlaceFlags;
+    public string? FieldOrder => EffectiveInterlaceFlags is { } flags
         ? (flags & 1) == 0 ? "progressive" : (flags & 4) != 0 ? "top-first" : "bottom-first"
         : null;
     public int? SampleRate { get; init; }
@@ -92,6 +94,42 @@ internal static unsafe class CaptureMediaType
     private static readonly Guid VideoInfo2 = new("F72A76A0-EB0A-11D0-ACE4-0000C0CC16BA");
     private static readonly Guid Mpeg2VideoInfo = new("E06D80E3-DB46-11CF-B4D1-00805F6CBBEA");
     private static readonly Guid WaveFormat = new("05589F81-C356-11CE-BF01-00AA0055595A");
+
+    internal static DirectShowFormat ResolveScanMode(DirectShowFormat format, string deviceId,
+        IEnumerable<DirectShowFormat> advertised)
+    {
+        if (format.FormatType != VideoInfo || format.Kind != "video" || format.InterlaceFlags is not null ||
+            format.Width is not > 0 || format.Height is not > 0 || format.FrameInterval100ns is not > 0)
+            return format;
+
+        var alternatives = advertised.Where(candidate => candidate.FormatType == VideoInfo2 &&
+            candidate.InterlaceFlags.HasValue && candidate.PinId == format.PinId &&
+            candidate.MajorType == format.MajorType && candidate.Subtype == format.Subtype &&
+            candidate.Width == format.Width && candidate.Height == format.Height &&
+            candidate.FrameInterval100ns == format.FrameInterval100ns && candidate.FourCc == format.FourCc &&
+            candidate.ImageBytes == format.ImageBytes && candidate.BitmapBitsPerPixel == format.BitmapBitsPerPixel &&
+            candidate.BitmapTopDown == format.BitmapTopDown)
+            // Display preferences do not change the field order or sample layout.
+            .Select(candidate => (candidate.InterlaceFlags!.Value & 1) == 0 ? 0u : candidate.InterlaceFlags.Value & 0x37)
+            .Distinct().Take(2).ToArray();
+        if (alternatives.Length > 0)
+            return alternatives.Length == 1 ? format with { FallbackInterlaceFlags = alternatives[0] } : format;
+
+        // The Blackmagic AVStream pin omits scan metadata for these two native SD modes.
+        if (!deviceId.StartsWith(@"@device:pnp:\\?\decklink#avstream#", StringComparison.OrdinalIgnoreCase) ||
+            format.FourCc is not ("UYVY" or "v210") || format.Width != 720)
+            return format;
+
+        const uint interlaced = 0x01;
+        const uint topFieldFirst = 0x04;
+        const uint bothFieldsRegular = 0x20;
+        return (format.Height, format.FrameInterval100ns) switch
+        {
+            (486, 333666 or 333667) => format with { FallbackInterlaceFlags = interlaced | bothFieldsRegular },
+            (576, 400000) => format with { FallbackInterlaceFlags = interlaced | topFieldFirst | bothFieldsRegular },
+            _ => format
+        };
+    }
 
     internal static DirectShowFormat Describe(in DirectShowMediaType type, int index, string pinId, string pinName, bool includeBitmapHeader = false)
     {

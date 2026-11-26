@@ -37,18 +37,27 @@ public sealed partial class FireWireCaptureView : UserControl, ILiveMediaSource
     public bool IsFinalizing { get; private set; }
     public bool CanStart => FireWireCapture.IsSupported && !discovering && DevicePicker.SelectedItem is FireWireDevice;
     public bool SupportsRecording => CanStart;
-    public bool CanRecord => IsCapturing && !IsStopping && HasInput;
+    public bool CanRecord => IsCapturing && !IsStopping && session?.CanRecord == true;
     public bool HasInput => session?.HasRecentInput == true;
     internal PreviewFeed? ActivePreview => Volatile.Read(ref activePreview);
-    public long ReceivedUnits => (session?.ReceivedBytes ?? 0) / 192;
+    public long ReceivedUnits => session?.ReceivedUnits ?? 0;
+    private FireWireDevice? SelectedDevice => DevicePicker.SelectedItem as FireWireDevice;
+    internal FireWireMediaFormat ExpectedFormat => session?.Format ??
+        SelectedDevice?.SimulatedFormat ?? (SelectedDevice?.IsDv == true ? FireWireMediaFormat.Dv : new(TsLayout.Ts192));
+    internal string FormatSummary => ExpectedFormat.IsDv
+        ? (session?.DvInfo?.LastFrame?.Encoding ?? session?.Format?.Encoding ?? SelectedDevice?.SimulatedFormat?.Encoding)?.DisplayName() ?? "DV" :
+        (session?.Format ?? SelectedDevice?.SimulatedFormat)?.Transport is { } layout ? $"MPEG-TS ({layout.Stride} B)" : "MPEG-TS";
     public long DecodedFrames => decoder?.DecodedFrames ?? 0;
     public bool HasPreview => ffmpeg is not null && CanStart && !decodeFailed;
-    public CaptureAudioInfo? AudioInfo => Volatile.Read(ref switchingProgram) ? null : decoder?.AudioInfo;
+    public CaptureAudioInfo? AudioInfo => Volatile.Read(ref switchingProgram) ? null :
+        session?.DvInfo?.LastFrame is { AudioRate: int rate } frame
+            ? new("DV PCM", frame.AudioBits, rate, frame.AudioChannels ?? decoder?.AudioInfo?.Channels, null) : decoder?.AudioInfo;
     public bool HasAudio => HasPreview && Volatile.Read(ref hasAudio);
     public bool HasDeinterlace => HasPreview && Volatile.Read(ref hasFieldOrder);
     public string? PreviewFailure { get; private set; }
     public string? PreviewHint => !IsCapturing ? "FwPreviewStandby" : ffmpeg is null ? "FwMissingFfmpeg" :
-        decodeFailed ? "FwCaptureStillAvailable" : HasInput ? "FwReacquiringVideo" : "FwWaitForData";
+        decodeFailed ? "FwCaptureStillAvailable" : HasInput ? "FwReacquiringVideo" :
+        SelectedDevice?.SimulatedFormat is not null ? "FwGeneratingSimulation" : "FwWaitForData";
     public string? SavedPath { get; private set; }
     public string? RecordingDetail => IsFinalizing ? L("QcFinishing") : recording is { } writer
         ? string.Format(L("FwRecordingProgress"), writer.WrittenBytes / 1048576d)
@@ -133,16 +142,14 @@ public sealed partial class FireWireCaptureView : UserControl, ILiveMediaSource
         UpdateControls();
         try
         {
-            var devices = await Task.Run(() => FireWireCapture.List()
-                .Select(device => string.IsNullOrWhiteSpace(device.Model) ? device :
-                    device with { Name = $"{device.Vendor} {device.Model}".Trim() }).ToArray());
-            DevicePicker.ItemsSource = devices;
-            DevicePicker.SelectedItem = devices.FirstOrDefault(device => device.Id == previous) ?? devices.FirstOrDefault();
-            if (devices.Length == 0)
-                ShowNotice("FwNoDevices", InfoBarSeverity.Warning);
+            var devices = await Task.Run(() => FireWireCapture.List(includeSimulated: true));
+            PopulateDevicePicker(devices, previous);
+            if (devices.All(device => device.SimulatedFormat is not null))
+                ShowNotice("FwNoDevices", InfoBarSeverity.Informational);
         }
         catch (Exception error)
         {
+            PopulateDevicePicker(FireWireCapture.SimulatedDevices, previous);
             ShowNotice("FwDeviceScanFailed", InfoBarSeverity.Error, error.Message);
         }
         finally
@@ -150,6 +157,15 @@ public sealed partial class FireWireCaptureView : UserControl, ILiveMediaSource
             discovering = false;
             UpdateControls();
         }
+    }
+
+    private void PopulateDevicePicker(IEnumerable<FireWireDevice> devices, string? previous)
+    {
+        var display = devices.Select(device => device.SimulatedFormat is not null
+            ? device with { Name = string.Format(L("FwSimulatedName"), device.Model) }
+            : string.IsNullOrWhiteSpace(device.Model) ? device : device with { Name = $"{device.Vendor} {device.Model}".Trim() }).ToArray();
+        DevicePicker.ItemsSource = display;
+        DevicePicker.SelectedItem = display.FirstOrDefault(device => device.Id == previous) ?? display.FirstOrDefault();
     }
 
     private async void RefreshClicked(object sender, RoutedEventArgs e) => await RefreshAsync();
@@ -182,10 +198,10 @@ public sealed partial class FireWireCaptureView : UserControl, ILiveMediaSource
         audio = new StereoMonitor(CaptureAudioFormat.Pcm16, FireWirePreviewDecoder.AudioRate);
         Notice.IsOpen = false;
         Volatile.Write(ref activePreview, feed);
-        var previewDecoder = ffmpeg is null ? null : new FireWirePreviewRecovery();
+        var previewDecoder = ffmpeg is null ? null : new FireWirePreviewRecovery(device.IsDv);
         decoder = previewDecoder;
         CaptureSampleHandler? offer = previewDecoder is null ? null : previewDecoder.Offer;
-        var decoding = previewDecoder is null ? Task.CompletedTask : DecodePreviewAsync(previewDecoder, ffmpeg!, playback, feed, stop.Token);
+        var decoding = previewDecoder is null ? Task.CompletedTask : DecodePreviewAsync(live, previewDecoder, ffmpeg!, playback, feed, stop.Token);
         UpdateControls();
 
         try
@@ -196,7 +212,7 @@ public sealed partial class FireWireCaptureView : UserControl, ILiveMediaSource
                 Volatile.Write(ref videoDetails, null);
                 previewDecoder.NotifyStreamChange();
             };
-            await Task.Run(() => live.Run(device.Id, offer, stop.Token, changed));
+            await Task.Run(() => live.Run(device.Id, offer, stop.Token, changed, ffmpeg));
         }
         catch (OperationCanceledException) when (stop.IsCancellationRequested) { }
         catch (Exception error)
@@ -222,7 +238,7 @@ public sealed partial class FireWireCaptureView : UserControl, ILiveMediaSource
         }
     }
 
-    private async Task DecodePreviewAsync(FireWirePreviewRecovery active, string executable, LocalAudioMonitor playback,
+    private async Task DecodePreviewAsync(FireWireLiveSession live, FireWirePreviewRecovery active, string executable, LocalAudioMonitor playback,
         PreviewFeed feed, CancellationToken stop)
     {
         var previous = double.NaN;
@@ -240,6 +256,7 @@ public sealed partial class FireWireCaptureView : UserControl, ILiveMediaSource
                 var format = info.VideoCodec switch
                 {
                     "mpeg2video" => $"MPEG-2 / {info.PixelFormat}",
+                    "dvvideo" => $"{(live.DvInfo?.LastFrame?.Encoding ?? live.Format?.Encoding)?.DisplayName() ?? "DV"} / {info.PixelFormat}",
                     "h264" => $"H.264 / {info.PixelFormat}",
                     "hevc" => $"HEVC / {info.PixelFormat}",
                     { } codec => $"{codec} / {info.PixelFormat}",
@@ -339,8 +356,8 @@ public sealed partial class FireWireCaptureView : UserControl, ILiveMediaSource
             var folder = outputDirectory();
             if (!Directory.Exists(folder))
                 throw new DirectoryNotFoundException(folder);
-            var prefix = RecordingFileNaming.BuildPrefix(recordingLabel(), DateTime.Now);
-            var writer = live.StartRecording(Path.Combine(folder, prefix + "_iLINK.ts192"));
+            var name = RecordingFileNaming.BuildFireWireName(recordingLabel(), DateTime.Now, ExpectedFormat);
+            var writer = live.StartRecording(Path.Combine(folder, name));
             recording = writer;
             SavedPath = null;
             recordingDetail = null;
@@ -356,7 +373,9 @@ public sealed partial class FireWireCaptureView : UserControl, ILiveMediaSource
             else
             {
                 SavedPath = clip.Path;
-                recordingDetail = string.Format(L("FwSavedRecording"), clip.Path, clip.Analysis.Packets);
+                recordingDetail = clip.DvAnalysis is { } dv
+                    ? string.Format(L("FwSavedDvRecording"), clip.Path, dv.Frames)
+                    : string.Format(L("FwSavedRecording"), clip.Path, clip.Analysis?.Packets ?? 0);
             }
         }
         catch (Exception error)

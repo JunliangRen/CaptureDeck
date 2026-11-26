@@ -51,6 +51,35 @@ internal static class DirectShowCommand
                 return 0;
             }
 
+            if (args is ["controls", _] or ["controls", _, _, _])
+            {
+                DirectShowControlChange? change = null;
+                if (args.Length == 4)
+                {
+                    if (args[3] == "auto")
+                        change = new(args[2], 0, DirectShowControlMode.Auto);
+                    else if (int.TryParse(args[3], NumberStyles.Integer, CultureInfo.InvariantCulture, out var value))
+                        change = new(args[2], value, DirectShowControlMode.Manual);
+                    else
+                        return Usage(1);
+                }
+                var controls = backend.CameraControls(args[1], change);
+                if (json)
+                    PrintJson(controls);
+                else if (controls.Length == 0)
+                    Console.WriteLine("No supported camera controls reported.");
+                else
+                    foreach (var control in controls)
+                    {
+                        var values = control.Choices is { } choices ? string.Join(", ", choices) :
+                            $"{control.Minimum}..{control.Maximum}, step {control.Step}";
+                        Console.WriteLine($"{control.Id}: {control.Value} ({control.CurrentMode}); " +
+                            $"{values}; default {control.DefaultValue?.ToString(CultureInfo.InvariantCulture) ?? "—"}; " +
+                            $"{control.SupportedModes}; {control.Interface}");
+                    }
+                return 0;
+            }
+
             var worker = args.FirstOrDefault() == "capture-worker";
             var negotiate = args.FirstOrDefault() == "negotiate";
             if (negotiate)
@@ -96,6 +125,13 @@ internal static class DirectShowCommand
             {
                 DirectShowInspectionOperation.List => backend.GetDevices(),
                 DirectShowInspectionOperation.Probe => backend.Probe(request.Device!),
+                DirectShowInspectionOperation.Controls => backend.CameraControls(request.Device!, request.ControlChange),
+                DirectShowInspectionOperation.DiagnosticDevice when request.Device is { } device =>
+                    backend.DescribeDeviceForDiagnostics(device, request.IncludeControls),
+                DirectShowInspectionOperation.DiagnosticCheck when request.Device is { } device && request.Video is { } video =>
+                    backend.CheckCaptureForDiagnostics(new(device, video.Index, request.Audio?.Index,
+                        TimeSpan.FromSeconds(request.Sample ? 2 : 0)) { ExpectedVideo = video, ExpectedAudio = request.Audio },
+                        CancellationToken.None),
                 DirectShowInspectionOperation.Negotiate or DirectShowInspectionOperation.Sample when
                     request.Device is { } device && request.Video is { } video =>
                     backend.Run(new DirectShowCaptureRequest(device, video.Index, request.Audio?.Index,
@@ -219,6 +255,7 @@ internal static class DirectShowCommand
     {
         Console.WriteLine("CaptureRack.Probe directshow list [--json]");
         Console.WriteLine("CaptureRack.Probe directshow probe <device-index-or-id> [--json]");
+        Console.WriteLine("CaptureRack.Probe directshow controls <device-index-or-id> [<property> <value|auto>] [--json]");
         Console.WriteLine("CaptureRack.Probe directshow negotiate <device-index-or-id> <video-index> [audio-index] [--json] [--trace]");
         Console.WriteLine("CaptureRack.Probe directshow capture <device-index-or-id> <seconds> <video-index> [audio-index] [--json] [--trace]");
         Console.WriteLine("Use format indexes from probe. Capture validates sample delivery without writing media files.");

@@ -162,9 +162,6 @@
                                         </DataTemplate>
                                     </ItemsControl.ItemTemplate>
                                 </ItemsControl>
-                                <Button x:Name="SourceRackConfigureButton" HorizontalAlignment="Stretch"
-                                        Style="{StaticResource StudioTransportPrimaryButtonStyle}"
-                                        Click="SourceRackConfigure_Click" />
                             </StackPanel>
                         </Flyout>
                     </Button.Flyout>

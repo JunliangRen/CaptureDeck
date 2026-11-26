@@ -75,7 +75,7 @@ public static class DirectShowPreviewVideo
 
         bool hd = encoding == "HDYC" || height > 576;
         bool bottomUp = (encoding is "RGB24" or "RGB32") && format.BitmapTopDown == false;
-        bool preserveFields = (format.InterlaceFlags & 1) == 1 && ((height | outputHeight) & 1) == 0;
+        bool preserveFields = (format.EffectiveInterlaceFlags & 1) == 1 && ((height | outputHeight) & 1) == 0;
         for (int row = 0; row < outputHeight; row++)
         {
             int y = preserveFields ? ((row / 2 * height / outputHeight) * 2 + row % 2) : row * height / outputHeight;

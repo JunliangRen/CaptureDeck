@@ -34,6 +34,10 @@ public sealed partial class DirectShowCapabilitiesView : UserControl, ILiveMedia
         localize = translate;
         DevicePicker.Header = L("Device");
         DevicePicker.PlaceholderText = L("DsSelectDevice");
+        ResolutionPicker.Header = L("DsResolution");
+        FrameRatePicker.Header = L("DsFrameRate");
+        ColorSpacePicker.Header = L("DsColorSpace");
+        DetailsSection.Header = L("DsFormatDetails");
         VideoStreamPicker.Header = L("DsVideoStream");
         VideoFormatPicker.Header = L("DsVideoFormat");
         AudioPicker.Header = L("DsAudioFormat");
@@ -43,6 +47,8 @@ public sealed partial class DirectShowCapabilitiesView : UserControl, ILiveMedia
         AdvertisedHeading.Text = L("DsDriverReported");
         NegotiatedHeading.Text = L("DsNegotiated");
         SampleHeading.Text = L("DsSampleResult");
+        CopyDiagnosticsButton.Content = L("DsCopyDiagnostics");
+        BindCameraControls();
         if (capabilities is not null)
             PopulateFormats();
         RenderEvidence();
@@ -57,6 +63,8 @@ public sealed partial class DirectShowCapabilitiesView : UserControl, ILiveMedia
         await RunAsync(async token =>
         {
             var previous = (DevicePicker.SelectedItem as DirectShowDevice)?.Id;
+            var video = VideoFormat;
+            var audio = AudioFormat;
             var devices = await DirectShowInspectionClient.RunAsync<DirectShowDevice[]>(
                 new(DirectShowInspectionOperation.List), token);
             token.ThrowIfCancellationRequested();
@@ -67,7 +75,7 @@ public sealed partial class DirectShowCapabilitiesView : UserControl, ILiveMedia
             updatingPickers = false;
             populated = true;
             if (DevicePicker.SelectedItem is DirectShowDevice selected)
-                await InspectAsync(selected, token);
+                await InspectAsync(selected, token, video, audio);
             else if (devices.Length == 0)
                 ShowNotice("DsNoDevices", InfoBarSeverity.Informational);
         });
@@ -81,50 +89,95 @@ public sealed partial class DirectShowCapabilitiesView : UserControl, ILiveMedia
         await RunAsync(token => InspectAsync(selected, token));
     }
 
-    private async Task InspectAsync(DirectShowDevice device, CancellationToken token)
+    private async Task InspectAsync(DirectShowDevice device, CancellationToken token,
+        DirectShowFormat? video = null, DirectShowFormat? audio = null)
     {
-        var report = await DirectShowInspectionClient.RunAsync<DirectShowDeviceCapabilities>(
-            new(DirectShowInspectionOperation.Probe, device.Id), token);
+        DirectShowDeviceCapabilities report;
+        try
+        {
+            report = await DirectShowInspectionClient.RunAsync<DirectShowDeviceCapabilities>(
+                new(DirectShowInspectionOperation.Probe, device.Id), token);
+        }
+        catch (Exception error) when (error is not OperationCanceledException)
+        {
+            formatDiscoveryFailure = DirectShowDiagnosticFailure.FromException("Read advertised media types", error);
+            throw;
+        }
         token.ThrowIfCancellationRequested();
         capabilities = report;
-        PopulateFormats();
+        PopulateFormats(video, audio);
         if (VideoStreamPicker.Items.Count == 0)
             ShowNotice("DsNoVideo", InfoBarSeverity.Warning);
     }
 
-    private void PopulateFormats()
+    private void PopulateFormats() => PopulateFormats(VideoFormat, AudioFormat);
+
+    private void PopulateFormats(DirectShowFormat? previousVideo, DirectShowFormat? previousAudio)
     {
         updatingPickers = true;
-        var previousPin = (VideoStreamPicker.SelectedItem as VideoStream)?.PinId;
-        var previousVideo = (VideoFormatPicker.SelectedItem as FormatOption)?.Format?.Index;
-        var previousAudio = (AudioPicker.SelectedItem as FormatOption)?.Format?.Index;
         var formats = capabilities!.Formats;
         var video = formats.Where(format => format.Kind == "video")
             .GroupBy(format => new { format.PinId, format.IsInfrared })
-            .Select(group => new VideoStream(group.Key.PinId, group.ToArray(),
+            .Select(group => new FormatGroup<(string PinId, bool IsInfrared)>((group.Key.PinId, group.Key.IsInfrared), group.ToArray(),
                 $"{L(group.Key.IsInfrared ? "DsInfrared" : "DsVideo")} · {Pin(group.First())}"))
             .ToArray();
         VideoStreamPicker.ItemsSource = video;
-        VideoStreamPicker.SelectedItem = video.FirstOrDefault(stream => stream.Formats.Any(format => format.Index == previousVideo))
-            ?? video.FirstOrDefault(stream => stream.PinId == previousPin) ?? video.FirstOrDefault();
+        VideoStreamPicker.SelectedItem = video.FirstOrDefault(stream => stream.Key == (previousVideo?.PinId, previousVideo?.IsInfrared))
+            ?? video.FirstOrDefault();
         PopulateVideoFormats(previousVideo);
 
         var audio = new List<FormatOption> { new(L("DsWithoutAudio"), null) };
         audio.AddRange(formats.Where(format => format.Kind == "audio")
             .Select(format => new FormatOption($"{Pin(format)} · {Describe(format)}", format)));
         AudioPicker.ItemsSource = audio;
-        AudioPicker.SelectedItem = audio.FirstOrDefault(item => item.Format?.Index == previousAudio) ?? audio[0];
+        AudioPicker.SelectedItem = audio.FirstOrDefault(item => item.Format == previousAudio) ?? audio[0];
         updatingPickers = false;
     }
 
-    private void PopulateVideoFormats(int? previous)
+    private void PopulateVideoFormats(DirectShowFormat? previous, ComboBox? changed = null)
     {
-        var options = (VideoStreamPicker.SelectedItem as VideoStream)?.Formats
-            .Select(format => new FormatOption(Describe(format), format)).ToArray() ?? [];
+        var formats = (VideoStreamPicker.SelectedItem as FormatGroup<(string, bool)>)?.Formats ?? [];
+        var preference = previous ?? formats.FirstOrDefault();
+        var resolution = SelectFormatGroup(ResolutionPicker, formats, Resolution,
+            key => key is (int width, int height) ? $"{width} × {height}" : L("DsUnspecified"),
+            preference is null ? default : Resolution(preference), refresh: changed != ResolutionPicker &&
+                changed != FrameRatePicker && changed != ColorSpacePicker);
+        var frameRate = SelectFormatGroup(FrameRatePicker, resolution, FrameRate,
+            fps => fps is { } value ? $"{value:0.###} fps" : L("DsUnspecified"),
+            preference is null ? null : FrameRate(preference), refresh: changed != FrameRatePicker && changed != ColorSpacePicker);
+        var color = SelectFormatGroup(ColorSpacePicker, frameRate, Encoding, name => name ?? L("DsUnspecified"),
+            preference is null ? null : Encoding(preference), refresh: changed != ColorSpacePicker);
+        var options = color.Select(format => new FormatOption($"{L(ScanOrder(format))} · #{format.Index}", format)).ToArray();
         VideoFormatPicker.ItemsSource = options;
-        VideoFormatPicker.SelectedItem = options.FirstOrDefault(option => option.Format?.Index == previous)
-            ?? options.FirstOrDefault();
+        VideoFormatPicker.SelectedItem = options.FirstOrDefault(option => option.Format == previous)
+            ?? options.FirstOrDefault(option => option.Format?.FieldOrder is not null) ?? options.FirstOrDefault();
     }
+
+    private static DirectShowFormat[] SelectFormatGroup<TKey>(ComboBox picker, DirectShowFormat[] formats,
+        Func<DirectShowFormat, TKey> key, Func<TKey, string> label, TKey preferred, bool refresh)
+    {
+        if (refresh)
+        {
+            var groups = formats.GroupBy(key).Select(group => new FormatGroup<TKey>(group.Key, group.ToArray(), label(group.Key))).ToArray();
+            picker.ItemsSource = groups;
+            picker.SelectedItem = groups.FirstOrDefault(group => EqualityComparer<TKey>.Default.Equals(group.Key, preferred))
+                ?? groups.FirstOrDefault();
+        }
+        return (picker.SelectedItem as FormatGroup<TKey>)?.Formats ?? [];
+    }
+
+    private static (int? Width, int? Height) Resolution(DirectShowFormat format) => (format.Width, format.Height);
+    private static double? FrameRate(DirectShowFormat format) => format.FramesPerSecond is { } fps ? Math.Round(fps, 3) : null;
+    private static string Encoding(DirectShowFormat format) => DirectShowPreviewVideo.Encoding(format)
+        ?? (format.IsMpeg2Video ? "MPEG-2" : format.FourCc ?? format.Subtype.ToString());
+
+    private static string ScanOrder(DirectShowFormat format) => format.FieldOrder switch
+    {
+        "progressive" => "DsProgressive",
+        "top-first" => "DsTopFirst",
+        "bottom-first" => "DsBottomFirst",
+        _ => "DsFieldUnknown"
+    };
 
     private string Pin(DirectShowFormat format) => string.Format(L("DsPin"), format.PinName, format.PinId);
 
@@ -135,25 +188,18 @@ public sealed partial class DirectShowCapabilitiesView : UserControl, ILiveMedia
             return string.Format(L("DsAudioDescription"), format.IsPcm ? "PCM" : format.Subtype.ToString(),
                 sampleRate, format.Channels, format.BitsPerSample);
         }
-        var encoding = format.InfraredEncoding ?? format.FourCc ?? format.Subtype.ToString();
+        var encoding = Encoding(format);
         if (format.Width is null)
             return encoding;
-        var order = format.FieldOrder switch
-        {
-            "progressive" => "DsProgressive",
-            "top-first" => "DsTopFirst",
-            "bottom-first" => "DsBottomFirst",
-            _ => "DsFieldUnknown"
-        };
-        return $"{encoding} · {format.Width} × {format.Height} · {format.FramesPerSecond:0.###} fps · {L(order)}";
+        return $"{encoding} · {format.Width} × {format.Height} · {format.FramesPerSecond:0.###} fps · {L(ScanOrder(format))}";
     }
 
-    private void VideoStreamChanged(object sender, SelectionChangedEventArgs e)
+    private void VideoOptionsChanged(object sender, SelectionChangedEventArgs e)
     {
         if (updatingPickers)
             return;
         updatingPickers = true;
-        PopulateVideoFormats(null);
+        PopulateVideoFormats(VideoFormat, (ComboBox)sender);
         updatingPickers = false;
         ClearTests();
         RenderEvidence();
@@ -172,25 +218,34 @@ public sealed partial class DirectShowCapabilitiesView : UserControl, ILiveMedia
 
     private async Task VerifyAsync(bool sample)
     {
-        if (capabilities?.Device is not { } device ||
-            (VideoFormatPicker.SelectedItem as FormatOption)?.Format is not { } video)
+        if (capabilities?.Device is not { } device || VideoFormat is not { } video)
             return;
-        var audio = (AudioPicker.SelectedItem as FormatOption)?.Format;
+        var audio = AudioFormat;
         if (sample)
             sampled = null;
         else
             negotiated = null;
         await RunAsync(async token =>
         {
-            var report = await DirectShowInspectionClient.RunAsync<DirectShowCaptureResult>(
-                new(sample ? DirectShowInspectionOperation.Sample : DirectShowInspectionOperation.Negotiate,
-                    device.Id, video, audio), token);
+            DirectShowDiagnosticCheck check;
+            try
+            {
+                check = await DirectShowInspectionClient.RunAsync<DirectShowDiagnosticCheck>(
+                    new(DirectShowInspectionOperation.DiagnosticCheck, device.Id, video, audio, Sample: sample), token);
+            }
+            catch (Exception error) when (error is not OperationCanceledException)
+            {
+                SaveDiagnosticCheck(sample, new(null, null, null,
+                    DirectShowDiagnosticFailure.FromException("Run inspection worker", error)));
+                throw;
+            }
             token.ThrowIfCancellationRequested();
-            negotiated = report;
+            SaveDiagnosticCheck(sample, check);
+            negotiated = check.Result;
             if (sample)
-                sampled = report;
-            if (report.Error is { } error)
-                ShowNotice("DsFailed", InfoBarSeverity.Error, error);
+                sampled = check.Result;
+            if (check.Failure is { } failure)
+                ShowNotice("DsFailed", InfoBarSeverity.Error, failure.Message);
         });
     }
 
@@ -198,10 +253,15 @@ public sealed partial class DirectShowCapabilitiesView : UserControl, ILiveMedia
     {
         updatingPickers = true;
         VideoStreamPicker.ItemsSource = null;
+        ResolutionPicker.ItemsSource = null;
+        FrameRatePicker.ItemsSource = null;
+        ColorSpacePicker.ItemsSource = null;
         VideoFormatPicker.ItemsSource = null;
         AudioPicker.ItemsSource = null;
         updatingPickers = false;
         capabilities = null;
+        formatDiscoveryFailure = null;
+        ResetCameraControls();
         ClearTests();
     }
 
@@ -209,15 +269,20 @@ public sealed partial class DirectShowCapabilitiesView : UserControl, ILiveMedia
     {
         negotiated = null;
         sampled = null;
+        negotiationCheck = sampleCheck = null;
+        previewDiagnostic = null;
         Notice.IsOpen = false;
     }
 
     private void RenderEvidence()
     {
-        var video = capabilities is null ? null : (VideoFormatPicker.SelectedItem as FormatOption)?.Format;
-        var audio = (AudioPicker.SelectedItem as FormatOption)?.Format;
+        var video = VideoFormat;
+        var audio = AudioFormat;
         var visible = video is not null;
-        FormatPanel.Visibility = capabilities is null ? Visibility.Collapsed : Visibility.Visible;
+        FormatPanel.Visibility = visible ? Visibility.Visible : Visibility.Collapsed;
+        DetailsSection.Visibility = DevicePicker.SelectedItem is DirectShowDevice ? Visibility.Visible : Visibility.Collapsed;
+        VideoStreamPicker.Visibility = VideoStreamPicker.Items.Count > 1 ? Visibility.Visible : Visibility.Collapsed;
+        VideoFormatPicker.Visibility = VideoFormatPicker.Items.Count > 1 ? Visibility.Visible : Visibility.Collapsed;
         AudioPicker.Visibility = capabilities?.Formats.Any(format => format.Kind == "audio") == true
             ? Visibility.Visible : Visibility.Collapsed;
         ResultPanel.Visibility = visible ? Visibility.Visible : Visibility.Collapsed;
@@ -225,6 +290,9 @@ public sealed partial class DirectShowCapabilitiesView : UserControl, ILiveMedia
         RefreshButton.IsEnabled = idle;
         DevicePicker.IsEnabled = idle && DevicePicker.Items.Count > 0;
         VideoStreamPicker.IsEnabled = idle && VideoStreamPicker.Items.Count > 0;
+        ResolutionPicker.IsEnabled = idle && visible;
+        FrameRatePicker.IsEnabled = idle && visible;
+        ColorSpacePicker.IsEnabled = idle && visible;
         VideoFormatPicker.IsEnabled = idle && visible;
         AudioPicker.IsEnabled = idle && visible;
         NegotiateButton.IsEnabled = idle && visible;
@@ -250,9 +318,9 @@ public sealed partial class DirectShowCapabilitiesView : UserControl, ILiveMedia
     private string DescribeSelection(DirectShowFormat video, DirectShowFormat? audio) =>
         audio is null ? Describe(video) : Describe(video) + "\n" + Describe(audio);
 
-    private async Task RunAsync(Func<CancellationToken, Task> action)
+    private async Task RunAsync(Func<CancellationToken, Task> action, bool allowPreview = false)
     {
-        if (operation is not null || previewStop is not null)
+        if (operation is not null || (!allowPreview && previewStop is not null))
             return;
         using var stop = new CancellationTokenSource();
         operation = stop;
@@ -281,6 +349,6 @@ public sealed partial class DirectShowCapabilitiesView : UserControl, ILiveMedia
         Notice.IsOpen = true;
     }
 
-    public sealed record VideoStream(string PinId, DirectShowFormat[] Formats, string Label);
+    public sealed record FormatGroup<TKey>(TKey Key, DirectShowFormat[] Formats, string Label);
     public sealed record FormatOption(string Label, DirectShowFormat? Format);
 }

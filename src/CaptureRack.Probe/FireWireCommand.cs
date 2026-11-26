@@ -18,8 +18,8 @@ internal static class FireWireCommand
             {
                 Console.WriteLine("CaptureRack.Probe firewire list [--json]");
                 Console.WriteLine("CaptureRack.Probe firewire probe --device <id> [--json]");
-                Console.WriteLine("CaptureRack.Probe firewire capture --device <id> --output <path> [--format ts192] [--duration <seconds>] [--no-data-timeout <seconds>] [--json]");
-                Console.WriteLine("CaptureRack.Probe firewire analyze --input <path> [--format ts188|ts192] [--json]");
+                Console.WriteLine("CaptureRack.Probe firewire capture --device <id> --output <path> [--format dv|dv25|dv50|dvh1|ts188|ts192] [--duration <seconds>] [--no-data-timeout <seconds>] [--json]");
+                Console.WriteLine("CaptureRack.Probe firewire analyze --input <path> [--format dv|dv25|dv50|dvh1|ts188|ts192] [--json]");
                 return 0;
             }
 
@@ -53,7 +53,7 @@ internal static class FireWireCommand
         if (json)
             WriteJson(new { schema_version = 1, type = "device_list", devices });
         else if (devices.Count == 0)
-            Console.WriteLine("No MSTape devices found.");
+            Console.WriteLine("No i.LINK tape devices found.");
         else
             foreach (var device in devices)
                 Console.WriteLine($"{device.Id}  {device.Vendor} {device.Model}  {device.Name}");
@@ -63,21 +63,19 @@ internal static class FireWireCommand
     private static int Probe(Dictionary<string, string> options, bool json)
     {
         var device = Required(options, "--device");
-        var formats = FireWireCapture.GetFormats(device).Select(format => format.Format).ToArray();
+        var formats = FireWireCapture.GetMediaFormats(device).Select(format => format.Id).ToArray();
         if (json)
             WriteJson(new { schema_version = 1, type = "device_probe", device_id = device, formats });
         else
-            Console.WriteLine($"{device}: {(formats.Length == 0 ? "No supported native TS format" : string.Join(", ", formats))}");
+            Console.WriteLine($"{device}: {(formats.Length == 0 ? "No supported native tape format" : string.Join(", ", formats))}");
         return 0;
     }
 
     private static int Capture(Dictionary<string, string> options, bool json)
     {
-        if (options.TryGetValue("--format", out var format) && format != "ts192")
-            throw new ArgumentException("Live FireWire capture requires native ts192. Use analyze for existing ts188 files.");
         var request = new FireWireRequest(Required(options, "--device"), Required(options, "--output"),
             Seconds(options, "--duration", 0, allowZero: true),
-            Seconds(options, "--no-data-timeout", 30, allowZero: false));
+            Seconds(options, "--no-data-timeout", 30, allowZero: false), Format(options));
         using var cancellation = new CancellationTokenSource();
         ConsoleCancelEventHandler cancel = (_, args) =>
         {
@@ -123,7 +121,22 @@ internal static class FireWireCommand
 
     private static int Analyze(Dictionary<string, string> options, bool json)
     {
-        var report = TsFile.Analyze(Required(options, "--input"), Format(options));
+        var input = Required(options, "--input");
+        var format = Format(options);
+        if (format?.IsDv == true || (format is null && Path.GetExtension(input).Equals(".dv", StringComparison.OrdinalIgnoreCase)))
+        {
+            var expected = format?.Encoding is DvEncoding.Consumer or null ? null : format?.Encoding;
+            var dv = DvFile.Analyze(input, encoding: expected);
+            if (json)
+                Console.WriteLine(dv.ToJson());
+            else
+            {
+                var detected = dv.Analysis.LastFrame is { } frame ? new FireWireMediaFormat(null, frame.Encoding).Id : "dv";
+                Console.WriteLine($"format={detected} input={dv.Analysis.InputBytes} frames={dv.Analysis.Frames} invalid={dv.Analysis.InvalidFrames} trailing={dv.Analysis.TrailingBytes} unexpected_format={dv.Analysis.UnexpectedFormatFrames}");
+            }
+            return dv.ExitCode;
+        }
+        var report = TsFile.Analyze(input, format?.Transport);
         var analysis = report.Analysis;
         if (json)
             Console.WriteLine(report.ToJson());
@@ -142,13 +155,17 @@ internal static class FireWireCommand
         return code;
     }
 
-    private static TsLayout? Format(Dictionary<string, string> options) =>
+    private static FireWireMediaFormat? Format(Dictionary<string, string> options) =>
         options.GetValueOrDefault("--format") switch
         {
             null => null,
-            "ts188" => TsLayout.Ts188,
-            "ts192" => TsLayout.Ts192,
-            _ => throw new ArgumentException("--format must be ts188 or ts192.")
+            "dv" => FireWireMediaFormat.Dv,
+            "dv25" => new FireWireMediaFormat(null, DvEncoding.Dvcpro25),
+            "dv50" => new FireWireMediaFormat(null, DvEncoding.Dvcpro50),
+            "dvh1" => new FireWireMediaFormat(null, DvEncoding.DvcproHd),
+            "ts188" => new FireWireMediaFormat(TsLayout.Ts188),
+            "ts192" => new FireWireMediaFormat(TsLayout.Ts192),
+            _ => throw new ArgumentException("--format must be dv, dv25, dv50, dvh1, ts188 or ts192.")
         };
 
     private static string Required(Dictionary<string, string> options, string name) =>

@@ -239,6 +239,27 @@
                         </Grid>
                     </Border>
                 </StackPanel>
+
+                <StackPanel x:Name="AudioChannelsGroup">
+                    <TextBlock x:Name="AudioChannelsLabel" Text="Audio channels" Style="{StaticResource StudioFieldLabelStyle}" />
+                    <Border Background="{ThemeResource StudioSegmentTrackBrush}"
+                            BorderBrush="{ThemeResource StudioHairlineBrush}" BorderThickness="1"
+                            CornerRadius="4" Padding="2">
+                        <Grid ColumnSpacing="2">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <Button x:Name="AudioChannels2Button" Style="{StaticResource StudioFormatSegmentButtonStyle}"
+                                    Tag="2" Click="AudioChannelsSegment_Click" />
+                            <Button x:Name="AudioChannels8Button" Grid.Column="1" Style="{StaticResource StudioFormatSegmentButtonStyle}"
+                                    Tag="8" Click="AudioChannelsSegment_Click" />
+                            <Button x:Name="AudioChannels16Button" Grid.Column="2" Style="{StaticResource StudioFormatSegmentButtonStyle}"
+                                    Tag="16" Click="AudioChannelsSegment_Click" />
+                        </Grid>
+                    </Border>
+                </StackPanel>
             </StackPanel>
         </Border>
     </StackPanel>

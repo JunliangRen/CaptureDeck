@@ -6,8 +6,16 @@ public sealed partial class MainWindow
 {
     private TestSignalScenario SelectedTestScenario => testSignalInspector.SelectedScenario;
 
-    private string TestSignalScenarioKey => SelectedTestScenario == TestSignalScenario.TimingFaults
-        ? "TestSignalFaults" : "TestSignalNormal";
+    private string TestSignalScenarioKey => SelectedTestScenario switch
+    {
+        TestSignalScenario.TimingFaults => "TestSignalFaults",
+        TestSignalScenario.MultiChannel => "TestSignalMultiChannel",
+        _ => "TestSignalNormal"
+    };
+
+    private uint ActiveDeckLinkAudioChannels => IsTestSignalActive
+        ? (SelectedTestScenario == TestSignalScenario.MultiChannel ? 8u : CaptureAudio.Channels)
+        : deckLinkInspector.SelectedAudioChannels;
 
     private string GetRecordingLabel()
     {
@@ -37,6 +45,7 @@ public sealed partial class MainWindow
             Preview = feed,
             PixelFormat = RecordingVideoFormat,
             AudioFormat = RecordingAudioFormat,
+            AudioChannels = deckLinkInspector.SelectedAudioChannels,
             PreviewRecorder = recorder,
             AnalogOptions = deckLinkInspector.BuildAnalogInputOptions(),
             LocalAudioMonitor = audioMonitor

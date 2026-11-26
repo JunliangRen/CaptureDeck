@@ -4,7 +4,7 @@ using System.Runtime.InteropServices;
 
 namespace CaptureRack.DeckLink;
 
-public enum TestSignalScenario { Normal, TimingFaults }
+public enum TestSignalScenario { Normal, TimingFaults, MultiChannel }
 
 // The generator uses the same sample consumer and MOV writer as hardware capture.
 public static class TestSignal
@@ -47,7 +47,7 @@ public static class TestSignal
         private readonly CaptureCallback callback;
         private readonly GeneratedVideo video;
         private TimeSpan elapsed;
-        private readonly GeneratedAudio audio = new();
+        private readonly GeneratedAudio audio;
         private const int CycleFrames = 120;
 
         internal Session(TestSignalScenario scenario, PreviewFeed feed, PreviewRecorder recorder,
@@ -56,10 +56,12 @@ public static class TestSignal
             this.scenario = scenario;
             this.feed = feed;
             this.recorder = recorder;
+            var channels = scenario == TestSignalScenario.MultiChannel ? 8u : CaptureAudio.Channels;
+            audio = new((int)channels);
             video = new(scenario == TestSignalScenario.TimingFaults);
             // Require a readable frame before opening the MOV, even though the mode is fixed.
             callback = new(feed, PixelFormat, AudioFormat, Mode, null, automaticMode: true, audioMonitor,
-                signalClock: () => elapsed);
+                signalClock: () => elapsed, audioChannels: channels);
             callback.UseMonitoringAudioFormat(CaptureAudioFormat.Pcm32);
             recorder.Connect(callback);
         }
@@ -78,7 +80,7 @@ public static class TestSignal
             var resetOffset = faults
                 ? (index / CycleFrames + (phase >= 70 ? 1 : 0)) * 4800
                 : 0;
-            audio.Render(start, (int)(SampleAt(index + 1) - start), start - resetOffset, noInput);
+            audio.Render(start, (int)(SampleAt(index + 1) - start), start - resetOffset, noInput, index);
             callback.AcceptManagedSamples(skipVideo ? null : video, audio);
             feed.ConvertLatest(lumaScaleBits: 10, Mode.PreviewFieldInterval);
         }
@@ -206,24 +208,55 @@ public static class TestSignal
 
     private sealed class GeneratedAudio : IDeckLinkAudioInputPacket
     {
-        private static readonly (int Left, int Right)[] Tone = Enumerable.Range(0, 2400)
+        private static readonly (int Left, int Right)[] Pair1Tone = Enumerable.Range(0, 2400)
             .Select(i => (Sample(i, 440, 0.125), Sample(i, 660, 0.089))).ToArray();
-        private readonly int[] samples = GC.AllocateUninitializedArray<int>(1602 * 2, pinned: true);
+        private static readonly (int Left, int Right)[] Pair2Tone = Enumerable.Range(0, 2400)
+            .Select(i => (Sample(i, 880, 0.18), Sample(i, 1100, 0.14))).ToArray();
+        private static readonly (int Left, int Right)[] Pair3Tone = Enumerable.Range(0, 2400)
+            .Select(i => (Sample(i, 330, 0.22), Sample(i, 550, 0.16))).ToArray();
+        private readonly int channels;
+        private readonly int[] samples;
         private int count;
         private long timestamp;
+
+        public GeneratedAudio(int channels)
+        {
+            this.channels = channels;
+            samples = GC.AllocateUninitializedArray<int>(1602 * channels, pinned: true);
+        }
 
         private static int Sample(int index, int frequency, double amplitude) =>
             (int)(Math.Sin(Math.Tau * index * frequency / CaptureAudio.SampleRate) * amplitude * int.MaxValue);
 
-        public void Render(long start, int frames, long time, bool silent)
+        public void Render(long start, int frames, long time, bool silent, long frameIndex)
         {
             count = frames;
             timestamp = time;
+            var pair2Active = channels >= 4 && ((frameIndex / 90) % 3) != 0; // Active 6s, quiet 3s
+            var pair3Active = channels >= 6 && ((frameIndex / 150) % 2) == 1; // Active 5s, quiet 5s
             for (var i = 0; i < count; i++)
             {
-                var (left, right) = silent ? default : Tone[(int)((start + i) % Tone.Length)];
-                samples[i * 2] = left;
-                samples[i * 2 + 1] = right;
+                var offset = i * channels;
+                var toneIdx = (int)((start + i) % Pair1Tone.Length);
+                var (left, right) = silent ? default : Pair1Tone[toneIdx];
+                samples[offset] = left;
+                samples[offset + 1] = right;
+                if (channels > 2)
+                {
+                    Array.Clear(samples, offset + 2, channels - 2);
+                    if (!silent && pair2Active)
+                    {
+                        var (l2, r2) = Pair2Tone[toneIdx];
+                        samples[offset + 2] = l2;
+                        samples[offset + 3] = r2;
+                    }
+                    if (!silent && pair3Active)
+                    {
+                        var (l3, r3) = Pair3Tone[toneIdx];
+                        samples[offset + 4] = l3;
+                        samples[offset + 5] = r3;
+                    }
+                }
             }
         }
 

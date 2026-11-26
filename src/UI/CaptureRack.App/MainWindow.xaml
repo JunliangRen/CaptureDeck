@@ -291,8 +291,7 @@
                                 BorderBrush="{ThemeResource StudioMonitorBezelBrush}" BorderThickness="1.5"
                                 SizeChanged="PreviewMonitorHousing_SizeChanged"
                                 PointerEntered="PreviewSurface_PointerEntered"
-                                PointerExited="PreviewSurface_PointerExited"
-                                PointerMoved="PreviewSurface_PointerMoved">
+                                PointerExited="PreviewSurface_PointerExited">
                             <Grid>
                                 <Border x:Name="PreviewRecFrameGlow" Visibility="Collapsed" IsHitTestVisible="False"
                                         CornerRadius="3" BorderThickness="2"
@@ -408,38 +407,6 @@
                                         LostFocus="PreviewFullscreen_FocusChanged">
                                     <FontIcon x:Name="PreviewFullscreenIcon" Glyph="&#xE740;" FontSize="15" Foreground="#F8FAFC" />
                                 </Button>
-
-                                <Border x:Name="FullscreenMiniBar" HorizontalAlignment="Center" VerticalAlignment="Bottom"
-                                        Margin="0,0,0,20" Padding="10,6" CornerRadius="4" Visibility="Collapsed"
-                                        Opacity="0" IsHitTestVisible="False" RequestedTheme="Dark"
-                                        Background="#E810131A" BorderBrush="#3AFFFFFF" BorderThickness="1">
-                                    <StackPanel Orientation="Horizontal" Spacing="12" VerticalAlignment="Center">
-                                        <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
-                                            <Rectangle x:Name="FullscreenSignalDot" Width="7" Height="7" RadiusX="1" RadiusY="1"
-                                                       Fill="{ThemeResource StudioSignalLockBrush}" />
-                                            <TextBlock x:Name="FullscreenStatusText" FontSize="12" Foreground="#E2E8F0"
-                                                       VerticalAlignment="Center" />
-                                        </StackPanel>
-                                        <TextBlock x:Name="FullscreenClockText" Style="{StaticResource StudioTimecodeTextStyle}"
-                                                   FontSize="13" Foreground="#FFFFFF" Visibility="Collapsed"
-                                                   VerticalAlignment="Center" />
-                                        <Button x:Name="FullscreenRecordButton" CornerRadius="3" Padding="10,4"
-                                                Style="{StaticResource StudioRecordIdleButtonStyle}"
-                                                Click="RecordButton_Click">
-                                            <StackPanel Orientation="Horizontal" Spacing="6">
-                                                <FontIcon x:Name="FullscreenRecordIcon" Glyph="&#xE7C8;" FontSize="12" />
-                                                <TextBlock x:Name="FullscreenRecordLabel" FontSize="12" />
-                                            </StackPanel>
-                                        </Button>
-                                        <Button x:Name="FullscreenExitButton" CornerRadius="3" Padding="9,4"
-                                                Style="{StaticResource SubtleButtonStyle}" Click="PreviewFullscreen_Click">
-                                            <StackPanel Orientation="Horizontal" Spacing="5">
-                                                <FontIcon Glyph="&#xE73F;" FontSize="12" />
-                                                <TextBlock x:Name="FullscreenExitLabel" FontSize="12" />
-                                            </StackPanel>
-                                        </Button>
-                                    </StackPanel>
-                                </Border>
                             </Grid>
                         </Border>
 

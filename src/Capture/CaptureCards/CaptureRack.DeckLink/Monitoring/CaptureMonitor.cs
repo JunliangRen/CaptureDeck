@@ -9,6 +9,39 @@ public sealed record StereoLevels(double LeftPeak, double RightPeak, long LeftCl
     public uint SampleRate { get; init; }
     public uint SampleBits { get; init; }
     public double SpectrumFloorDbfs { get; init; }
+    public int ChannelCount { get; init; } = 2;
+    public AudioChannelLayout ChannelLayout { get; init; } = AudioChannelLayout.Stereo;
+    public AudioMonitorRoute MonitorRoute { get; init; } = AudioMonitorRoute.Default;
+    public IReadOnlyList<double>? ChannelPeaks { get; init; }
+    public IReadOnlyList<long>? ChannelClips { get; init; }
+
+    public long TotalClips
+    {
+        get
+        {
+            if (ChannelClips is not { Count: > 0 } clips)
+                return LeftClips + RightClips;
+
+            long total = 0;
+            for (var i = 0; i < clips.Count; i++)
+                total += clips[i];
+            return total;
+        }
+    }
+
+    public double PeakForChannel(int index)
+    {
+        if (ChannelPeaks is { Count: > 0 } peaks)
+            return index >= 0 && index < peaks.Count ? peaks[index] : 0;
+        return index switch { 0 => LeftPeak, 1 => RightPeak, _ => 0 };
+    }
+
+    public long ClipsForChannel(int index)
+    {
+        if (ChannelClips is { Count: > 0 } clips)
+            return index >= 0 && index < clips.Count ? clips[index] : 0;
+        return index switch { 0 => LeftClips, 1 => RightClips, _ => 0 };
+    }
 }
 
 public enum CaptureEventKind { Unknown, TimestampRegression, FrameGap, NoInputAtStart, SignalLost, SignalRestored }
@@ -111,44 +144,147 @@ internal sealed class FrameTimeline(VideoMode mode, bool keepSignalHistory = fal
 }
 
 public sealed class StereoMonitor(CaptureAudioFormat format, uint sampleRate = CaptureAudio.SampleRate,
-    uint? sourceBits = null)
+    uint? sourceBits = null, int channels = 2, AudioChannelLayout layout = AudioChannelLayout.Unknown)
 {
     private const int SpectrumWindow = 2048;
     private const int DisplayFramesPerSecond = 60;
     private const int BufferedDisplayFrames = 4;
+    private const double ActivityThresholdLinear = 0.000251188643150958; // -72 dBFS
+    private readonly int channelCount = Math.Clamp(channels, 1, AudioMonitorRoute.MaxSupportedChannels);
+    private readonly AudioChannelLayout channelLayout = layout == AudioChannelLayout.Unknown
+        ? AudioChannelLayoutHelper.Detect(null, Math.Clamp(channels, 1, AudioMonitorRoute.MaxSupportedChannels))
+        : layout;
     private readonly int displayHop = SamplesPerDisplayFrame(sampleRate);
     private readonly double[] leftRing = new double[SpectrumWindow + BufferedDisplayFrames * SamplesPerDisplayFrame(sampleRate)];
     private readonly double[] rightRing = new double[SpectrumWindow + BufferedDisplayFrames * SamplesPerDisplayFrame(sampleRate)];
     private readonly double fullScale = format == CaptureAudioFormat.Pcm16 ? 32768.0 : 2147483648.0;
     private readonly long nearFullScale = format == CaptureAudioFormat.Pcm16 ? short.MaxValue : 0x7FFFFF00L;
+    private readonly long[] channelPeaks = new long[Math.Clamp(channels, 1, AudioMonitorRoute.MaxSupportedChannels)];
+    private readonly long[] channelClips = new long[Math.Clamp(channels, 1, AudioMonitorRoute.MaxSupportedChannels)];
+    private readonly long[] pairActiveUntilSample = new long[(Math.Clamp(channels, 1, AudioMonitorRoute.MaxSupportedChannels) + 1) / 2];
+    private readonly long activityHoldSamples = Math.Max(1, (long)sampleRate * 2);
+    private int packedRoute = AudioMonitorRoute.Default.Pack();
+    private int activePairMask = 1;
     private long receivedSamples;
     private long lastDisplaySample;
     private StereoLevels? lastLevel;
-    private long leftClips;
-    private long rightClips;
-    private long leftPeak;
-    private long rightPeak;
+    private long monitoredLeftPeak;
+    private long monitoredRightPeak;
     private double leftPower;
     private double rightPower;
     private double crossPower;
     private bool receivedAudio;
 
-    public (long Left, long Right) ClipCounts => (leftClips, rightClips);
+    public int Channels => channelCount;
+    public AudioChannelLayout Layout => channelLayout;
+    public int ActivePairMask => Volatile.Read(ref activePairMask);
+
+    public AudioMonitorRoute Route
+    {
+        get => AudioMonitorRoute.Unpack(Volatile.Read(ref packedRoute)).ClampForChannels(channelCount);
+        set => Volatile.Write(ref packedRoute, value.ClampForChannels(channelCount).Pack());
+    }
+
+    public (long Left, long Right) ClipCounts =>
+        (channelClips[0], channelCount > 1 ? channelClips[1] : 0);
+
+    public long[] CopyChannelClips() => (long[])channelClips.Clone();
 
     public void Add(int left, int right)
     {
         var leftMagnitude = Math.Abs((long)left);
         var rightMagnitude = Math.Abs((long)right);
-        leftPeak = Math.Max(leftPeak, leftMagnitude);
-        rightPeak = Math.Max(rightPeak, rightMagnitude);
+        channelPeaks[0] = Math.Max(channelPeaks[0], leftMagnitude);
         if (leftMagnitude >= nearFullScale)
-            leftClips++;
-        if (rightMagnitude >= nearFullScale)
-            rightClips++;
+            channelClips[0]++;
+        if (channelCount > 1)
+        {
+            channelPeaks[1] = Math.Max(channelPeaks[1], rightMagnitude);
+            if (rightMagnitude >= nearFullScale)
+                channelClips[1]++;
+        }
 
-        // Accumulate correlation and save a bounded sample window without doing FFT in the SDK callback.
         var l = left / fullScale;
         var r = right / fullScale;
+        RecordMonitoredSample(l, r, leftMagnitude, rightMagnitude);
+    }
+
+    public (double Left, double Right) AddFrame(ReadOnlySpan<int> frameSamples)
+    {
+        if (channelCount == 2 && frameSamples.Length >= 2)
+        {
+            Add(frameSamples[0], frameSamples[1]);
+            return (frameSamples[0] / fullScale, frameSamples[1] / fullScale);
+        }
+
+        Span<double> normalized = stackalloc double[channelCount];
+        var activeThreshold = (long)(fullScale * ActivityThresholdLinear);
+        var mask = 1;
+        for (var ch = 0; ch < channelCount; ch++)
+        {
+            var raw = ch < frameSamples.Length ? frameSamples[ch] : 0;
+            var mag = Math.Abs((long)raw);
+            if (mag > channelPeaks[ch])
+                channelPeaks[ch] = mag;
+            if (mag >= nearFullScale)
+                channelClips[ch]++;
+
+            var pair = ch >> 1;
+            if (mag > activeThreshold)
+                pairActiveUntilSample[pair] = receivedSamples + activityHoldSamples;
+            if (pairActiveUntilSample[pair] > receivedSamples)
+                mask |= 1 << pair;
+
+            normalized[ch] = raw / fullScale;
+        }
+        Volatile.Write(ref activePairMask, mask);
+
+        var (l, r) = AudioMonitorMixer.RouteFrame(normalized, Route, channelLayout, mask);
+        RecordMonitoredSample(l, r, (long)Math.Round(Math.Abs(l) * fullScale), (long)Math.Round(Math.Abs(r) * fullScale));
+        return (l, r);
+    }
+
+    public (double Left, double Right) AddFrame(ReadOnlySpan<short> frameSamples)
+    {
+        if (channelCount == 2 && frameSamples.Length >= 2)
+        {
+            Add(frameSamples[0], frameSamples[1]);
+            return (frameSamples[0] / fullScale, frameSamples[1] / fullScale);
+        }
+
+        Span<double> normalized = stackalloc double[channelCount];
+        var activeThreshold = (long)(fullScale * ActivityThresholdLinear);
+        var mask = 1;
+        for (var ch = 0; ch < channelCount; ch++)
+        {
+            var raw = ch < frameSamples.Length ? frameSamples[ch] : (short)0;
+            var mag = Math.Abs((long)raw);
+            if (mag > channelPeaks[ch])
+                channelPeaks[ch] = mag;
+            if (mag >= nearFullScale)
+                channelClips[ch]++;
+
+            var pair = ch >> 1;
+            if (mag > activeThreshold)
+                pairActiveUntilSample[pair] = receivedSamples + activityHoldSamples;
+            if (pairActiveUntilSample[pair] > receivedSamples)
+                mask |= 1 << pair;
+
+            normalized[ch] = raw / fullScale;
+        }
+        Volatile.Write(ref activePairMask, mask);
+
+        var (l, r) = AudioMonitorMixer.RouteFrame(normalized, Route, channelLayout, mask);
+        RecordMonitoredSample(l, r, (long)Math.Round(Math.Abs(l) * fullScale), (long)Math.Round(Math.Abs(r) * fullScale));
+        return (l, r);
+    }
+
+    private void RecordMonitoredSample(double l, double r, long leftMag, long rightMag)
+    {
+        monitoredLeftPeak = Math.Max(monitoredLeftPeak, leftMag);
+        monitoredRightPeak = Math.Max(monitoredRightPeak, rightMag);
+
+        // Accumulate correlation and save a bounded sample window without doing FFT in the SDK callback.
         leftPower += l * l;
         rightPower += r * r;
         crossPower += l * r;
@@ -174,20 +310,63 @@ public sealed class StereoMonitor(CaptureAudioFormat format, uint sampleRate = C
         if (end < receivedSamples - (long)BufferedDisplayFrames * displayHop)
             end = receivedSamples - displayHop;
         lastDisplaySample = end;
-        return ReadWindow(end, receivedAudio ? ReadLevels() : lastLevel!);
+        var level = receivedAudio ? ReadLevels() : lastLevel! with { MonitorRoute = Route };
+        return ReadWindow(end, level);
     }
 
     private StereoLevels ReadLevels()
     {
+        var route = Route;
         var power = Math.Sqrt(leftPower * rightPower);
-        var level = new StereoLevels(leftPeak / fullScale, rightPeak / fullScale, leftClips, rightClips,
+        var peaks = new double[channelCount];
+        var clips = new long[channelCount];
+        for (var ch = 0; ch < channelCount; ch++)
+        {
+            peaks[ch] = channelPeaks[ch] / fullScale;
+            clips[ch] = channelClips[ch];
+            channelPeaks[ch] = 0;
+        }
+
+        double leftPeak;
+        double rightPeak;
+        long leftClips;
+        long rightClips;
+        if (channelCount == 1)
+        {
+            leftPeak = rightPeak = peaks[0];
+            leftClips = rightClips = clips[0];
+        }
+        else if (route.Mode == AudioMonitorMode.Downmix && channelCount > 2)
+        {
+            leftPeak = monitoredLeftPeak / fullScale;
+            rightPeak = monitoredRightPeak / fullScale;
+            leftClips = clips[0];
+            rightClips = clips[1];
+        }
+        else
+        {
+            var pairIdx = Math.Clamp(route.PairIndex, 0, (channelCount - 1) / 2);
+            var li = pairIdx * 2;
+            var ri = li + 1;
+            leftPeak = peaks[li];
+            rightPeak = ri < channelCount ? peaks[ri] : peaks[li];
+            leftClips = clips[li];
+            rightClips = ri < channelCount ? clips[ri] : clips[li];
+        }
+
+        var level = new StereoLevels(leftPeak, rightPeak, leftClips, rightClips,
             power > 0 ? Math.Clamp(crossPower / power, -1, 1) : null, null)
         {
             SampleRate = sampleRate,
             SampleBits = sourceBits ?? (uint)format,
-            SpectrumFloorDbfs = -20 * Math.Log10(Math.ScaleB(1, (int)(sourceBits ?? (uint)format) - 1))
+            SpectrumFloorDbfs = -20 * Math.Log10(Math.ScaleB(1, (int)(sourceBits ?? (uint)format) - 1)),
+            ChannelCount = channelCount,
+            ChannelLayout = channelLayout,
+            MonitorRoute = route,
+            ChannelPeaks = peaks,
+            ChannelClips = clips
         };
-        leftPeak = rightPeak = 0;
+        monitoredLeftPeak = monitoredRightPeak = 0;
         leftPower = rightPower = crossPower = 0;
         receivedAudio = false;
         return lastLevel = level;

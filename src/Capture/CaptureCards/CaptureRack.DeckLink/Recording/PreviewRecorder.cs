@@ -11,11 +11,26 @@ public sealed class PreviewRecorder
     private MovRecording? recording;
     private CaptureStats? savedOnDisconnect;
     private ExceptionDispatchInfo? finishError;
+    private AudioMonitorRoute audioMonitorRoute = AudioMonitorRoute.Default;
 
     internal void Connect(CaptureCallback input)
     {
         lock (gate)
+        {
             callback = input;
+            input.SetAudioMonitorRoute(audioMonitorRoute);
+        }
+    }
+
+    public void SetAudioMonitorRoute(AudioMonitorRoute route)
+    {
+        CaptureCallback? current;
+        lock (gate)
+        {
+            audioMonitorRoute = route;
+            current = callback;
+        }
+        current?.SetAudioMonitorRoute(route);
     }
 
     internal void Disconnect()

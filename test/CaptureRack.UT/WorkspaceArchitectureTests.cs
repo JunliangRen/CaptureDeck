@@ -725,4 +725,349 @@ public sealed class WorkspaceArchitectureTests
         Assert.Equal(12.0, custom.GainLeftDb);
         Assert.Equal(-12.0, custom.GainRightDb);
     }
+
+    [Theory]
+    [InlineData(false, false, false)]
+    [InlineData(false, true, false)]
+    [InlineData(true, false, false)]
+    [InlineData(true, true, true)]
+    public void FullscreenRenderPolicyPausesMainWindowOnlyWhenCoveredOnSameDisplay(
+        bool isFullscreen, bool coversMainDisplay, bool expectedPause) =>
+        Assert.Equal(expectedPause, FullscreenRenderPolicy.ShouldPauseMainWindowRendering(isFullscreen, coversMainDisplay));
+
+    [Theory]
+    [InlineData(false, false, false)]
+    [InlineData(false, true, true)]
+    [InlineData(true, false, false)]
+    [InlineData(true, true, false)]
+    public void FullscreenRenderPolicyGatesVideoScopesWhenMainWindowPaused(
+        bool pauseMainWindow, bool layoutShowsScopes, bool expectedRender) =>
+        Assert.Equal(expectedRender, FullscreenRenderPolicy.ShouldRenderVideoScopes(pauseMainWindow, layoutShowsScopes));
+
+    [Theory]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    public void FullscreenRenderPolicyGatesMainWindowMetersAndAnimations(bool pauseMainWindow, bool expectedActive)
+    {
+        Assert.Equal(expectedActive, FullscreenRenderPolicy.ShouldUpdateMainWindowMeters(pauseMainWindow));
+        Assert.Equal(expectedActive, FullscreenRenderPolicy.ShouldRunMainWindowAnimations(pauseMainWindow));
+    }
+
+    [Fact]
+    public void FullscreenRenderPolicyComputesNtsc480GuideHeightsAndRejectsInvalidInputs()
+    {
+        var (top486, bot486) = FullscreenRenderPolicy.ComputeNtsc480GuideHeights(486);
+        Assert.Equal(4, top486, precision: 3);
+        Assert.Equal(2, bot486, precision: 3);
+
+        var (top1080, bot1080) = FullscreenRenderPolicy.ComputeNtsc480GuideHeights(1080);
+        Assert.Equal(1080 * 4.0 / 486.0, top1080, precision: 3);
+        Assert.Equal(1080 * 2.0 / 486.0, bot1080, precision: 3);
+
+        // Very small preview clamps to minimum visible line thickness (2px top, 1px bottom).
+        var (topSmall, botSmall) = FullscreenRenderPolicy.ComputeNtsc480GuideHeights(100);
+        Assert.Equal(2, topSmall, precision: 3);
+        Assert.Equal(1, botSmall, precision: 3);
+
+        foreach (var invalid in new[] { 0d, -50d, double.NaN, double.PositiveInfinity, double.NegativeInfinity })
+        {
+            var (t, b) = FullscreenRenderPolicy.ComputeNtsc480GuideHeights(invalid);
+            Assert.Equal(0, t);
+            Assert.Equal(0, b);
+        }
+    }
+
+    [Fact]
+    public void FullscreenRenderPolicyComputesPillarboxAndLetterboxSurfaceSizes()
+    {
+        // 4:3 content inside 1920x1080 fullscreen (padding 0) -> pillarboxed to 1440x1080.
+        var (w43, h43) = FullscreenRenderPolicy.ComputePreviewSurfaceSize(1920, 1080, 4d / 3, padding: 0);
+        Assert.Equal(1440, w43, precision: 3);
+        Assert.Equal(1080, h43, precision: 3);
+
+        // 16:9 content inside 1000x800 container with 14px per-side padding (28px total) -> available 972x772.
+        var (w169, h169) = FullscreenRenderPolicy.ComputePreviewSurfaceSize(1000, 800, 16d / 9, padding: 14);
+        Assert.Equal(972, w169, precision: 3);
+        Assert.Equal(972 / (16d / 9), h169, precision: 3);
+
+        // Negative or non-finite padding clamps cleanly to zero.
+        var (wNegPad, hNegPad) = FullscreenRenderPolicy.ComputePreviewSurfaceSize(1920, 1080, 16d / 9, padding: -10);
+        Assert.Equal(1920, wNegPad, precision: 3);
+        Assert.Equal(1080, hNegPad, precision: 3);
+        var (wNanPad, hNanPad) = FullscreenRenderPolicy.ComputePreviewSurfaceSize(1920, 1080, 16d / 9, padding: double.NaN);
+        Assert.Equal(1920, wNanPad, precision: 3);
+        Assert.Equal(1080, hNanPad, precision: 3);
+
+        // Exact 16:9 fit with zero padding -> fills entire 2560x1440 display.
+        var (wFull, hFull) = FullscreenRenderPolicy.ComputePreviewSurfaceSize(2560, 1440, 16d / 9, padding: 0);
+        Assert.Equal(2560, wFull, precision: 3);
+        Assert.Equal(1440, hFull, precision: 3);
+    }
+
+    [Theory]
+    [InlineData(0, 1080, 1.5, 0)]
+    [InlineData(1920, 0, 1.5, 0)]
+    [InlineData(-100, 1080, 1.5, 0)]
+    [InlineData(double.NaN, 1080, 1.5, 0)]
+    [InlineData(1920, double.PositiveInfinity, 1.5, 0)]
+    [InlineData(10, 10, 1.5, 14)]
+    public void FullscreenRenderPolicyReturnsZeroForInvalidOrTooSmallBounds(
+        double width, double height, double aspect, double padding)
+    {
+        var (w, h) = FullscreenRenderPolicy.ComputePreviewSurfaceSize(width, height, aspect, padding);
+        Assert.Equal(0, w);
+        Assert.Equal(0, h);
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(-1.5)]
+    [InlineData(double.NaN)]
+    [InlineData(double.PositiveInfinity)]
+    public void FullscreenRenderPolicyFallsBackToFourByThreeForInvalidAspectRatio(double invalidAspect)
+    {
+        var (w, h) = FullscreenRenderPolicy.ComputePreviewSurfaceSize(1920, 1080, invalidAspect, padding: 0);
+        Assert.Equal(1440, w, precision: 3);
+        Assert.Equal(1080, h, precision: 3);
+    }
+
+    [Fact]
+    public void AudioMonitorRouteClampsByChannelCountAndDefaultsToPairZero()
+    {
+        Assert.Equal(AudioMonitorMode.Pair, AudioMonitorRoute.Default.Mode);
+        Assert.Equal(0, AudioMonitorRoute.Default.PairIndex);
+        Assert.Equal(AudioMonitorRoute.Default, AudioMonitorRoute.Pair(3).ClampForChannels(2));
+        Assert.Equal(AudioMonitorRoute.Default, AudioMonitorRoute.Downmix.ClampForChannels(2));
+        Assert.Equal(AudioMonitorRoute.Pair(3), AudioMonitorRoute.Pair(7).ClampForChannels(8));
+        Assert.Equal(AudioMonitorRoute.Downmix, AudioMonitorRoute.Downmix.ClampForChannels(6));
+    }
+
+    [Fact]
+    public void AudioChannelLayoutHelperDetectsSurroundAndFormatsLabels()
+    {
+        var layout51 = AudioChannelLayoutHelper.Detect("5.1(side)", 6);
+        Assert.Equal(AudioChannelLayout.Surround51, layout51);
+        Assert.Equal("C", AudioChannelLayoutHelper.ChannelCode(2, 6, layout51));
+        Assert.Equal("LFE", AudioChannelLayoutHelper.ChannelCode(3, 6, layout51));
+        Assert.Equal("3-4 (C/LFE)", AudioChannelLayoutHelper.PairShortLabel(1, 6, layout51));
+
+        var layout71 = AudioChannelLayoutHelper.Detect("7.1", 8);
+        Assert.Equal(AudioChannelLayout.Surround71, layout71);
+        Assert.Equal("Lrs", AudioChannelLayoutHelper.ChannelCode(6, 8, layout71));
+        Assert.Equal("Rrs", AudioChannelLayoutHelper.ChannelCode(7, 8, layout71));
+
+        Assert.Equal("M", AudioChannelLayoutHelper.ChannelCode(0, 1, AudioChannelLayout.Mono));
+        Assert.Equal("L", AudioChannelLayoutHelper.ChannelCode(0, 2, AudioChannelLayout.Stereo));
+        Assert.Equal("8", AudioChannelLayoutHelper.ChannelCode(7, 8, AudioChannelLayout.Unknown));
+        Assert.Equal("5-6", AudioChannelLayoutHelper.PairCompactLabel(2, 8));
+    }
+
+    [Fact]
+    public void AudioMonitorMixerRoutesPairsDownmixesSurroundAndSoftLimits()
+    {
+        double[] eightCh = [0.2, -0.2, 0.5, -0.5, 0.0, 0.0, 0.0, 0.0];
+        var (l1, r1) = AudioMonitorMixer.RouteFrame(eightCh, AudioMonitorRoute.Pair(0), AudioChannelLayout.Unknown, 0b11);
+        Assert.Equal(0.2, l1, precision: 6);
+        Assert.Equal(-0.2, r1, precision: 6);
+
+        var (l2, r2) = AudioMonitorMixer.RouteFrame(eightCh, AudioMonitorRoute.Pair(1), AudioChannelLayout.Unknown, 0b11);
+        Assert.Equal(0.5, l2, precision: 6);
+        Assert.Equal(-0.5, r2, precision: 6);
+
+        // Generic downmix uses only active pairs (2 active pairs -> equal-power 1/sqrt(2), NOT attenuated by silent pairs 3-4).
+        var (ld, rd) = AudioMonitorMixer.RouteFrame(eightCh, AudioMonitorRoute.Downmix, AudioChannelLayout.Unknown, 0b0011);
+        var expectedGeneric = (0.2 + 0.5) / Math.Sqrt(2);
+        Assert.Equal(expectedGeneric, ld, precision: 5);
+        Assert.Equal(-expectedGeneric, rd, precision: 5);
+
+        // ITU-R BS.775 5.1 surround downmix: L + 0.707*C + 0.707*Ls.
+        double[] surround51 = [0.2, 0.1, 0.4, 0.9, 0.2, 0.3];
+        var (ls, rs) = AudioMonitorMixer.RouteFrame(surround51, AudioMonitorRoute.Downmix, AudioChannelLayout.Surround51, 0b111);
+        const double coef = 0.7071067811865475;
+        Assert.Equal(0.2 + 0.4 * coef + 0.2 * coef, ls, precision: 5);
+        Assert.Equal(0.1 + 0.4 * coef + 0.3 * coef, rs, precision: 5);
+
+        // Soft limiter stays transparent below 0.85 and caps extreme sums <= 1.0.
+        Assert.Equal(0.5, AudioMonitorMixer.SoftLimit(0.5), precision: 6);
+        var hot = AudioMonitorMixer.SoftLimit(2.5);
+        Assert.InRange(hot, 0.95, 1.0);
+        Assert.Equal(-hot, AudioMonitorMixer.SoftLimit(-2.5), precision: 6);
+    }
+
+    [Fact]
+    public void StereoMonitorTracksAllChannelsAndRoutesMonitoredPairToSpectrumAndPhase()
+    {
+        var monitor = new StereoMonitor(CaptureAudioFormat.Pcm16, 48_000, channels: 8);
+        monitor.Route = AudioMonitorRoute.Pair(1); // Monitor Ch 3-4
+
+        short[] frame = new short[8];
+        for (var i = 0; i < 1600; i++)
+        {
+            frame[0] = 2000;
+            frame[1] = -2000;
+            frame[2] = 16000;
+            frame[3] = 16000; // In-phase on Ch 3-4
+            frame[4] = short.MaxValue; // Clip on Ch 5
+            frame[5] = 0;
+            frame[6] = 0;
+            frame[7] = 0;
+            monitor.AddFrame(frame);
+        }
+
+        var levels = Assert.IsType<StereoMonitor.AudioWindow>(monitor.ReadForDisplay()).Analyze();
+        Assert.Equal(8, levels.ChannelCount);
+        Assert.Equal(AudioMonitorRoute.Pair(1), levels.MonitorRoute);
+        Assert.Equal(16000 / 32768.0, levels.LeftPeak, precision: 4);
+        Assert.Equal(16000 / 32768.0, levels.RightPeak, precision: 4);
+        Assert.NotNull(levels.PhaseCorrelation);
+        Assert.True(levels.PhaseCorrelation > 0.99);
+        Assert.Equal(2000 / 32768.0, levels.PeakForChannel(0), precision: 4);
+        Assert.Equal(0, levels.PeakForChannel(6), precision: 6);
+        Assert.True(levels.ClipsForChannel(4) >= 1600);
+        Assert.Equal(0, levels.ClipsForChannel(0));
+    }
+
+    [Fact]
+    public void MultiChannelMeterPolicyAndActivityTrackerExpandWithHysteresisAndClipLatch()
+    {
+        var tracker = new MultiChannelActivityTracker(attackFrames: 3, holdFrames: 4);
+        var ballistics = new MultiChannelMeterBallistics();
+
+        StereoLevels MakeLevels(double p34, long clip56 = 0) =>
+            new(0.2, 0.2, 0, 0, 1.0, null)
+            {
+                ChannelCount = 8,
+                ChannelLayout = AudioChannelLayout.Unknown,
+                MonitorRoute = AudioMonitorRoute.Default,
+                ChannelPeaks = [0.2, 0.2, p34, p34, 0, 0, 0, 0],
+                ChannelClips = [0, 0, 0, 0, clip56, 0, 0, 0]
+            };
+
+        Span<bool> clipped = stackalloc bool[4];
+
+        // Initially quiet on Ch 3-8 -> Auto shows only Ch 1-2.
+        var quiet = MakeLevels(0);
+        tracker.Observe(quiet);
+        ballistics.UpdateInput(quiet);
+        ballistics.FillClippedPairs(clipped);
+        Assert.Equal([0, 1], MultiChannelMeterPolicy.ComputeVisibleChannels(8, AudioMeterDisplayMode.Auto, AudioMonitorRoute.Default, tracker.ActivePairs, clipped));
+
+        // 2 frames of signal on Ch 3-4 (< attack=3) does not pop open yet (glitch filter).
+        tracker.Observe(MakeLevels(0.1));
+        tracker.Observe(MakeLevels(0.1));
+        Assert.Equal([0, 1], MultiChannelMeterPolicy.ComputeVisibleChannels(8, AudioMeterDisplayMode.Auto, AudioMonitorRoute.Default, tracker.ActivePairs, clipped));
+
+        // 3rd frame reaches attack -> expands to Ch 1-4.
+        tracker.Observe(MakeLevels(0.1));
+        Assert.Equal([0, 1, 2, 3], MultiChannelMeterPolicy.ComputeVisibleChannels(8, AudioMeterDisplayMode.Auto, AudioMonitorRoute.Default, tracker.ActivePairs, clipped));
+
+        // Goes silent: stays expanded for holdFrames-1 (3 frames) without collapsing.
+        for (var i = 0; i < 3; i++)
+        {
+            tracker.Observe(quiet);
+            Assert.Equal([0, 1, 2, 3], MultiChannelMeterPolicy.ComputeVisibleChannels(8, AudioMeterDisplayMode.Auto, AudioMonitorRoute.Default, tracker.ActivePairs, clipped));
+        }
+        // 4th silent frame completes hold -> collapses back to Ch 1-2.
+        tracker.Observe(quiet);
+        Assert.Equal([0, 1], MultiChannelMeterPolicy.ComputeVisibleChannels(8, AudioMeterDisplayMode.Auto, AudioMonitorRoute.Default, tracker.ActivePairs, clipped));
+
+        // Clip on Ch 5 forces Ch 5-6 visible even when silent until clip latch is reset.
+        var withClip = MakeLevels(0, clip56: 5);
+        ballistics.UpdateInput(withClip);
+        ballistics.FillClippedPairs(clipped);
+        Assert.Equal([0, 1, 4, 5], MultiChannelMeterPolicy.ComputeVisibleChannels(8, AudioMeterDisplayMode.Auto, AudioMonitorRoute.Default, tracker.ActivePairs, clipped));
+
+        ballistics.ResetClipLatch(4);
+        ballistics.FillClippedPairs(clipped);
+        Assert.Equal([0, 1], MultiChannelMeterPolicy.ComputeVisibleChannels(8, AudioMeterDisplayMode.Auto, AudioMonitorRoute.Default, tracker.ActivePairs, clipped));
+
+        // Selecting Ch 7-8 as monitor route forces Ch 7-8 visible in Auto, and only Ch 7-8 in MonitoredPair.
+        Assert.Equal([0, 1, 6, 7], MultiChannelMeterPolicy.ComputeVisibleChannels(8, AudioMeterDisplayMode.Auto, AudioMonitorRoute.Pair(3), tracker.ActivePairs, clipped));
+        Assert.Equal([6, 7], MultiChannelMeterPolicy.ComputeVisibleChannels(8, AudioMeterDisplayMode.MonitoredPair, AudioMonitorRoute.Pair(3), tracker.ActivePairs, clipped));
+        Assert.Equal([0, 1, 2, 3, 4, 5, 6, 7], MultiChannelMeterPolicy.ComputeVisibleChannels(8, AudioMeterDisplayMode.All, AudioMonitorRoute.Default, tracker.ActivePairs, clipped));
+    }
+
+    [Fact]
+    public void DeckLinkAudioChannelCapabilitiesAndFfv1CodecSelectionHandleMultiChannel()
+    {
+        Assert.Equal([2u], CaptureAudio.SupportedChannelCounts(16, audioInputId: 4)); // Analog
+        Assert.Equal([2u, 8u], CaptureAudio.SupportedChannelCounts(8, audioInputId: 1)); // Embedded 8ch card
+        Assert.Equal([2u, 8u, 16u], CaptureAudio.SupportedChannelCounts(16, audioInputId: 1)); // Embedded 16ch card
+        Assert.Equal(8u, CaptureAudio.NormalizeChannels(16, maxDeviceChannels: 8, audioInputId: 1));
+        Assert.Equal(2u, CaptureAudio.NormalizeChannels(8, maxDeviceChannels: 16, audioInputId: 8)); // Analog XLR
+        Assert.Equal(32, CaptureAudio.BytesPerFrame(CaptureAudioFormat.Pcm32, 8));
+        Assert.Equal(32, CaptureAudio.BytesPerFrame(CaptureAudioFormat.Pcm16, 16));
+
+        var ffv1 = new CaptureRack.Recording.RecordingEncoding(CaptureRack.Recording.RecordingOutput.Ffv1);
+        Assert.True(ffv1.UsesFlacAudio(8));
+        Assert.False(ffv1.UsesFlacAudio(16));
+        Assert.Equal("Encoded_FFV1_FLAC8", ffv1.FileTagForAudioChannels(8));
+        Assert.Equal("Encoded_FFV1_PCM", ffv1.FileTagForAudioChannels(16));
+        Assert.Contains("flac", ffv1.Arguments(fieldOrder: 0, audioBits: 16, audioChannels: 8));
+        Assert.DoesNotContain("flac", ffv1.Arguments(fieldOrder: 0, audioBits: 16, audioChannels: 16));
+        Assert.Contains("copy", ffv1.Arguments(fieldOrder: 0, audioBits: 16, audioChannels: 16));
+        Assert.Equal([16u, 8u, 2u], CaptureAudio.ChannelFallbackOrder(16));
+        Assert.Equal([8u, 2u], CaptureAudio.ChannelFallbackOrder(8));
+        Assert.Equal([2u], CaptureAudio.ChannelFallbackOrder(2));
+
+        // Panel width stays 86px for 2ch stereo, widens slightly for multi-channel 2-visible & 16ch.
+        Assert.Equal(86, MultiChannelMeterPolicy.ComputePanelWidth(2, multiChannel: false));
+        Assert.Equal(104, MultiChannelMeterPolicy.ComputePanelWidth(2, multiChannel: true));
+        Assert.Equal(312, MultiChannelMeterPolicy.ComputePanelWidth(16, multiChannel: true));
+
+        // QcWarningFormatter surfaces Ch 3-16 clipping even when Ch 1-2 have zero clips.
+        var expected = new QcExpectedMedia(10, 4800, "tb", 16, "v210", 720, 486, AudioChannels: 8);
+        var log = new QcCaptureLog("DeckLink", "14.0", "SDI", "Embedded", "NTSC",
+            DateTimeOffset.UtcNow, DateTimeOffset.UtcNow, expected, 10, 0, 0, 0, 10, 0, 0, [])
+        {
+            ChannelClips = [0, 0, 0, 0, 3, 0, 0, 0]
+        };
+        var qcResult = new QcResult(QcStatus.Passed, "ok", "a.capture.json", null, null, []);
+        var warnings = QcWarningFormatter.BuildMovWarnings(log, qcResult, key => key, CultureInfo.InvariantCulture);
+        Assert.Contains("QcWarnClipping", warnings);
+    }
+
+    [Fact]
+    public void QuickTimeMovieUsesLpcmV2ForMultiChannelPcm16AndSowtForStereoPcm16()
+    {
+        var mode = new VideoMode(0x6E747363, "525i59.94 NTSC", 8, 4, 1001, 30000, 0x6C6F7772);
+        var videoBytes = new byte[MovRecording.StoredRowBytes(mode.Width, CapturePixelFormat.Uyvy) * mode.Height];
+
+        using var stereoStream = new MemoryStream();
+        var stereoMov = new QuickTimeMovie(stereoStream, mode, CapturePixelFormat.Uyvy, videoBytes.Length, CaptureAudioFormat.Pcm16, audioChannels: 2);
+        stereoMov.WriteVideo(videoBytes, 0, mode.FrameDuration);
+        stereoMov.WriteAudio(new byte[100 * CaptureAudio.BytesPerFrame(CaptureAudioFormat.Pcm16, 2)], 0, 100);
+        stereoMov.Finish();
+        var stereoText = System.Text.Encoding.ASCII.GetString(stereoStream.ToArray());
+        Assert.Contains("sowt", stereoText);
+
+        using var multiStream = new MemoryStream();
+        var multiMov = new QuickTimeMovie(multiStream, mode, CapturePixelFormat.Uyvy, videoBytes.Length, CaptureAudioFormat.Pcm16, audioChannels: 8);
+        multiMov.WriteVideo(videoBytes, 0, mode.FrameDuration);
+        multiMov.WriteAudio(new byte[100 * CaptureAudio.BytesPerFrame(CaptureAudioFormat.Pcm16, 8)], 0, 100);
+        multiMov.Finish();
+        var multiText = System.Text.Encoding.ASCII.GetString(multiStream.ToArray());
+        Assert.Contains("lpcm", multiText);
+        Assert.DoesNotContain("sowt", multiText);
+    }
+
+    [Fact]
+    public void TestSignalMultiChannelScenarioEmitsEightChannelAudio()
+    {
+        var feed = new PreviewFeed();
+        var recorder = new PreviewRecorder { ReadAudioFromUi = true };
+        using var session = new TestSignal.Session(TestSignalScenario.MultiChannel, feed, recorder);
+        for (var i = 0; i < 6; i++)
+            session.Emit(i);
+
+        var stats = session.Snapshot(readAudio: false);
+        Assert.Equal(8u, stats.AudioChannels);
+        Assert.Equal(8, stats.AudioInfo?.Channels);
+
+        var levels = recorder.ReadAudioLevels();
+        Assert.NotNull(levels);
+        Assert.Equal(8, levels!.ChannelCount);
+        Assert.True(levels.PeakForChannel(0) > 0.05);
+        Assert.Equal(0, levels.PeakForChannel(6));
+    }
 }

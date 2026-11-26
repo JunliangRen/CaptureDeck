@@ -24,6 +24,7 @@ public static partial class DeckLinkCapture
     private const uint DetectedInputMode = 0x6476696D;
     private const uint FormatDetection = 1;
     private const uint SupportsInputFormatDetection = 0x696E6664;
+    private const uint MaximumAudioChannelsAttribute = 0x6D616368; // mach
 
     public static string GetApiVersion()
     {
@@ -62,7 +63,8 @@ public static partial class DeckLinkCapture
         CaptureRouting? routing = null, PreviewFeed? preview = null,
         CapturePixelFormat pixelFormat = CapturePixelFormat.V210, string? recordingPath = null,
         CaptureAudioFormat audioFormat = CaptureAudioFormat.Pcm16, PreviewRecorder? previewRecorder = null,
-        AnalogInputOptions? analogOptions = null, LocalAudioMonitor? localAudioMonitor = null)
+        AnalogInputOptions? analogOptions = null, LocalAudioMonitor? localAudioMonitor = null,
+        uint audioChannels = CaptureAudio.Channels)
     {
         if (recordingPath is not null && requestedMode is null)
             throw new InvalidOperationException("Choose a fixed input mode before recording.");
@@ -70,6 +72,8 @@ public static partial class DeckLinkCapture
             throw new ArgumentException("Live recording requires a preview.", nameof(previewRecorder));
         if (audioFormat is not (CaptureAudioFormat.Pcm16 or CaptureAudioFormat.Pcm32))
             throw new ArgumentOutOfRangeException(nameof(audioFormat));
+        if (!CaptureAudio.IsValidChannelCount(audioChannels))
+            throw new ArgumentOutOfRangeException(nameof(audioChannels), "DeckLink audio channels must be 2, 8, or 16.");
 
         CaptureStats? result = null;
         VisitDevices((current, device) =>
@@ -81,8 +85,11 @@ public static partial class DeckLinkCapture
 
             using var route = routing is { } selected ? new InputRoutingScope(device, selected, analogOptions) : null;
             var info = ReadDevice(index, device, input, includeSources: false, pixelFormat);
+            var activeAudioInput = routing?.Audio ?? info.ActiveAudioInputId;
+            var effectiveChannels = CaptureAudio.NormalizeChannels(
+                audioChannels, info.MaxAudioChannels, activeAudioInput);
             result = RunCapture(device, input, info, requestedMode, duration, progress, cancellation, preview,
-                pixelFormat, recordingPath, audioFormat, previewRecorder, localAudioMonitor);
+                pixelFormat, recordingPath, audioFormat, previewRecorder, localAudioMonitor, effectiveChannels);
             return false;
         });
         return result ?? throw new InvalidOperationException($"DeckLink device {index} was not found.");
@@ -189,10 +196,15 @@ public static partial class DeckLinkCapture
         const uint persistentIdAttribute = 0x70656964;
         long? persistentId = attributes is not null && attributes.GetInt(persistentIdAttribute, out var idValue) == 0
             ? idValue : null;
+        var maxAudioChannels = attributes is not null && attributes.GetInt(MaximumAudioChannelsAttribute, out var maxCh) == 0 && maxCh > 0
+            ? (int)Math.Min(maxCh, AudioMonitorRoute.MaxSupportedChannels)
+            : (int)CaptureAudio.Channels;
         return new(index, name, DescribeVideo(video), DescribeAudio(audio), currentModes, true, supportsDetection,
             videoSources, audioSources, device is IDeckLinkEncoderInput)
         {
             PersistentId = persistentId,
+            ActiveAudioInputId = audio,
+            MaxAudioChannels = maxAudioChannels,
             SupportsVancInputMapping = supportsVancInputMapping,
             AnalogCapabilities = new AnalogInputCapabilities(
                 supportsAnalogVideoFlags, supportsConsumerAudioLevels, supportsAnalogAudioGain)
@@ -286,7 +298,7 @@ public static partial class DeckLinkCapture
     private static CaptureStats RunCapture(IDeckLink device, IDeckLinkInput input, CaptureDevice info,
         uint? requestedMode, TimeSpan? duration, Action<VideoMode, CaptureStats> progress, CancellationToken stop,
         PreviewFeed? preview, CapturePixelFormat format, string? recordingPath, CaptureAudioFormat audioFormat,
-        PreviewRecorder? previewRecorder, LocalAudioMonitor? localAudioMonitor)
+        PreviewRecorder? previewRecorder, LocalAudioMonitor? localAudioMonitor, uint audioChannels)
     {
         var modes = info.Modes;
         if (modes.Count == 0)
@@ -308,7 +320,7 @@ public static partial class DeckLinkCapture
         while (true)
         {
             var stats = Capture(input, status, mode, duration, detect, progress, stop, preview, format, recordingPath,
-                audioFormat, previewRecorder, automaticMode: requestedMode is null, localAudioMonitor);
+                audioFormat, previewRecorder, automaticMode: requestedMode is null, localAudioMonitor, audioChannels);
             if (stats.Error is not null || stats.NextMode is not { } next || stop.IsCancellationRequested)
                 return stats;
 
@@ -322,37 +334,28 @@ public static partial class DeckLinkCapture
     private static CaptureStats Capture(IDeckLinkInput input, IDeckLinkStatus? status, VideoMode mode, TimeSpan? duration,
         bool detect, Action<VideoMode, CaptureStats> progress, CancellationToken stop, PreviewFeed? preview,
         CapturePixelFormat format, string? recordingPath, CaptureAudioFormat audioFormat,
-        PreviewRecorder? previewRecorder, bool automaticMode, LocalAudioMonitor? localAudioMonitor)
+        PreviewRecorder? previewRecorder, bool automaticMode, LocalAudioMonitor? localAudioMonitor, uint audioChannels)
     {
         var empty = new CaptureStats();
         var readAudio = previewRecorder?.ReadAudioFromUi != true;
         if (stop.IsCancellationRequested)
             return empty;
 
-        using var recording = recordingPath is null ? null : new MovRecording(recordingPath, mode, format, audioFormat);
         var lumaScaleBits = format == CapturePixelFormat.V210 ? 10 : 8;
-        var callback = new CaptureCallback(preview, format, audioFormat, mode, recording, automaticMode, localAudioMonitor);
-        Check(input.SetCallback(callback), "SetCallback");
+        Check(input.EnableVideoInput(mode.Id, (uint)format, detect ? FormatDetection : 0), "EnableVideoInput");
         try
         {
-            Check(input.EnableVideoInput(mode.Id, (uint)format, detect ? FormatDetection : 0), "EnableVideoInput");
+            var (inputAudioFormat, enabledChannels) = EnableAudioInputWithFallback(
+                input, audioFormat, audioChannels, preferPcm32Preview: preview is not null && recordingPath is null);
             try
             {
-                var inputAudioFormat = audioFormat;
-                if (preview is not null && recordingPath is null && audioFormat == CaptureAudioFormat.Pcm16 &&
-                    input.EnableAudioInput(CaptureAudio.SampleRate, (uint)CaptureAudioFormat.Pcm32, CaptureAudio.Channels) >= 0)
-                {
-                    inputAudioFormat = CaptureAudioFormat.Pcm32;
-                }
-                else
-                {
-                    Check(input.EnableAudioInput(CaptureAudio.SampleRate, (uint)audioFormat, CaptureAudio.Channels),
-                        "EnableAudioInput");
-                }
+                using var recording = recordingPath is null ? null : new MovRecording(recordingPath, mode, format, audioFormat, audioChannels: enabledChannels);
+                var callback = new CaptureCallback(preview, format, audioFormat, mode, recording, automaticMode, localAudioMonitor, audioChannels: enabledChannels);
+                if (inputAudioFormat != audioFormat)
+                    callback.UseMonitoringAudioFormat(inputAudioFormat);
+                Check(input.SetCallback(callback), "SetCallback");
                 try
                 {
-                    if (inputAudioFormat != audioFormat)
-                        callback.UseMonitoringAudioFormat(inputAudioFormat);
                     Check(input.StartStreams(), "StartStreams");
                     try
                     {
@@ -414,23 +417,43 @@ public static partial class DeckLinkCapture
                 }
                 finally
                 {
-                    Check(input.DisableAudioInput(), "DisableAudioInput");
+                    Check(input.SetCallback(null), "Clear callback");
                 }
+
+                var result = callback.Snapshot(publishMonitor: true, readAudio: readAudio);
+                if (recording is not null)
+                    result.Recording = recording.Finish();
+                return result;
             }
             finally
             {
-                Check(input.DisableVideoInput(), "DisableVideoInput");
+                Check(input.DisableAudioInput(), "DisableAudioInput");
             }
         }
         finally
         {
-            Check(input.SetCallback(null), "Clear callback");
+            Check(input.DisableVideoInput(), "DisableVideoInput");
+        }
+    }
+
+    private static (CaptureAudioFormat Format, uint Channels) EnableAudioInputWithFallback(
+        IDeckLinkInput input, CaptureAudioFormat requestedFormat, uint requestedChannels, bool preferPcm32Preview)
+    {
+        var candidates = CaptureAudio.ChannelFallbackOrder(requestedChannels);
+        var lastHr = 0;
+        foreach (var ch in candidates)
+        {
+            if (preferPcm32Preview && requestedFormat == CaptureAudioFormat.Pcm16 &&
+                input.EnableAudioInput(CaptureAudio.SampleRate, (uint)CaptureAudioFormat.Pcm32, ch) >= 0)
+                return (CaptureAudioFormat.Pcm32, ch);
+
+            lastHr = input.EnableAudioInput(CaptureAudio.SampleRate, (uint)requestedFormat, ch);
+            if (lastHr >= 0)
+                return (requestedFormat, ch);
         }
 
-        var result = callback.Snapshot(publishMonitor: true, readAudio: readAudio);
-        if (recording is not null)
-            result.Recording = recording.Finish();
-        return result;
+        Check(lastHr, "EnableAudioInput");
+        return (requestedFormat, CaptureAudio.Channels);
     }
 
     private static T Activate<T>(Guid clsid) where T : class =>
@@ -442,9 +465,10 @@ public static partial class DeckLinkCapture
             throw new COMException($"{operation} failed (0x{result:X8}).", result);
     }
 
-    public static double EstimateRecordingBytesPerSecond(VideoMode mode, CapturePixelFormat video, CaptureAudioFormat audio) =>
+    public static double EstimateRecordingBytesPerSecond(VideoMode mode, CapturePixelFormat video,
+        CaptureAudioFormat audio, uint audioChannels = CaptureAudio.Channels) =>
         (double)MovRecording.StoredRowBytes(mode.Width, video) * mode.Height * mode.FramesPerSecond +
-        CaptureAudio.SampleRate * CaptureAudio.BytesPerFrame(audio);
+        CaptureAudio.SampleRate * CaptureAudio.BytesPerFrame(audio, audioChannels);
 
     public static string FormatFourCc(uint value) =>
         Encoding.ASCII.GetString([(byte)(value >> 24), (byte)(value >> 16), (byte)(value >> 8), (byte)value]);
@@ -668,6 +692,8 @@ public sealed record CaptureDevice(int Index, string Name, string VideoInput, st
     bool HasHardwareEncoderInput)
 {
     public long? PersistentId { get; init; }
+    internal uint ActiveAudioInputId { get; init; } = 1;
+    public int MaxAudioChannels { get; init; } = (int)CaptureAudio.Channels;
     public bool SupportsVancInputMapping { get; init; }
     public AnalogInputCapabilities AnalogCapabilities { get; init; } = new(false, false, false);
 }
@@ -709,15 +735,46 @@ public enum CapturePixelFormat : uint { V210 = 0x76323130, Uyvy = 0x32767579, Bg
 
 public enum CaptureAudioFormat : uint { Pcm16 = 16, Pcm32 = 32 }
 
-internal static class CaptureAudio
+public static class CaptureAudio
 {
     public const uint SampleRate = 48000;
     public const uint Channels = 2;
+
+    public static bool IsValidChannelCount(uint channels) => channels is 2 or 8 or 16;
+
+    public static bool SupportsMultiChannelInput(uint audioInputId) => audioInputId is 1 or 2; // Embedded or AES/EBU
+
+    public static uint[] SupportedChannelCounts(int maxDeviceChannels, uint audioInputId)
+    {
+        if (!SupportsMultiChannelInput(audioInputId) || maxDeviceChannels < 8)
+            return [2];
+        return maxDeviceChannels >= 16 ? [2, 8, 16] : [2, 8];
+    }
+
+    public static uint[] ChannelFallbackOrder(uint requested) => requested switch
+    {
+        >= 16 => [16, 8, 2],
+        >= 8 => [8, 2],
+        _ => [2]
+    };
+
+    public static uint NormalizeChannels(uint requested, int maxDeviceChannels, uint audioInputId)
+    {
+        var supported = SupportedChannelCounts(maxDeviceChannels, audioInputId);
+        if (supported.Contains(requested))
+            return requested;
+        for (var i = supported.Length - 1; i >= 0; i--)
+            if (supported[i] <= requested)
+                return supported[i];
+        return Channels;
+    }
+
     public static bool SupportsRecordingFormat(CaptureAudioFormat input, CaptureAudioFormat output) =>
         output == CaptureAudioFormat.Pcm16 && input is CaptureAudioFormat.Pcm16 or CaptureAudioFormat.Pcm32 ||
         output == CaptureAudioFormat.Pcm32 && input == CaptureAudioFormat.Pcm32;
 
-    public static int BytesPerFrame(CaptureAudioFormat format) => (int)((uint)format / 8 * Channels);
+    public static int BytesPerFrame(CaptureAudioFormat format, uint channels = Channels) =>
+        (int)((uint)format / 8 * channels);
 }
 
 public sealed record VideoMode(uint Id, string Name, int Width, int Height, long FrameDuration, long TimeScale,

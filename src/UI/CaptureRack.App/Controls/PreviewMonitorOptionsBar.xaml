@@ -80,12 +80,20 @@
                         Width="30" Height="28" CornerRadius="2" Click="AudioMonitorMute_Click">
                     <FontIcon x:Name="AudioMonitorIcon" Glyph="&#xE74F;" FontSize="13" />
                 </Button>
+                <Border x:Name="AudioMonitorRouteBadge" Visibility="Collapsed" VerticalAlignment="Center"
+                        CornerRadius="2" Padding="4,1" Margin="0,0,2,0"
+                        Background="{ThemeResource StudioAccentSoftBrush}"
+                        BorderBrush="{ThemeResource StudioAccentBrush}" BorderThickness="1">
+                    <TextBlock x:Name="AudioMonitorRouteBadgeText" Style="{StaticResource StudioMonoTextStyle}"
+                               FontSize="9" FontWeight="SemiBold"
+                               Foreground="{ThemeResource StudioAccentBrush}" />
+                </Border>
                 <Button x:Name="AudioMonitorVolumeButton" Style="{StaticResource StudioIconButtonStyle}"
                         Width="20" Height="28" CornerRadius="2">
                     <FontIcon Glyph="&#xE70D;" FontSize="8" Foreground="{ThemeResource StudioTextSecondaryBrush}" />
                     <Button.Flyout>
                         <Flyout Placement="BottomEdgeAlignedRight">
-                            <StackPanel Width="230" Spacing="8">
+                            <StackPanel Width="244" Spacing="8">
                                 <Grid>
                                     <TextBlock x:Name="AudioMonitorTitleText" FontSize="13" FontWeight="SemiBold"
                                                Foreground="{ThemeResource StudioTextPrimaryBrush}" />
@@ -95,6 +103,12 @@
                                 </Grid>
                                 <Slider x:Name="AudioMonitorVolumeSlider" Minimum="0" Maximum="100" Value="80"
                                         StepFrequency="1" ValueChanged="AudioMonitorVolumeSlider_ValueChanged" />
+                                <StackPanel x:Name="AudioMonitorRouteSection" Spacing="4" Visibility="Collapsed">
+                                    <TextBlock x:Name="AudioMonitorRouteLabel" Style="{StaticResource StudioFieldLabelStyle}" />
+                                    <ComboBox x:Name="AudioMonitorRoutePicker" CornerRadius="3" HorizontalAlignment="Stretch"
+                                              SelectionChanged="AudioMonitorRoutePicker_SelectionChanged"
+                                              DropDownClosed="AudioMonitorRoutePicker_DropDownClosed" />
+                                </StackPanel>
                                 <TextBlock x:Name="AudioMonitorNoticeText" FontSize="11" TextWrapping="Wrap"
                                            Foreground="{ThemeResource StudioTextSecondaryBrush}" />
                             </StackPanel>

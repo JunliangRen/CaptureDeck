@@ -8,11 +8,19 @@ public sealed partial class TestSignalInspectorView : UserControl
 {
     private bool syncing;
 
-    public TestSignalScenario SelectedScenario => ScenarioPicker.SelectedIndex == 1
-        ? TestSignalScenario.TimingFaults : TestSignalScenario.Normal;
+    public TestSignalScenario SelectedScenario => ScenarioPicker.SelectedIndex switch
+    {
+        1 => TestSignalScenario.TimingFaults,
+        2 => TestSignalScenario.MultiChannel,
+        _ => TestSignalScenario.Normal
+    };
 
-    public string SelectedScenarioTag => SelectedScenario == TestSignalScenario.TimingFaults
-        ? "TimingFaults" : "Normal";
+    public string SelectedScenarioTag => SelectedScenario switch
+    {
+        TestSignalScenario.TimingFaults => "TimingFaults",
+        TestSignalScenario.MultiChannel => "MultiChannel",
+        _ => "Normal"
+    };
 
     public bool HasOpenDropdown => ScenarioPicker.IsDropDownOpen;
 
@@ -25,7 +33,12 @@ public sealed partial class TestSignalInspectorView : UserControl
         syncing = true;
         try
         {
-            ScenarioPicker.SelectedIndex = string.Equals(scenarioTag, "TimingFaults", StringComparison.OrdinalIgnoreCase) ? 1 : 0;
+            ScenarioPicker.SelectedIndex = scenarioTag switch
+            {
+                _ when string.Equals(scenarioTag, "TimingFaults", StringComparison.OrdinalIgnoreCase) => 1,
+                _ when string.Equals(scenarioTag, "MultiChannel", StringComparison.OrdinalIgnoreCase) => 2,
+                _ => 0
+            };
         }
         finally
         {
@@ -46,6 +59,7 @@ public sealed partial class TestSignalInspectorView : UserControl
             AutomationProperties.SetName(ScenarioPicker, ScenarioLabel.Text);
             NormalItem.Content = localize("TestSignalNormal");
             FaultsItem.Content = localize("TestSignalFaults");
+            MultiChannelItem.Content = localize("TestSignalMultiChannel");
             ScenarioHint.Text = localize("TestSignalHint");
             ScenarioPicker.SelectedIndex = -1;
             ScenarioPicker.SelectedIndex = currentIndex < 0 ? 0 : currentIndex;

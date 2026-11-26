@@ -1790,4 +1790,15 @@
   <data name="EncodingDeinterlace" xml:space="preserve"><value>ソフトウェアでインターレース解除</value></data>
   <data name="EncodingBadBitrate" xml:space="preserve"><value>1〜1,000,000 kb/s のビットレートを入力してください。</value></data>
   <data name="EncodingSoftware" xml:space="preserve"><value>ソフトウェア圧縮</value></data>
+  <data name="AudioChannels" xml:space="preserve"><value>音声チャンネル</value></data>
+  <data name="AudioMeterModeAuto" xml:space="preserve"><value>自動（アクティブペア）</value></data>
+  <data name="AudioMeterModeAll" xml:space="preserve"><value>全チャンネル表示</value></data>
+  <data name="AudioMeterModeMonitored" xml:space="preserve"><value>モニター中のペアのみ</value></data>
+  <data name="AudioMeterModeTooltip" xml:space="preserve"><value>マルチチャンネル音声メーターの表示モードを選択</value></data>
+  <data name="AudioMonitorRouteLabel" xml:space="preserve"><value>モニターチャンネル</value></data>
+  <data name="AudioMonitorDownmix" xml:space="preserve"><value>ステレオダウンミックス</value></data>
+  <data name="AudioMonitorDownmixShort" xml:space="preserve"><value>MIX</value></data>
+  <data name="AudioMonitorPairTooltip" xml:space="preserve"><value>Ch {0} をモニター（スペクトル・位相も連動）</value></data>
+  <data name="AudioChannelNumber" xml:space="preserve"><value>Ch {0} ({1})</value></data>
+  <data name="TestSignalMultiChannel" xml:space="preserve"><value>8ch アクティブペア（デモ）</value></data>
 </root>

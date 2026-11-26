@@ -13,6 +13,7 @@
                           SelectionChanged="ScenarioPicker_SelectionChanged">
                     <ComboBoxItem x:Name="NormalItem" Tag="Normal" />
                     <ComboBoxItem x:Name="FaultsItem" Tag="TimingFaults" />
+                    <ComboBoxItem x:Name="MultiChannelItem" Tag="MultiChannel" />
                 </ComboBox>
             </StackPanel>
             <TextBlock x:Name="ScenarioHint" FontSize="12" TextWrapping="Wrap"

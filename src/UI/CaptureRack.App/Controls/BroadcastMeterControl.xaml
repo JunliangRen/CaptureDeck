@@ -41,8 +41,50 @@
                 </Setter.Value>
             </Setter>
         </Style>
+
+        <Style x:Key="MeterModePillButtonStyle" TargetType="Button">
+            <Setter Property="Height" Value="18" />
+            <Setter Property="Padding" Value="5,0" />
+            <Setter Property="MinWidth" Value="0" />
+            <Setter Property="MinHeight" Value="0" />
+            <Setter Property="CornerRadius" Value="2" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Background" Value="{ThemeResource StudioNeutralPillBrush}" />
+            <Setter Property="BorderBrush" Value="{ThemeResource StudioHairlineBrush}" />
+            <Setter Property="Foreground" Value="{ThemeResource StudioTextSecondaryBrush}" />
+            <Setter Property="FontSize" Value="10" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="RootBorder"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="{TemplateBinding CornerRadius}"
+                                Padding="{TemplateBinding Padding}">
+                            <VisualStateManager.VisualStateGroups>
+                                <VisualStateGroup x:Name="CommonStates">
+                                    <VisualState x:Name="Normal" />
+                                    <VisualState x:Name="PointerOver">
+                                        <VisualState.Setters>
+                                            <Setter Target="RootBorder.Opacity" Value="0.85" />
+                                        </VisualState.Setters>
+                                    </VisualState>
+                                    <VisualState x:Name="Pressed">
+                                        <VisualState.Setters>
+                                            <Setter Target="RootBorder.Opacity" Value="0.7" />
+                                        </VisualState.Setters>
+                                    </VisualState>
+                                </VisualStateGroup>
+                            </VisualStateManager.VisualStateGroups>
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
     </UserControl.Resources>
-    <Border Width="86" Style="{StaticResource StudioInstrumentCardStyle}" Padding="8,10">
+    <Border x:Name="MeterCard" Width="86" Style="{StaticResource StudioInstrumentCardStyle}" Padding="8,10">
         <Grid x:Name="StereoMeterGrid" RowSpacing="6" AutomationProperties.Name="Stereo audio peak meters">
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto" />
@@ -50,105 +92,46 @@
                 <RowDefinition Height="*" />
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
             </Grid.RowDefinitions>
 
-            <Grid>
-                <TextBlock x:Name="StereoHeading" Text="AUDIO" Style="{StaticResource StudioSectionHeadingStyle}"
-                           HorizontalAlignment="Left" />
-                <TextBlock Text="dBFS" FontSize="10" Foreground="{ThemeResource StudioTextMutedBrush}"
-                           HorizontalAlignment="Right" />
-            </Grid>
-
-            <!-- Clickable CLIP Latch Indicators (click to reset monitoring latch) -->
-            <Grid Grid.Row="1" ColumnSpacing="4">
+            <!-- Header: AUDIO + dBFS or Multi-Channel Mode Selector -->
+            <Grid ColumnSpacing="4">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*" />
-                    <ColumnDefinition Width="*" />
-                    <ColumnDefinition Width="24" />
+                    <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
-                <Button x:Name="LeftClipButton" Style="{StaticResource ClipLatchButtonStyle}"
-                        Click="LeftClipButton_Click">
-                    <TextBlock x:Name="LeftChannel" Text="L" FontSize="10" FontWeight="SemiBold"
-                               HorizontalAlignment="Center" VerticalAlignment="Center"
-                               Foreground="{ThemeResource StudioTextSecondaryBrush}" />
-                </Button>
-                <Button x:Name="RightClipButton" Grid.Column="1" Style="{StaticResource ClipLatchButtonStyle}"
-                        Click="RightClipButton_Click">
-                    <TextBlock x:Name="RightChannel" Text="R" FontSize="10" FontWeight="SemiBold"
-                               HorizontalAlignment="Center" VerticalAlignment="Center"
-                               Foreground="{ThemeResource StudioTextSecondaryBrush}" />
+                <TextBlock x:Name="StereoHeading" Text="AUDIO" Style="{StaticResource StudioSectionHeadingStyle}"
+                           HorizontalAlignment="Left" VerticalAlignment="Center" />
+                <TextBlock x:Name="UnitLabel" Grid.Column="1" Text="dBFS" FontSize="10" Foreground="{ThemeResource StudioTextMutedBrush}"
+                           HorizontalAlignment="Right" VerticalAlignment="Center" />
+                <Button x:Name="MeterModeButton" Grid.Column="1" HorizontalAlignment="Right" VerticalAlignment="Center"
+                        Style="{StaticResource MeterModePillButtonStyle}" Visibility="Collapsed">
+                    <TextBlock x:Name="MeterModeText" Style="{StaticResource StudioMonoTextStyle}" FontSize="9" />
+                    <Button.Flyout>
+                        <MenuFlyout Placement="BottomEdgeAlignedRight">
+                            <RadioMenuFlyoutItem x:Name="MeterModeAutoItem" GroupName="MeterDisplayMode"
+                                                 IsChecked="True" Click="MeterModeAuto_Click" />
+                            <RadioMenuFlyoutItem x:Name="MeterModeAllItem" GroupName="MeterDisplayMode"
+                                                 Click="MeterModeAll_Click" />
+                            <RadioMenuFlyoutItem x:Name="MeterModeMonitoredItem" GroupName="MeterDisplayMode"
+                                                 Click="MeterModeMonitored_Click" />
+                        </MenuFlyout>
+                    </Button.Flyout>
                 </Button>
             </Grid>
+
+            <!-- Clickable Per-Channel CLIP Latch Indicators -->
+            <Grid x:Name="ClipIndicatorsGrid" Grid.Row="1" ColumnSpacing="3" />
 
             <!-- Vertical Ballistic Gradient Bars + Peak Hold + dB Scale -->
-            <Grid Grid.Row="2" ColumnSpacing="4">
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*" />
-                    <ColumnDefinition Width="*" />
-                    <ColumnDefinition Width="24" />
-                </Grid.ColumnDefinitions>
+            <Grid x:Name="MeterRailsHost" Grid.Row="2" ColumnSpacing="3" SizeChanged="MeterRail_SizeChanged" />
 
-                <Grid x:Name="LeftMeterRail" Width="12" HorizontalAlignment="Center"
-                      SizeChanged="MeterRail_SizeChanged">
-                    <Border CornerRadius="1" Background="{ThemeResource StudioMeterTrackBrush}"
-                            BorderBrush="{ThemeResource StudioHairlineBrush}" BorderThickness="1" />
-                    <Border CornerRadius="1" Background="{StaticResource StudioMeterFillBrush}"
-                            Margin="1" RenderTransformOrigin="0.5,1">
-                        <Border.RenderTransform>
-                            <ScaleTransform x:Name="LeftMeterFill" ScaleY="0" />
-                        </Border.RenderTransform>
-                    </Border>
-                    <Border x:Name="LeftPeakHoldBar" Height="2" VerticalAlignment="Bottom"
-                            Margin="1,0" CornerRadius="0" Opacity="0"
-                            Background="{ThemeResource StudioMeterPeakBrush}">
-                        <Border.RenderTransform>
-                            <TranslateTransform x:Name="LeftPeakHoldOffset" Y="0" />
-                        </Border.RenderTransform>
-                    </Border>
-                </Grid>
+            <!-- Clickable Pair Monitor Route Selector Row (visible only when > 2 channels) -->
+            <Grid x:Name="PairRouteGrid" Grid.Row="3" ColumnSpacing="3" Visibility="Collapsed" />
 
-                <Grid x:Name="RightMeterRail" Grid.Column="1" Width="12" HorizontalAlignment="Center">
-                    <Border CornerRadius="1" Background="{ThemeResource StudioMeterTrackBrush}"
-                            BorderBrush="{ThemeResource StudioHairlineBrush}" BorderThickness="1" />
-                    <Border CornerRadius="1" Background="{StaticResource StudioMeterFillBrush}"
-                            Margin="1" RenderTransformOrigin="0.5,1">
-                        <Border.RenderTransform>
-                            <ScaleTransform x:Name="RightMeterFill" ScaleY="0" />
-                        </Border.RenderTransform>
-                    </Border>
-                    <Border x:Name="RightPeakHoldBar" Height="2" VerticalAlignment="Bottom"
-                            Margin="1,0" CornerRadius="0" Opacity="0"
-                            Background="{ThemeResource StudioMeterPeakBrush}">
-                        <Border.RenderTransform>
-                            <TranslateTransform x:Name="RightPeakHoldOffset" Y="0" />
-                        </Border.RenderTransform>
-                    </Border>
-                </Grid>
-
-                <Grid Grid.Column="2" AutomationProperties.AccessibilityView="Raw">
-                    <Grid.RowDefinitions>
-                        <RowDefinition Height="*" />
-                        <RowDefinition Height="*" />
-                        <RowDefinition Height="*" />
-                        <RowDefinition Height="*" />
-                        <RowDefinition Height="*" />
-                    </Grid.RowDefinitions>
-                    <TextBlock Text="0" Style="{StaticResource StudioMonoTextStyle}" FontSize="9"
-                               Foreground="{ThemeResource StudioTextMutedBrush}" HorizontalAlignment="Right" VerticalAlignment="Top" />
-                    <TextBlock Grid.Row="1" Text="-12" Style="{StaticResource StudioMonoTextStyle}" FontSize="9"
-                               Foreground="{ThemeResource StudioTextMutedBrush}" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,-5,0,0" />
-                    <TextBlock Grid.Row="2" Text="-24" Style="{StaticResource StudioMonoTextStyle}" FontSize="9"
-                               Foreground="{ThemeResource StudioTextMutedBrush}" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,-5,0,0" />
-                    <TextBlock Grid.Row="3" Text="-36" Style="{StaticResource StudioMonoTextStyle}" FontSize="9"
-                               Foreground="{ThemeResource StudioTextMutedBrush}" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,-5,0,0" />
-                    <TextBlock Grid.Row="4" Text="-48" Style="{StaticResource StudioMonoTextStyle}" FontSize="9"
-                               Foreground="{ThemeResource StudioTextMutedBrush}" HorizontalAlignment="Right" VerticalAlignment="Top" Margin="0,-5,0,0" />
-                    <TextBlock Grid.Row="4" Text="-60" Style="{StaticResource StudioMonoTextStyle}" FontSize="9"
-                               Foreground="{ThemeResource StudioTextMutedBrush}" HorizontalAlignment="Right" VerticalAlignment="Bottom" />
-                </Grid>
-            </Grid>
-
-            <Grid Grid.Row="3" ColumnSpacing="4">
+            <!-- Monitored Stereo Peak Numeric Readout -->
+            <Grid Grid.Row="4" ColumnSpacing="4">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*" />
                     <ColumnDefinition Width="*" />
@@ -161,14 +144,27 @@
                            Foreground="{ThemeResource StudioTextPrimaryBrush}" />
             </Grid>
 
-            <!-- Visual Stereo Phase Correlation Bar -->
-            <StackPanel Grid.Row="4" Spacing="3">
+            <!-- Visual Stereo Phase Correlation Bar (+ active monitor route tag when > 2 ch) -->
+            <StackPanel Grid.Row="5" Spacing="3">
+                <Border x:Name="MonitorRouteTag" Visibility="Collapsed" CornerRadius="2" Padding="4,1"
+                        HorizontalAlignment="Center"
+                        Background="{ThemeResource StudioAccentSoftBrush}"
+                        BorderBrush="{ThemeResource StudioAccentBrush}" BorderThickness="1">
+                    <TextBlock x:Name="MonitorRouteTagText" Style="{StaticResource StudioMonoTextStyle}"
+                               FontSize="9" FontWeight="SemiBold"
+                               Foreground="{ThemeResource StudioAccentBrush}" />
+                </Border>
                 <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
                     <TextBlock Text="-1" FontSize="9" Foreground="{ThemeResource StudioTextMutedBrush}" />
-                    <TextBlock x:Name="PhaseLevel" Text="—" HorizontalAlignment="Center"
+                    <TextBlock x:Name="PhaseLevel" Grid.Column="1" Text="—" HorizontalAlignment="Center"
                                Style="{StaticResource StudioMonoTextStyle}" FontSize="10"
                                Foreground="{ThemeResource StudioTextSecondaryBrush}" />
-                    <TextBlock Text="+1" FontSize="9" Foreground="{ThemeResource StudioTextMutedBrush}"
+                    <TextBlock Grid.Column="2" Text="+1" FontSize="9" Foreground="{ThemeResource StudioTextMutedBrush}"
                                HorizontalAlignment="Right" />
                 </Grid>
                 <Grid x:Name="PhaseBarRail" Height="6" SizeChanged="PhaseBarRail_SizeChanged">

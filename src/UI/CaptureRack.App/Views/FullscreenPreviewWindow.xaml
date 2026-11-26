@@ -1,0 +1,119 @@
+<Window
+    x:Class="CaptureRack.App.Views.FullscreenPreviewWindow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    Title="CaptureRack Preview">
+    <Grid x:Name="RootCanvas" Background="#000000" RequestedTheme="Dark"
+          KeyboardAcceleratorPlacementMode="Hidden"
+          SizeChanged="RootCanvas_SizeChanged"
+          PointerEntered="RootCanvas_PointerEntered"
+          PointerMoved="RootCanvas_PointerMoved"
+          PointerPressed="RootCanvas_PointerPressed"
+          Tapped="RootCanvas_Tapped"
+          DoubleTapped="RootCanvas_DoubleTapped">
+        <Grid.KeyboardAccelerators>
+            <KeyboardAccelerator Key="Escape" Invoked="ExitFullscreen_Invoked" />
+            <KeyboardAccelerator Key="F11" Invoked="ExitFullscreen_Invoked" />
+            <KeyboardAccelerator Key="F5" Invoked="TogglePreview_Invoked" />
+            <KeyboardAccelerator Key="F9" Invoked="ToggleRecord_Invoked" />
+            <KeyboardAccelerator Key="M" Invoked="ToggleAudioMonitor_Invoked" />
+        </Grid.KeyboardAccelerators>
+
+        <Border x:Name="PreviewSurface" HorizontalAlignment="Center" VerticalAlignment="Center"
+                Background="#000000">
+            <Grid>
+                <Image x:Name="PreviewImage" Stretch="Fill" />
+
+                <Grid x:Name="SafeAreaOverlay" Visibility="Collapsed" IsHitTestVisible="False">
+                    <Border Margin="18" BorderBrush="{ThemeResource StudioSafeGuideBrush}"
+                            BorderThickness="1" Opacity="0.55" />
+                    <Border Margin="36" BorderBrush="{ThemeResource StudioSafeGuideBrush}"
+                            BorderThickness="1" Opacity="0.35" />
+                    <Rectangle Width="18" Height="1" Fill="{ThemeResource StudioSafeGuideBrush}"
+                               HorizontalAlignment="Center" VerticalAlignment="Center" Opacity="0.65" />
+                    <Rectangle Width="1" Height="18" Fill="{ThemeResource StudioSafeGuideBrush}"
+                               HorizontalAlignment="Center" VerticalAlignment="Center" Opacity="0.65" />
+                </Grid>
+
+                <Grid x:Name="Ntsc480GuideOverlay" Visibility="Collapsed" IsHitTestVisible="False">
+                    <Border x:Name="Ntsc480TopShade" VerticalAlignment="Top" Height="4"
+                            Background="#66F59E0B" BorderBrush="#CCF59E0B" BorderThickness="0,0,0,1" />
+                    <Border x:Name="Ntsc480BottomShade" VerticalAlignment="Bottom" Height="2"
+                            Background="#66F59E0B" BorderBrush="#CCF59E0B" BorderThickness="0,1,0,0" />
+                </Grid>
+
+                <StackPanel x:Name="PreviewPlaceholder" HorizontalAlignment="Center"
+                            VerticalAlignment="Center" Spacing="12" Margin="20" Visibility="Collapsed">
+                    <Border Width="44" Height="44" CornerRadius="4" HorizontalAlignment="Center"
+                            Background="#16FFFFFF" BorderBrush="#2AFFFFFF" BorderThickness="1">
+                        <Grid>
+                            <FontIcon x:Name="PlaceholderIcon" Glyph="&#xE714;" FontSize="20" Foreground="#CBD5E1" />
+                            <ProgressRing x:Name="PlaceholderSpinner" Width="20" Height="20"
+                                          IsActive="False" Visibility="Collapsed" />
+                        </Grid>
+                    </Border>
+                    <TextBlock x:Name="PlaceholderText" FontSize="14" FontWeight="SemiBold" Foreground="#F1F5F9"
+                               TextAlignment="Center" TextWrapping="Wrap" MaxWidth="360" />
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <!-- Recording Tally Badge -->
+        <Border x:Name="RecTally" HorizontalAlignment="Right" VerticalAlignment="Top"
+                Margin="14" Padding="8,4" CornerRadius="3" Visibility="Collapsed"
+                Background="#E6B91C1C" BorderBrush="#88FCA5A5" BorderThickness="1"
+                IsHitTestVisible="False">
+            <StackPanel Orientation="Horizontal" Spacing="7" VerticalAlignment="Center">
+                <Ellipse x:Name="RecTallyDot" Width="7" Height="7" Fill="#FFFFFF" VerticalAlignment="Center" />
+                <TextBlock Text="REC" Style="{StaticResource StudioMonoTextStyle}"
+                           FontSize="11" FontWeight="Bold" Foreground="#FFFFFF" VerticalAlignment="Center" />
+                <StackPanel Orientation="Horizontal" Spacing="2" Height="10" VerticalAlignment="Center">
+                    <Border x:Name="RecBar1" Width="2" Height="10" Background="#FFFFFF" RenderTransformOrigin="0.5,1" />
+                    <Border x:Name="RecBar2" Width="2" Height="10" Background="#FFFFFF" RenderTransformOrigin="0.5,1" />
+                    <Border x:Name="RecBar3" Width="2" Height="10" Background="#FFFFFF" RenderTransformOrigin="0.5,1" />
+                </StackPanel>
+            </StackPanel>
+        </Border>
+
+        <!-- Auto-Hiding Bottom Mini Control Bar -->
+        <Border x:Name="MiniBar" HorizontalAlignment="Center" VerticalAlignment="Bottom"
+                Margin="0,0,0,22" Padding="10,6" CornerRadius="4"
+                Opacity="0" IsHitTestVisible="False"
+                Background="#E810131A" BorderBrush="#3AFFFFFF" BorderThickness="1"
+                PointerEntered="MiniBar_PointerEntered"
+                PointerExited="MiniBar_PointerExited"
+                Tapped="MiniBar_Tapped"
+                DoubleTapped="MiniBar_DoubleTapped"
+                GotFocus="MiniBar_GotFocus"
+                LostFocus="MiniBar_LostFocus">
+            <StackPanel Orientation="Horizontal" Spacing="12" VerticalAlignment="Center">
+                <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                    <Rectangle x:Name="SignalDot" Width="7" Height="7" RadiusX="1" RadiusY="1"
+                               Fill="{ThemeResource StudioTextMutedBrush}" />
+                    <TextBlock x:Name="StatusText" FontSize="12" Foreground="#E2E8F0" VerticalAlignment="Center" />
+                </StackPanel>
+                <TextBlock x:Name="ClockText" Style="{StaticResource StudioTimecodeTextStyle}"
+                           FontSize="13" Foreground="#FFFFFF" Visibility="Collapsed" VerticalAlignment="Center" />
+                <Button x:Name="RecordButton" CornerRadius="3" Padding="10,4" MinHeight="28"
+                        AllowFocusOnInteraction="False"
+                        Style="{StaticResource StudioRecordIdleButtonStyle}"
+                        Click="RecordButton_Click">
+                    <StackPanel Orientation="Horizontal" Spacing="6">
+                        <FontIcon x:Name="RecordIcon" Glyph="&#xE7C8;" FontSize="12" />
+                        <ProgressRing x:Name="RecordSpinner" Width="12" Height="12"
+                                      IsActive="False" Visibility="Collapsed" VerticalAlignment="Center" />
+                        <TextBlock x:Name="RecordLabel" FontSize="12" VerticalAlignment="Center" />
+                    </StackPanel>
+                </Button>
+                <Button x:Name="ExitButton" CornerRadius="3" Padding="9,4" MinHeight="28"
+                        AllowFocusOnInteraction="False"
+                        Style="{StaticResource SubtleButtonStyle}" Click="ExitButton_Click">
+                    <StackPanel Orientation="Horizontal" Spacing="5">
+                        <FontIcon Glyph="&#xE73F;" FontSize="12" />
+                        <TextBlock x:Name="ExitLabel" FontSize="12" VerticalAlignment="Center" />
+                    </StackPanel>
+                </Button>
+            </StackPanel>
+        </Border>
+    </Grid>
+</Window>

@@ -91,7 +91,7 @@ public sealed partial class MainWindow
         fireWireView.RestoreSettings(settings.FireWire);
         testSignalInspector.RestoreScenario(settings.TestSignalScenario);
 
-        ApplySettingsLanguage(language, settings.DeckLink.VideoFormat, settings.DeckLink.AudioFormat);
+        ApplySettingsLanguage(language, settings.DeckLink.VideoFormat, settings.DeckLink.AudioFormat, settings.DeckLink.AudioChannels);
         RestoreRecordingEncoding(settings.RecordingEncoding);
         OutputPath.Text = settings.OutputFolder ?? "";
         RecordingLabelBox.Text = settings.RecordingLabel ?? "";
@@ -181,6 +181,7 @@ public sealed partial class MainWindow
         {
             VideoFormat = (uint)deckLinkInspector.SelectedVideoFormat,
             AudioFormat = (uint)deckLinkInspector.SelectedAudioFormat,
+            AudioChannels = deckLinkInspector.SelectedAudioChannels,
             AnalogNtscIre = deckLinkInspector.AnalogNtscIre,
             AnalogComponentLevel = deckLinkInspector.AnalogComponentLevel,
             AnalogAudioLevel = deckLinkInspector.AnalogAudioLevel,
@@ -256,7 +257,7 @@ public sealed partial class MainWindow
     private void UpdateCaptureFooter()
     {
         var sessionActive = IsCaptureInputActive || IsCaptureRecording || recordingTransition || qcStop is not null;
-        CaptureFooter.Visibility = !previewFullscreen && (activePage != ActiveAppPage.Settings || sessionActive)
+        CaptureFooter.Visibility = activePage != ActiveAppPage.Settings || sessionActive
             ? Visibility.Visible : Visibility.Collapsed;
     }
 
@@ -289,7 +290,8 @@ public sealed partial class MainWindow
 
     private string LocalFormat(string key, params object[] args) => string.Format(settingsCulture, L(key), args);
 
-    private void ApplySettingsLanguage(string language, uint? videoFormat, uint? audioFormat, bool preserveActiveRouting = false)
+    private void ApplySettingsLanguage(string language, uint? videoFormat, uint? audioFormat,
+        uint? audioChannels = null, bool preserveActiveRouting = false)
     {
         settingsCulture = CultureInfo.GetCultureInfo(language);
         BindRecordingOutput();
@@ -305,7 +307,7 @@ public sealed partial class MainWindow
         RecordingLabelBox.PlaceholderText = L("RecordingLabelPlaceholder");
         BrowseLabel.Text = L("Browse");
 
-        deckLinkInspector.SetFormats(videoFormat, audioFormat);
+        deckLinkInspector.SetFormats(videoFormat, audioFormat, audioChannels);
         deckLinkInspector.ApplyLanguage(L, settingsCulture, preserveActiveRouting);
         UpdateRecordingFilenamePreview();
 
@@ -346,6 +348,7 @@ public sealed partial class MainWindow
             language,
             (uint)deckLinkInspector.SelectedVideoFormat,
             (uint)deckLinkInspector.SelectedAudioFormat,
+            deckLinkInspector.SelectedAudioChannels,
             preserveActiveRouting: true);
         loading = false;
         UpdateControls();
@@ -407,11 +410,13 @@ public sealed partial class MainWindow
                 ? LocalFormat("AutoFallbackMode", mode.Label, activeMode.Description)
                 : $"{mode.Label} ({activeMode.Description})"
             : mode?.Label;
+        var pcmSummary = deckLinkInspector.SelectedAudioChannels > 2
+            ? $"{LocalFormat("ShortPcmFormat", (uint)deckLinkInspector.SelectedAudioFormat)} {LocalFormat("PreviewAudioChannels", deckLinkInspector.SelectedAudioChannels)}"
+            : LocalFormat("ShortPcmFormat", (uint)deckLinkInspector.SelectedAudioFormat);
         var summary = device is null || video is null || audio is null || mode is null
             ? L("Configure")
             : $"{device.Name} · {video.Name} / {audio.Name} · {modeLabel} · " +
-                $"{LocalFormat("ShortVideoFormat", DeckLinkCapture.FormatFourCc((uint)deckLinkInspector.SelectedVideoFormat), deckLinkInspector.SelectedVideoFormat == CapturePixelFormat.V210 ? 10 : 8)} / " +
-                LocalFormat("ShortPcmFormat", (uint)deckLinkInspector.SelectedAudioFormat);
+                $"{LocalFormat("ShortVideoFormat", DeckLinkCapture.FormatFourCc((uint)deckLinkInspector.SelectedVideoFormat), deckLinkInspector.SelectedVideoFormat == CapturePixelFormat.V210 ? 10 : 8)} / {pcmSummary}";
         ConfigurationSummary.Text = summary;
         AutomationProperties.SetName(QuickSourceButton, $"{L("Capture")} · {summary}");
 
@@ -505,7 +510,7 @@ public sealed partial class MainWindow
                 : selectedMode is null
                     ? L(mode is { Id: null } ? "StorageWaitingForAutoMode" : "StorageNeedsMode")
                     : LocalFormat("StorageDuration", FormatRecordingTime(space.AvailableBytes /
-                        DeckLinkCapture.EstimateRecordingBytesPerSecond(selectedMode, RecordingVideoFormat, RecordingAudioFormat)));
+                        DeckLinkCapture.EstimateRecordingBytesPerSecond(selectedMode, RecordingVideoFormat, RecordingAudioFormat, ActiveDeckLinkAudioChannels)));
             InspectorStorageStatus.Text = HasLiveCapture && LiveMediaSource is null ? $"{free} · {estimate}" : free;
             StorageStatus.Text = HasLiveCapture && LiveMediaSource is null && selectedMode is not null ? estimate : free;
 

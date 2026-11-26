@@ -9,6 +9,7 @@ public sealed record DeckLinkCaptureRequest(int DeviceIndex, uint? ModeId, TimeS
     public PreviewFeed? Preview { get; init; }
     public CapturePixelFormat PixelFormat { get; init; } = CapturePixelFormat.V210;
     public CaptureAudioFormat AudioFormat { get; init; } = CaptureAudioFormat.Pcm16;
+    public uint AudioChannels { get; init; } = CaptureAudio.Channels;
     public string? RecordingPath { get; init; }
     public PreviewRecorder? PreviewRecorder { get; init; }
     public AnalogInputOptions? AnalogOptions { get; init; }
@@ -61,5 +62,6 @@ public sealed class DeckLinkBackend
         DeckLinkCapture.Run(request.DeviceIndex, request.ModeId, request.Duration,
             (mode, stats) => progress(new DeckLinkProgress(mode, stats)), cancellation,
             request.Routing, request.Preview, request.PixelFormat, request.RecordingPath,
-            request.AudioFormat, request.PreviewRecorder, request.AnalogOptions, request.LocalAudioMonitor);
+            request.AudioFormat, request.PreviewRecorder, request.AnalogOptions, request.LocalAudioMonitor,
+            request.AudioChannels);
 }

@@ -98,7 +98,7 @@ public sealed partial class MainWindow : Window
     private int inspectorAnimationGeneration;
     private CompositionAnimation? inspectorSlideAnimation;
     private CompositionAnimation? inspectorOpacityAnimation;
-    private bool IsInspectorOpen => !previewFullscreen && ((lastWindowWidth >= 1180 && inspectorPinned) || inspectorOverlayOpen);
+    private bool IsInspectorOpen => (lastWindowWidth >= 1180 && inspectorPinned) || inspectorOverlayOpen;
     private bool showSafeArea;
     private double lastWindowWidth = 1320;
 
@@ -113,16 +113,10 @@ public sealed partial class MainWindow : Window
             previewHoverReady = true;
             UpdatePreviewFullscreenButton();
         };
-        fullscreenIdleTimer = DispatcherQueue.CreateTimer();
-        fullscreenIdleTimer.Interval = TimeSpan.FromSeconds(2);
-        fullscreenIdleTimer.IsRepeating = false;
-        fullscreenIdleTimer.Tick += (_, _) =>
-        {
-            fullscreenBarVisible = false;
-            UpdateFullscreenMiniBar();
-        };
 
         InitializeComponent();
+        Activated += MainWindow_Activated;
+        Closed += OnWindowClosed;
         WireModularViews();
         ConfigureWindowChrome();
         InitializeSettings();
@@ -168,6 +162,7 @@ public sealed partial class MainWindow : Window
         {
             if (settingsReady && IsTestSignalActive)
             {
+                UpdateRecordingFilenamePreview();
                 UpdateConfigurationStatus();
                 SettingsChanged();
             }
@@ -215,6 +210,7 @@ public sealed partial class MainWindow : Window
         {
             deckLinkInspector.ShowVancScanStatus("", scanning: false);
             UpdateControls();
+            UpdateRecordingFilenamePreview();
             SettingsChanged();
             if (!loading && captureTask is null && IsDeckLinkActive)
                 ShowInputSelectionStatus();
@@ -231,6 +227,7 @@ public sealed partial class MainWindow : Window
             UpdateRecordingFormat();
         };
         deckLinkInspector.AudioFormatChanged += (_, _) => UpdateRecordingFormat();
+        deckLinkInspector.AudioChannelsChanged += (_, _) => UpdateRecordingFormat();
         deckLinkInspector.AnalogSettingsChanged += (_, _) => SettingsChanged();
         deckLinkInspector.VancSettingsChanged += (_, _) => SettingsChanged();
 
@@ -241,6 +238,8 @@ public sealed partial class MainWindow : Window
         monitorOptionsBar.Ntsc480GuideChanged += (_, enabled) => SetNtsc480Guide(enabled);
         monitorOptionsBar.AudioMonitorToggled += (_, _) => ToggleAudioMonitor();
         monitorOptionsBar.AudioMonitorVolumeChanged += (_, volume) => SetAudioMonitorVolume(volume);
+        monitorOptionsBar.AudioMonitorRouteChanged += (_, route) => SetAudioMonitorRoute(route);
+        StereoMeter.MonitorRouteSelected += (_, route) => SetAudioMonitorRoute(route);
 
         plannedStageView.SwitchToDeckLinkRequested += (_, _) =>
             SelectBackendModule(DeckLinkBackend.BackendId, persist: true);
@@ -408,6 +407,8 @@ public sealed partial class MainWindow : Window
         activeModule = target;
         if (changed)
         {
+            if (previewFullscreen)
+                SetPreviewFullscreen(false);
             previewSelection = default;
             displayedStats = null;
             observedPreviewMode = null;
@@ -465,7 +466,7 @@ public sealed partial class MainWindow : Window
         SplitSpectrumBtn.Visibility = caps.SupportsAudioSpectrum ? Visibility.Visible : Visibility.Collapsed;
         SplitEventsBtn.Visibility = caps.SupportsEvents ? Visibility.Visible : Visibility.Collapsed;
         ApplyWorkspaceLayout();
-        StereoMeter.Visibility = !previewFullscreen && liveStage && caps.SupportsAudioMeters && lastWindowWidth >= 680
+        StereoMeter.Visibility = liveStage && caps.SupportsAudioMeters && lastWindowWidth >= 680
             ? Visibility.Visible : Visibility.Collapsed;
         UpdateRecordingFilenamePreview();
     }
@@ -530,7 +531,7 @@ public sealed partial class MainWindow : Window
         TelemetryStrip.HorizontalAlignment = compact ? HorizontalAlignment.Left : HorizontalAlignment.Center;
         FooterStorageButton.Visibility = narrow ? Visibility.Collapsed : Visibility.Visible;
         ConfigurationSummary.Visibility = width < 820 ? Visibility.Collapsed : Visibility.Visible;
-        StereoMeter.Visibility = !previewFullscreen && HasLiveCapture && ActiveWorkspaceCapabilities.SupportsAudioMeters && width >= 680
+        StereoMeter.Visibility = HasLiveCapture && ActiveWorkspaceCapabilities.SupportsAudioMeters && width >= 680
             ? Visibility.Visible : Visibility.Collapsed;
     }
 
@@ -559,15 +560,6 @@ public sealed partial class MainWindow : Window
     {
         if (inspectorClosing || inspectorSlideAnimation is not null || inspectorOpacityAnimation is not null)
             StopInspectorAnimations();
-
-        if (previewFullscreen)
-        {
-            InspectorPanel.Visibility = Visibility.Collapsed;
-            InspectorScrim.Visibility = Visibility.Collapsed;
-            InspectorDockColumn.Width = new GridLength(0);
-            UpdateWheelFallbackState();
-            return;
-        }
 
         var canDock = lastWindowWidth >= 1180;
         if (canDock && inspectorPinned)
@@ -781,6 +773,9 @@ public sealed partial class MainWindow : Window
         if (activePage == target || LiveMediaSource?.IsRecording == true)
             return;
 
+        if (target != ActiveAppPage.Capture && previewFullscreen)
+            SetPreviewFullscreen(false);
+
         if (activePage == ActiveAppPage.Settings)
             SavePendingSettings();
         if (target == ActiveAppPage.Settings)
@@ -857,15 +852,15 @@ public sealed partial class MainWindow : Window
         ApplySegmentState(LayoutSpectrumBtn, layout == WorkspaceLayoutMode.Spectrum);
         ApplySegmentState(LayoutEventsBtn, layout == WorkspaceLayoutMode.Events);
 
-        var showPreview = previewFullscreen || layout is WorkspaceLayoutMode.Focus or WorkspaceLayoutMode.Split;
-        var showInstruments = !previewFullscreen && layout != WorkspaceLayoutMode.Focus;
-        var showSplitDivider = !previewFullscreen && layout == WorkspaceLayoutMode.Split;
+        var showPreview = layout is WorkspaceLayoutMode.Focus or WorkspaceLayoutMode.Split;
+        var showInstruments = layout != WorkspaceLayoutMode.Focus;
+        var showSplitDivider = layout == WorkspaceLayoutMode.Split;
 
         PreviewMonitorHousing.Visibility = showPreview ? Visibility.Visible : Visibility.Collapsed;
         SplitResizeHandle.Visibility = showSplitDivider ? Visibility.Visible : Visibility.Collapsed;
         InstrumentsHost.Visibility = showInstruments ? Visibility.Visible : Visibility.Collapsed;
 
-        if (previewFullscreen || layout == WorkspaceLayoutMode.Focus)
+        if (layout == WorkspaceLayoutMode.Focus)
         {
             PreviewStageRow.Height = new GridLength(1, GridUnitType.Star);
             SplitDividerRow.Height = new GridLength(0);
@@ -988,6 +983,7 @@ public sealed partial class MainWindow : Window
         SafeAreaOverlay.Visibility = showSafeArea && PreviewPlaceholder.Visibility == Visibility.Collapsed
             ? Visibility.Visible : Visibility.Collapsed;
         UpdateNtsc480GuideLayout();
+        SyncFullscreenPreviewWindow();
     }
 
     private void MonitorViewport_SizeChanged(object sender, SizeChangedEventArgs e) => UpdateMonitorLayout();
@@ -1001,17 +997,15 @@ public sealed partial class MainWindow : Window
 
     private void UpdateMonitorLayout()
     {
-        if (previewBoxWidth <= 0 || previewBoxHeight <= 0)
-            return;
-
-        var pad = previewFullscreen ? 0 : 14;
-        var availW = Math.Max(0, previewBoxWidth - pad * 2);
-        var availH = Math.Max(0, previewBoxHeight - pad * 2);
-        var height = Math.Min(availW / previewAspectRatio, availH);
-        var width = height * previewAspectRatio;
-        PreviewSurface.Width = Math.Max(0, width);
-        PreviewSurface.Height = Math.Max(0, height);
-        UpdateNtsc480GuideLayout();
+        var (width, height) = FullscreenRenderPolicy.ComputePreviewSurfaceSize(
+            previewBoxWidth, previewBoxHeight, previewAspectRatio, padding: 14);
+        if (width > 0 && height > 0)
+        {
+            PreviewSurface.Width = width;
+            PreviewSurface.Height = height;
+            UpdateNtsc480GuideLayout();
+        }
+        fullscreenWindow?.UpdateGeometry(previewAspectRatio, showSafeArea, LiveMediaSource is null && showNtsc480Guide);
     }
 
     private void UpdatePreviewAspectRatio(int width, int height)
@@ -1144,6 +1138,7 @@ public sealed partial class MainWindow : Window
                 settings.DeckLink.ModeId);
             loading = false;
             UpdateControls();
+            UpdateRecordingFilenamePreview();
             if (!IsDeckLinkActive)
                 return;
 
@@ -1222,7 +1217,8 @@ public sealed partial class MainWindow : Window
         var samplePrefix = sanitized.Length == 0 ? "CaptureRack_YYYYMMDD_HHmmss" : $"{sanitized}_CaptureRack_YYYYMMDD_HHmmss";
         if (SupportsSoftwareOutput && SelectedRecordingOutput != RecordingOutput.Native)
         {
-            RecordingFilenamePreview.Text = $"{samplePrefix}_{new RecordingEncoding(SelectedRecordingOutput).FileTag}.mkv";
+            var tag = new RecordingEncoding(SelectedRecordingOutput).FileTagForAudioChannels((int)ActiveDeckLinkAudioChannels);
+            RecordingFilenamePreview.Text = $"{samplePrefix}_{tag}.mkv";
             return;
         }
         if (!HasLiveCapture)
@@ -1231,8 +1227,15 @@ public sealed partial class MainWindow : Window
             return;
         }
         var videoTag = RecordingVideoFormat == CapturePixelFormat.Uyvy ? "8bit-Uncompressed" : "10bit-Uncompressed";
-        var audioTag = RecordingAudioFormat == CaptureAudioFormat.Pcm32 ? "32bit-PCM" : "16bit-PCM";
+        var channels = ActiveDeckLinkAudioChannels;
+        var audioTag = BuildPcmAudioTag(RecordingAudioFormat, channels);
         RecordingFilenamePreview.Text = $"{samplePrefix}_{videoTag}_{audioTag}.mov";
+    }
+
+    private static string BuildPcmAudioTag(CaptureAudioFormat format, uint channels)
+    {
+        var bits = format == CaptureAudioFormat.Pcm32 ? "32bit" : "16bit";
+        return channels > 2 ? $"{bits}-{channels}ch-PCM" : $"{bits}-PCM";
     }
 
     private async void BrowseButton_Click(object sender, RoutedEventArgs e) => await BrowseOutputFolderAsync();
@@ -1452,6 +1455,8 @@ public sealed partial class MainWindow : Window
         var directory = OutputPath.Text.Trim();
         if (!Path.IsPathFullyQualified(directory) || !Directory.Exists(directory))
         {
+            if (previewFullscreen)
+                SetPreviewFullscreen(false);
             holdRecordingStatus = true;
             UpdateLivePreviewStatus();
             SetStatus("ChooseOutput", "ExistingOutput", InfoBarSeverity.Warning);
@@ -1468,17 +1473,19 @@ public sealed partial class MainWindow : Window
             var encoding = ReadRecordingEncoding();
             var videoTag = RecordingVideoFormat == CapturePixelFormat.Uyvy ? "8bit-Uncompressed" : "10bit-Uncompressed";
             var audioFormat = RecordingAudioFormat;
-            var audioTag = audioFormat == CaptureAudioFormat.Pcm32 ? "32bit-PCM" : "16bit-PCM";
+            var audioChannels = displayedStats?.AudioChannels ?? ActiveDeckLinkAudioChannels;
+            var audioTag = BuildPcmAudioTag(audioFormat, audioChannels);
             var label = GetRecordingLabel();
             var source = IsTestSignalActive
-                ? ("CaptureRack test signal", "Built-in", SelectedTestScenario.ToString(), "Stereo test tone")
+                ? ("CaptureRack test signal", "Built-in", SelectedTestScenario.ToString(),
+                    audioChannels > 2 ? $"{audioChannels}-channel test tone" : "Stereo test tone")
                 : (deckLinkInspector.SelectedDevice!.Name, $"Blackmagic DeckLink API {sdkVersion}",
                     deckLinkInspector.SelectedVideoSource!.Name, deckLinkInspector.SelectedAudioSource!.Name);
             var now = DateTime.Now;
             var opened = await Task.Run(() =>
             {
                 var path = encoding.IsSoftware
-                    ? Path.Combine(directory, $"{RecordingFileNaming.BuildPrefix(label, now)}_{encoding.FileTag}.mkv")
+                    ? Path.Combine(directory, $"{RecordingFileNaming.BuildPrefix(label, now)}_{encoding.FileTagForAudioChannels((int)audioChannels)}.mkv")
                     : RecordingFileNaming.BuildMovPath(directory, label, now, videoTag, audioTag);
                 return (Path: path, Started: recorder.Start(path, audioFormat, encoding));
             });
@@ -1489,10 +1496,11 @@ public sealed partial class MainWindow : Window
             statusFilePath = opened.Path;
             recordingSession = true;
             displayedRecordingSeconds = 0;
-            RecordingElapsed.Text = FullscreenClockText.Text = "00:00:00";
+            RecordingElapsed.Text = "00:00:00";
             recordingClock.Restart();
             UpdateRecordingIndicator(active: true);
             SetStatus("RecordingActive", encoding.IsSoftware ? "EncodingLive" : "WritingMov");
+            SyncFullscreenPreviewWindow();
         }
         catch (Exception ex) when (IsSessionError(ex))
         {
@@ -1658,12 +1666,28 @@ public sealed partial class MainWindow : Window
                 previewRecorder = null;
             }
             if (!closing)
+            {
+                ResetAudioMonitorRoute();
                 UpdateControls();
+            }
         }
+    }
+
+    private void OnWindowClosed(object sender, WindowEventArgs args)
+    {
+        closing = true;
+        CloseFullscreenPreviewWindow(suppressRestore: true);
     }
 
     private async void OnClosing(AppWindow sender, AppWindowClosingEventArgs e)
     {
+        if (previewFullscreen)
+        {
+            var willDeferClose = LiveMediaSource is { IsCapturing: true } or { IsRecording: true } ||
+                qcStop is not null || recordingTransition || recordingSession || closing;
+            CloseFullscreenPreviewWindow(suppressRestore: !willDeferClose);
+        }
+
         if (LiveMediaSource is { IsCapturing: true } or { IsRecording: true })
         {
             e.Cancel = true;
@@ -2096,7 +2120,8 @@ public sealed partial class MainWindow : Window
     {
         var beamVisual = ElementCompositionPreview.GetElementVisual(RecordingSweepBeam);
         beamVisual.StopAnimation(nameof(Visual.Offset));
-        if (!recordingClock.IsRunning || !Controls.StudioFeedback.AnimationsEnabled)
+        if (!recordingClock.IsRunning || !Controls.StudioFeedback.AnimationsEnabled ||
+            !FullscreenRenderPolicy.ShouldRunMainWindowAnimations(PauseMainWindowRendering))
         {
             beamVisual.Offset = Vector3.Zero;
             return;
@@ -2116,7 +2141,8 @@ public sealed partial class MainWindow : Window
 
     private void UpdateRecordingIndicator(bool active)
     {
-        var animationsEnabled = Controls.StudioFeedback.AnimationsEnabled;
+        var animationsEnabled = Controls.StudioFeedback.AnimationsEnabled &&
+            FullscreenRenderPolicy.ShouldRunMainWindowAnimations(PauseMainWindowRendering);
 
         foreach (var dot in new UIElement[] { RecordingIndicator, PreviewRecTallyDot })
         {
@@ -2170,11 +2196,11 @@ public sealed partial class MainWindow : Window
             visual.StartAnimation("Scale.Y", bounce);
         }
 
-        PreviewRecFrameGlow.Visibility = active && !previewFullscreen ? Visibility.Visible : Visibility.Collapsed;
+        PreviewRecFrameGlow.Visibility = active ? Visibility.Visible : Visibility.Collapsed;
         var glowVisual = ElementCompositionPreview.GetElementVisual(PreviewRecFrameGlow);
         glowVisual.StopAnimation(nameof(Visual.Opacity));
         glowVisual.Opacity = 1f;
-        if (active && !previewFullscreen && animationsEnabled)
+        if (active && animationsEnabled)
         {
             var breathe = glowVisual.Compositor.CreateScalarKeyFrameAnimation();
             breathe.InsertKeyFrame(0f, 0.95f);
@@ -2191,6 +2217,7 @@ public sealed partial class MainWindow : Window
         PreviewRecTally.Visibility = active ? Visibility.Visible : Visibility.Collapsed;
         PreviewMonitorHousing.BorderBrush = active
             ? ThemeBrush("StudioRecBrush") : ThemeBrush("StudioMonitorBezelBrush");
+        SyncFullscreenPreviewWindow();
     }
 
     private static void RevealWorkspacePanel(UIElement panel)
@@ -2240,7 +2267,7 @@ public sealed partial class MainWindow : Window
         displayedRecordingSeconds = seconds;
         var text = $"{seconds / 3600:D2}:{elapsed.Minutes:D2}:{elapsed.Seconds:D2}";
         RecordingElapsed.Text = text;
-        FullscreenClockText.Text = text;
+        SyncFullscreenPreviewWindow();
     }
 
     private void ResetPreview(PreviewFeed? feed)
@@ -2250,6 +2277,8 @@ public sealed partial class MainWindow : Window
         previewBitmap = null;
         previewFrame = null;
         preview = feed;
+        if (feed is not null && PauseMainWindowRendering)
+            feed.RenderScopes = false;
         displayedPreviewSkips = 0;
         PreviewImage.Source = null;
         previewCaption = null;
@@ -2262,6 +2291,7 @@ public sealed partial class MainWindow : Window
         decodedDisplayAspectRatio = 0;
         if (feed is null)
             UpdatePreviewScanMode(null);
+        SyncFullscreenPreviewWindow();
     }
 
     private void PresentPreview()
@@ -2275,6 +2305,12 @@ public sealed partial class MainWindow : Window
             bitmapPixels?.Dispose();
             previewBitmap = new WriteableBitmap(frame.Width, frame.Height);
             bitmapPixels = previewBitmap.PixelBuffer.AsStream();
+            if (!PauseMainWindowRendering)
+                PreviewImage.Source = previewBitmap;
+            fullscreenWindow?.SetPreviewImage(previewBitmap, frameAvailable: true);
+        }
+        else if (!PauseMainWindowRendering && !ReferenceEquals(PreviewImage.Source, previewBitmap))
+        {
             PreviewImage.Source = previewBitmap;
         }
 
@@ -2284,19 +2320,21 @@ public sealed partial class MainWindow : Window
         bitmapPixels!.Position = 0;
         bitmapPixels.Write(frame.Pixels, 0, frame.Stride * frame.Height);
         previewBitmap.Invalidate();
+        previewCaption = new(frame.NoInput, frame.SignalWidth, frame.SignalHeight,
+            frame.SignalFormat ?? (frame.Format == CapturePixelFormat.Bgra ? "—" : DeckLinkCapture.FormatFourCc((uint)frame.Format)),
+            frame.SignalScanMode, feed.PresentedSequence);
         if (PreviewPlaceholder.Visibility == Visibility.Visible)
         {
             PreviewPlaceholder.Visibility = Visibility.Collapsed;
             PreviewPlaceholderSpinner.IsActive = false;
             PreviewPlaceholderSpinner.Visibility = Visibility.Collapsed;
             PreviewPlaceholderIcon.Visibility = Visibility.Visible;
-            PreviewHudPill.Visibility = previewFullscreen ? Visibility.Collapsed : Visibility.Visible;
+            PreviewHudPill.Visibility = Visibility.Visible;
             ApplySafeAreaOverlay();
         }
-        previewCaption = new(frame.NoInput, frame.SignalWidth, frame.SignalHeight,
-            frame.SignalFormat ?? (frame.Format == CapturePixelFormat.Bgra ? "—" : DeckLinkCapture.FormatFourCc((uint)frame.Format)),
-            frame.SignalScanMode, feed.PresentedSequence);
-        RenderPreviewCaption();
+        if (!PauseMainWindowRendering)
+            RenderPreviewCaption();
+        fullscreenWindow?.SetPreviewImage(previewBitmap, frameAvailable: true);
     }
 
     private void ShowCounts(CaptureStats stats)
@@ -2354,15 +2392,12 @@ public sealed partial class MainWindow : Window
                 previewRecorder is not null && !pickingOutput &&
                 captureStop is { IsCancellationRequested: false } && !string.IsNullOrWhiteSpace(OutputPath.Text)));
         RecordButton.Visibility = media?.SupportsRecording == false ? Visibility.Collapsed : Visibility.Visible;
-        FullscreenRecordButton.Visibility = RecordButton.Visibility;
         RecordButton.IsEnabled = recordEnabled;
-        FullscreenRecordButton.IsEnabled = recordEnabled;
         CancelQcButton.IsEnabled = qcStop is { IsCancellationRequested: false };
         QcCenterPage.IsCancelEnabled = CancelQcButton.IsEnabled;
         FooterQcActivePill.Visibility = qcStop is null ? Visibility.Collapsed : Visibility.Visible;
         QcCenterPage.IsCancelVisible = qcStop is not null;
         RecordingClock.Visibility = recordingClock.IsRunning ? Visibility.Visible : Visibility.Collapsed;
-        FullscreenClockText.Visibility = recordingClock.IsRunning ? Visibility.Visible : Visibility.Collapsed;
         QcResultsButton.Visibility = !changingRecording && qcStop is null && latestQcEntry is not null
             ? Visibility.Visible : Visibility.Collapsed;
         UpdateQcNavBadge();
@@ -2370,6 +2405,7 @@ public sealed partial class MainWindow : Window
         UpdateLivePreviewStatus();
         UpdatePreviewForSelection();
         UpdateConfigurationStatus();
+        SyncFullscreenPreviewWindow();
     }
 
     private void UpdateQcNavBadge()

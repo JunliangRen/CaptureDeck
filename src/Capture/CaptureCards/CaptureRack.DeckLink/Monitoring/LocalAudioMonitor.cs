@@ -85,6 +85,78 @@ public sealed class LocalAudioMonitor : IDisposable
         Enqueue(bytes);
     }
 
+    public void SubmitInterleavedPcm16(ReadOnlySpan<short> samples, int channels, AudioMonitorRoute route,
+        AudioChannelLayout layout = AudioChannelLayout.Unknown, int activePairMask = 1)
+    {
+        if (!enabled || disposed || samples.IsEmpty || channels <= 0)
+            return;
+        if (channels == 2)
+        {
+            SubmitPcm16(samples);
+            return;
+        }
+
+        var gain = Volume;
+        if (gain <= 0.0001)
+            return;
+
+        var frameCount = samples.Length / channels;
+        if (frameCount <= 0)
+            return;
+
+        var safeChannels = Math.Min(channels, AudioMonitorRoute.MaxSupportedChannels);
+        var bytes = new byte[frameCount * 4];
+        var dest = MemoryMarshal.Cast<byte, short>(bytes);
+        Span<double> frame = stackalloc double[safeChannels];
+        var scale = 32767.0 * gain;
+        for (var f = 0; f < frameCount; f++)
+        {
+            var baseOffset = f * channels;
+            for (var ch = 0; ch < safeChannels; ch++)
+                frame[ch] = samples[baseOffset + ch] / 32768.0;
+            var (l, r) = AudioMonitorMixer.RouteFrame(frame, route, layout, activePairMask);
+            dest[f * 2] = (short)Math.Clamp((int)Math.Round(l * scale), short.MinValue, short.MaxValue);
+            dest[f * 2 + 1] = (short)Math.Clamp((int)Math.Round(r * scale), short.MinValue, short.MaxValue);
+        }
+        Enqueue(bytes);
+    }
+
+    internal void SubmitInterleavedPcm32(ReadOnlySpan<int> samples, int channels, AudioMonitorRoute route,
+        AudioChannelLayout layout = AudioChannelLayout.Unknown, int activePairMask = 1)
+    {
+        if (!enabled || disposed || samples.IsEmpty || channels <= 0)
+            return;
+        if (channels == 2)
+        {
+            SubmitPcm32(samples);
+            return;
+        }
+
+        var gain = Volume;
+        if (gain <= 0.0001)
+            return;
+
+        var frameCount = samples.Length / channels;
+        if (frameCount <= 0)
+            return;
+
+        var safeChannels = Math.Min(channels, AudioMonitorRoute.MaxSupportedChannels);
+        var bytes = new byte[frameCount * 4];
+        var dest = MemoryMarshal.Cast<byte, short>(bytes);
+        Span<double> frame = stackalloc double[safeChannels];
+        var scale = 32767.0 * gain;
+        for (var f = 0; f < frameCount; f++)
+        {
+            var baseOffset = f * channels;
+            for (var ch = 0; ch < safeChannels; ch++)
+                frame[ch] = samples[baseOffset + ch] / 2147483648.0;
+            var (l, r) = AudioMonitorMixer.RouteFrame(frame, route, layout, activePairMask);
+            dest[f * 2] = (short)Math.Clamp((int)Math.Round(l * scale), short.MinValue, short.MaxValue);
+            dest[f * 2 + 1] = (short)Math.Clamp((int)Math.Round(r * scale), short.MinValue, short.MaxValue);
+        }
+        Enqueue(bytes);
+    }
+
     private void Enqueue(byte[] packet)
     {
         while (queue.Count >= MaxQueuedPackets)

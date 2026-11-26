@@ -10,7 +10,7 @@ using CaptureRack.Core;
 namespace CaptureRack.QualityControl;
 
 public sealed record QcExpectedMedia(long VideoFrames, long AudioSampleFrames, string FieldOrder,
-    int AudioBits, string VideoTag, int Width, int Height);
+    int AudioBits, string VideoTag, int Width, int Height, int AudioChannels = 2);
 
 public sealed record QcEvent(TimeSpan Elapsed, string Description);
 
@@ -20,6 +20,7 @@ public sealed record QcCaptureLog(
     long ValidVideoFrames, long NoInputFrames, long MissingVideoFrames, long TimestampRegressions,
     long AudioPackets, long? LeftClips, long? RightClips, IReadOnlyList<QcEvent> RecentEvents)
 {
+    public IReadOnlyList<long>? ChannelClips { get; init; }
     public bool InputModeChanged { get; init; }
     public RecordingTiming? Timing { get; init; }
     public string? CaptureError { get; init; }
@@ -256,7 +257,8 @@ public static class QcReports
                 "PCM was written continuously in arrival order. Check A/V sync around the reported timestamp.");
         if (capture.Timing is null && capture.TimestampRegressions > 0)
             warnings.Add($"Capture detected {capture.TimestampRegressions:N0} audio or video timestamp regressions.");
-        if (capture.LeftClips > 0 || capture.RightClips > 0)
+        if (capture.LeftClips > 0 || capture.RightClips > 0 ||
+            capture.ChannelClips?.Any(count => count > 0) == true)
             warnings.Add("Audio reached the capture monitor's clipping threshold.");
         return warnings;
     }
@@ -294,8 +296,8 @@ public static class QcReports
             && (isMov || audioCodec != "flac" || audioBits is not (8 or 16 or 24 or 32))
             || sampleRate <= 0 || channels <= 0))
             throw new InvalidOperationException("QC expects supported PCM or FLAC audio.");
-        if (deckLink && a is not null && (audioBits is not (16 or 32) || sampleRate != 48000 || channels != 2))
-            throw new InvalidOperationException("DeckLink QC expects 48 kHz, 16- or 32-bit signed stereo PCM.");
+        if (deckLink && a is not null && (audioBits is not (16 or 32) || sampleRate != 48000 || channels is not (2 or 8 or 16)))
+            throw new InvalidOperationException("DeckLink QC expects 48 kHz, 16- or 32-bit signed PCM with 2, 8, or 16 channels.");
 
         return new(v is not null, a is not null, v is null ? "" : Text(v, "codec_tag_string"),
             v is null ? "" : Text(v, "field_order"), v is null ? 0 : Number(v, "nb_frames"),
@@ -328,7 +330,10 @@ public static class QcReports
         else if (!media.HasVideo || expected.AudioSampleFrames > 0 && !media.HasAudio)
             problems.Add("A track recorded by the capture source is missing from the encoded file.");
         if (media.HasAudio)
+        {
             Compare("Audio bit depth", media.AudioBits, expected.AudioBits, problems);
+            Compare("Audio channels", media.Channels, expected.AudioChannels, problems);
+        }
         if (media.HasVideo)
         {
             Compare("Video width", media.Width, expected.Width, problems);

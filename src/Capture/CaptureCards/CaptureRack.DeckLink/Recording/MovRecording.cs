@@ -12,6 +12,7 @@ namespace CaptureRack.DeckLink;
 public sealed record RecordingResult(string Path, int VideoFrames, long AudioSampleFrames,
     VideoMode Mode, CapturePixelFormat VideoFormat, CaptureAudioFormat AudioFormat)
 {
+    public uint AudioChannels { get; init; } = CaptureAudio.Channels;
     public RecordingTiming? Timing { get; init; }
     public bool Deinterlaced { get; init; }
 }
@@ -23,6 +24,7 @@ internal sealed class MovRecording : IDisposable
     private readonly VideoMode mode;
     private readonly int rowBytes;
     private readonly int audioFrameBytes;
+    private readonly uint audioChannels;
     private readonly CaptureAudioFormat audioFormat;
     private readonly BlockingCollection<Packet> packets = new(16);
     private readonly Channel<Packet>? encodedPackets;
@@ -36,7 +38,7 @@ internal sealed class MovRecording : IDisposable
     internal bool IsSoftware => software;
 
     public MovRecording(string outputPath, VideoMode mode, CapturePixelFormat format, CaptureAudioFormat audioFormat,
-        RecordingEncoding? encoding = null, Action? beforeEncoderWrite = null)
+        RecordingEncoding? encoding = null, Action? beforeEncoderWrite = null, uint audioChannels = CaptureAudio.Channels)
     {
         path = Path.GetFullPath(outputPath);
         software = encoding?.IsSoftware == true;
@@ -50,7 +52,8 @@ internal sealed class MovRecording : IDisposable
 
         this.mode = mode;
         this.audioFormat = audioFormat;
-        audioFrameBytes = CaptureAudio.BytesPerFrame(audioFormat);
+        this.audioChannels = audioChannels;
+        audioFrameBytes = CaptureAudio.BytesPerFrame(audioFormat, audioChannels);
         rowBytes = StoredRowBytes(mode.Width, format);
         stagingPath = Path.Combine(Path.GetDirectoryName(path)!, $".capturerack-{Guid.NewGuid():N}.partial");
 
@@ -59,7 +62,7 @@ internal sealed class MovRecording : IDisposable
             if (software)
             {
                 var video = EncodedInput(mode, format, rowBytes);
-                var audio = new NativePcmTrack(48000, 2, (int)audioFormat, audioFrameBytes);
+                var audio = new NativePcmTrack(48000, (int)audioChannels, (int)audioFormat, audioFrameBytes);
                 encodedPackets = Channel.CreateBounded<Packet>(new BoundedChannelOptions(16) { SingleReader = true });
                 liveEncoder = new LiveEncodedRecording(path, encoding!, video, audio, beforeEncoderWrite: beforeEncoderWrite);
                 writer = Task.Run(() => WriteEncoded(liveEncoder, format));
@@ -263,7 +266,11 @@ internal sealed class MovRecording : IDisposable
                 throw new IOException($"{error} Recording prefix: {live.PartialPath}.");
             }
             live.Finish();
-            return new(path, videoFrames, audioSamples, mode, format, audioFormat) { Deinterlaced = live.Deinterlaced };
+            return new(path, videoFrames, audioSamples, mode, format, audioFormat)
+            {
+                AudioChannels = audioChannels,
+                Deinterlaced = live.Deinterlaced
+            };
         }
     }
 
@@ -271,7 +278,7 @@ internal sealed class MovRecording : IDisposable
     {
         using (stream)
         {
-            var movie = new QuickTimeMovie(stream, mode, format, checked(rowBytes * mode.Height), audioFormat);
+            var movie = new QuickTimeMovie(stream, mode, format, checked(rowBytes * mode.Height), audioFormat, audioChannels);
             foreach (var packet in packets.GetConsumingEnumerable())
             {
                 try
@@ -291,6 +298,7 @@ internal sealed class MovRecording : IDisposable
             stream.Flush(flushToDisk: true);
             return new RecordingResult(path, movie.VideoFrames, movie.AudioSamples, mode, format, audioFormat)
             {
+                AudioChannels = audioChannels,
                 Timing = movie.Timing
             };
         }

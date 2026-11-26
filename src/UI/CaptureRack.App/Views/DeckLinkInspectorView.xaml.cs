@@ -24,6 +24,7 @@ public sealed partial class DeckLinkInspectorView : UserControl
 
     public CapturePixelFormat SelectedVideoFormat { get; private set; } = CapturePixelFormat.V210;
     public CaptureAudioFormat SelectedAudioFormat { get; private set; } = CaptureAudioFormat.Pcm16;
+    public uint SelectedAudioChannels { get; private set; } = CaptureAudio.Channels;
 
     public string AnalogNtscIre { get; private set; } = "Driver";
     public string AnalogComponentLevel { get; private set; } = "Driver";
@@ -55,6 +56,7 @@ public sealed partial class DeckLinkInspectorView : UserControl
     public event EventHandler? SelectionChanged;
     public event EventHandler? VideoFormatChanged;
     public event EventHandler? AudioFormatChanged;
+    public event EventHandler? AudioChannelsChanged;
     public event EventHandler? AnalogSettingsChanged;
     public event EventHandler? VancSettingsChanged;
     public event EventHandler? VancScanRequested;
@@ -118,10 +120,13 @@ public sealed partial class DeckLinkInspectorView : UserControl
         UpdateVancControlsState();
     }
 
-    public void SetFormats(uint? videoFormat, uint? audioFormat)
+    public void SetFormats(uint? videoFormat, uint? audioFormat, uint? audioChannels = null)
     {
         SelectedVideoFormat = videoFormat == (uint)CapturePixelFormat.Uyvy ? CapturePixelFormat.Uyvy : CapturePixelFormat.V210;
         SelectedAudioFormat = audioFormat == (uint)CaptureAudioFormat.Pcm32 ? CaptureAudioFormat.Pcm32 : CaptureAudioFormat.Pcm16;
+        if (audioChannels is { } ch && CaptureAudio.IsValidChannelCount(ch))
+            SelectedAudioChannels = ch;
+        NormalizeSelectedAudioChannels();
         UpdateFormatSegmentVisuals();
     }
 
@@ -192,12 +197,16 @@ public sealed partial class DeckLinkInspectorView : UserControl
             AutomationProperties.SetName(ModePicker, localize("Mode"));
             VideoFormatLabel.Text = localize("VideoFormat");
             AudioFormatLabel.Text = localize("AudioFormat");
+            AudioChannelsLabel.Text = localize("AudioChannels");
             RecordingModeHint.Text = localize("AutoRecordingHint");
 
             VideoFormat10Button.Content = localize("Video10Short");
             VideoFormat8Button.Content = localize("Video8Short");
             AudioFormat16Button.Content = localize("Audio16Short");
             AudioFormat32Button.Content = localize("Audio32Short");
+            AudioChannels2Button.Content = string.Format(culture, localize("PreviewAudioChannels"), 2);
+            AudioChannels8Button.Content = string.Format(culture, localize("PreviewAudioChannels"), 8);
+            AudioChannels16Button.Content = string.Format(culture, localize("PreviewAudioChannels"), 16);
             ToolTipService.SetToolTip(VideoFormat10Button, localize("Video10"));
             ToolTipService.SetToolTip(VideoFormat8Button, localize("Video8"));
             ToolTipService.SetToolTip(AudioFormat16Button, localize("Audio16"));
@@ -267,9 +276,31 @@ public sealed partial class DeckLinkInspectorView : UserControl
         VideoFormat8Button.IsEnabled = idle || (canReopenPreview && SupportsSelectedMode(CapturePixelFormat.Uyvy));
         AudioFormat16Button.IsEnabled = idle || previewAudioFormat is CaptureAudioFormat.Pcm16 or CaptureAudioFormat.Pcm32;
         AudioFormat32Button.IsEnabled = idle || previewAudioFormat == CaptureAudioFormat.Pcm32;
+        var supportedChannels = SupportedAudioChannelsForSelection();
+        AudioChannels2Button.IsEnabled = idle;
+        AudioChannels8Button.IsEnabled = idle && supportedChannels.Contains(8u);
+        AudioChannels16Button.IsEnabled = idle && supportedChannels.Contains(16u);
+        if (NormalizeSelectedAudioChannels())
+            UpdateFormatSegmentVisuals();
         RecordingModeHint.Visibility = SelectedMode is { Id: null } ? Visibility.Visible : Visibility.Collapsed;
         UpdateAnalogControlsState(idle);
         UpdateVancControlsState();
+    }
+
+    private uint[] SupportedAudioChannelsForSelection() =>
+        SelectedDevice is { } device && SelectedAudioSource is { } audio
+            ? CaptureAudio.SupportedChannelCounts(device.MaxAudioChannels, audio.Id)
+            : [2u];
+
+    private bool NormalizeSelectedAudioChannels()
+    {
+        if (SelectedDevice is not { } device || SelectedAudioSource is not { } audio)
+            return false;
+        var normalized = CaptureAudio.NormalizeChannels(SelectedAudioChannels, device.MaxAudioChannels, audio.Id);
+        if (normalized == SelectedAudioChannels)
+            return false;
+        SelectedAudioChannels = normalized;
+        return true;
     }
 
     private bool SupportsSelectedMode(CapturePixelFormat format)
@@ -285,7 +316,7 @@ public sealed partial class DeckLinkInspectorView : UserControl
     {
         if (mode is not null)
         {
-            var mbps = DeckLinkCapture.EstimateRecordingBytesPerSecond(mode, SelectedVideoFormat, SelectedAudioFormat) * 8 / 1_000_000d;
+            var mbps = DeckLinkCapture.EstimateRecordingBytesPerSecond(mode, SelectedVideoFormat, SelectedAudioFormat, SelectedAudioChannels) * 8 / 1_000_000d;
             BitrateBadgeText.Text = $"~{mbps:0.#} Mbps";
             BitrateBadge.Visibility = Visibility.Visible;
         }
@@ -335,6 +366,9 @@ public sealed partial class DeckLinkInspectorView : UserControl
         ApplySegmentState(VideoFormat8Button, SelectedVideoFormat == CapturePixelFormat.Uyvy);
         ApplySegmentState(AudioFormat16Button, SelectedAudioFormat == CaptureAudioFormat.Pcm16);
         ApplySegmentState(AudioFormat32Button, SelectedAudioFormat == CaptureAudioFormat.Pcm32);
+        ApplySegmentState(AudioChannels2Button, SelectedAudioChannels == 2);
+        ApplySegmentState(AudioChannels8Button, SelectedAudioChannels == 8);
+        ApplySegmentState(AudioChannels16Button, SelectedAudioChannels == 16);
     }
 
     private void ApplySegmentState(Button button, bool active)
@@ -529,6 +563,21 @@ public sealed partial class DeckLinkInspectorView : UserControl
         SelectedAudioFormat = format;
         UpdateFormatSegmentVisuals();
         AudioFormatChanged?.Invoke(this, EventArgs.Empty);
+    }
+
+    private void AudioChannelsSegment_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not Button { IsEnabled: true, Tag: string tag } ||
+            !uint.TryParse(tag, CultureInfo.InvariantCulture, out var channels) ||
+            !CaptureAudio.IsValidChannelCount(channels))
+            return;
+
+        if (SelectedAudioChannels == channels)
+            return;
+
+        SelectedAudioChannels = channels;
+        UpdateFormatSegmentVisuals();
+        AudioChannelsChanged?.Invoke(this, EventArgs.Empty);
     }
 
     public void ShowVancScanStatus(string text, bool scanning, TelemetrySeverity severity = TelemetrySeverity.Normal)

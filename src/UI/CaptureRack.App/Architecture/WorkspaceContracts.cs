@@ -493,7 +493,8 @@ public static class QcWarningFormatter
                 warnings.Add(string.Format(formatProvider, localize("QcWarnAudioTiming"), audioTiming.AudioDiscontinuities, audioTiming.MaximumAudioOffsetSamples));
             if (capture is { Timing: null, TimestampRegressions: > 0 })
                 warnings.Add(string.Format(formatProvider, localize("QcWarnTimestamp"), capture.TimestampRegressions));
-            if (capture is { LeftClips: > 0 } or { RightClips: > 0 })
+            if (capture is { LeftClips: > 0 } or { RightClips: > 0 } ||
+                capture?.ChannelClips?.Any(count => count > 0) == true)
                 warnings.Add(localize("QcWarnClipping"));
             if (result.VideoFramesWithoutFieldFlags > 0)
                 warnings.Add(string.Format(formatProvider, localize("QcWarnFieldFlags"), result.VideoFramesWithoutFieldFlags));
@@ -783,6 +784,53 @@ internal static class FireWireSettingsResolver
             : new FireWireSettings { DeviceId = selectedDeviceId };
 }
 
+public static class FullscreenRenderPolicy
+{
+    public static bool ShouldPauseMainWindowRendering(bool fullscreenActive, bool sameDisplayAsMainWindow) =>
+        fullscreenActive && sameDisplayAsMainWindow;
+
+    public static bool ShouldRenderVideoScopes(bool pauseMainWindowRendering, bool layoutShowsScopes) =>
+        !pauseMainWindowRendering && layoutShowsScopes;
+
+    public static bool ShouldUpdateMainWindowMeters(bool pauseMainWindowRendering) =>
+        !pauseMainWindowRendering;
+
+    public static bool ShouldRunMainWindowAnimations(bool pauseMainWindowRendering) =>
+        !pauseMainWindowRendering;
+
+    public static (double TopHeight, double BottomHeight) ComputeNtsc480GuideHeights(double surfaceHeight)
+    {
+        if (double.IsNaN(surfaceHeight) || double.IsInfinity(surfaceHeight) || surfaceHeight <= 0)
+            return (0, 0);
+
+        return (Math.Max(2, surfaceHeight * 4.0 / 486.0), Math.Max(1, surfaceHeight * 2.0 / 486.0));
+    }
+
+    public static (double Width, double Height) ComputePreviewSurfaceSize(
+        double containerWidth,
+        double containerHeight,
+        double aspectRatio,
+        double padding)
+    {
+        if (double.IsNaN(containerWidth) || double.IsInfinity(containerWidth) || containerWidth <= 0 ||
+            double.IsNaN(containerHeight) || double.IsInfinity(containerHeight) || containerHeight <= 0)
+            return (0, 0);
+
+        var safeAspect = double.IsNaN(aspectRatio) || double.IsInfinity(aspectRatio) || aspectRatio <= 0
+            ? 4d / 3
+            : aspectRatio;
+        var pad = double.IsNaN(padding) || double.IsInfinity(padding) ? 0 : Math.Max(0, padding);
+        var availW = Math.Max(0, containerWidth - pad * 2);
+        var availH = Math.Max(0, containerHeight - pad * 2);
+        if (availW <= 0 || availH <= 0)
+            return (0, 0);
+
+        var height = Math.Min(availW / safeAspect, availH);
+        var width = height * safeAspect;
+        return (Math.Max(0, width), Math.Max(0, height));
+    }
+}
+
 public sealed class BroadcastMeterBallistics
 {
     private const double FloorDb = -60.0;
@@ -861,6 +909,260 @@ public sealed class BroadcastMeterBallistics
         else
         {
             peakHoldDb = Math.Max(displayedDb, peakHoldDb - PeakHoldDecayPerFrame);
+        }
+    }
+
+    private static double Normalize(double db) => Math.Clamp((60.0 + db) / 60.0, 0.0, 1.0);
+}
+
+public enum AudioMeterDisplayMode
+{
+    Auto = 0,
+    All = 1,
+    MonitoredPair = 2
+}
+
+public static class MultiChannelMeterPolicy
+{
+    public const double ActivityThresholdLinear = 0.000251188643150958; // -72 dBFS
+    public const int DefaultAttackFrames = 9;    // ~150 ms at 60 fps
+    public const int DefaultHoldFrames = 600;    // ~10 s at 60 fps
+
+    public static int[] ComputeVisibleChannels(
+        int totalChannels,
+        AudioMeterDisplayMode displayMode,
+        AudioMonitorRoute route,
+        ReadOnlySpan<bool> activePairs,
+        ReadOnlySpan<bool> clippedPairs)
+    {
+        var safeChannels = Math.Clamp(totalChannels, 1, AudioMonitorRoute.MaxSupportedChannels);
+        if (safeChannels == 1)
+            return [0];
+        if (safeChannels == 2)
+            return [0, 1];
+
+        var pairCount = (safeChannels + 1) / 2;
+        var clampedRoute = route.ClampForChannels(safeChannels);
+
+        if (displayMode == AudioMeterDisplayMode.All)
+        {
+            var all = new int[safeChannels];
+            for (var i = 0; i < safeChannels; i++)
+                all[i] = i;
+            return all;
+        }
+
+        var visible = new List<int>(safeChannels);
+        if (displayMode == AudioMeterDisplayMode.MonitoredPair && clampedRoute.Mode == AudioMonitorMode.Pair)
+        {
+            AppendPair(visible, clampedRoute.PairIndex, safeChannels);
+            return [.. visible];
+        }
+
+        // Auto mode (and MonitoredPair fallback when route is Downmix):
+        // Always include Ch 1-2, the monitored pair (if Pair mode), and every active or clipped pair.
+        for (var pair = 0; pair < pairCount; pair++)
+        {
+            var isPrimary = pair == 0;
+            var isMonitored = clampedRoute.Mode == AudioMonitorMode.Pair && clampedRoute.PairIndex == pair;
+            var isActive = pair < activePairs.Length && activePairs[pair];
+            var isClipped = pair < clippedPairs.Length && clippedPairs[pair];
+            if (isPrimary || isMonitored || isActive || isClipped)
+                AppendPair(visible, pair, safeChannels);
+        }
+
+        return [.. visible];
+    }
+
+    public static double ComputePanelWidth(int visibleChannelCount, bool multiChannel = false) => visibleChannelCount switch
+    {
+        <= 2 => multiChannel ? 104 : 86,
+        <= 4 => 124,
+        <= 6 => 152,
+        <= 8 => 184,
+        <= 12 => 248,
+        _ => 312
+    };
+
+    private static void AppendPair(List<int> list, int pairIndex, int totalChannels)
+    {
+        var left = pairIndex * 2;
+        if (left < totalChannels)
+            list.Add(left);
+        var right = left + 1;
+        if (right < totalChannels)
+            list.Add(right);
+    }
+}
+
+public sealed class MultiChannelActivityTracker(
+    int attackFrames = MultiChannelMeterPolicy.DefaultAttackFrames,
+    int holdFrames = MultiChannelMeterPolicy.DefaultHoldFrames)
+{
+    private readonly int attack = Math.Max(1, attackFrames);
+    private readonly int hold = Math.Max(1, holdFrames);
+    private readonly int[] aboveCount = new int[AudioMonitorRoute.MaxSupportedPairs];
+    private readonly int[] holdRemaining = new int[AudioMonitorRoute.MaxSupportedPairs];
+    private readonly bool[] pairActive = new bool[AudioMonitorRoute.MaxSupportedPairs];
+
+    public void Reset()
+    {
+        Array.Clear(aboveCount);
+        Array.Clear(holdRemaining);
+        Array.Clear(pairActive);
+    }
+
+    public void Observe(StereoLevels levels)
+    {
+        var channels = Math.Clamp(levels.ChannelCount, 1, AudioMonitorRoute.MaxSupportedChannels);
+        var pairs = (channels + 1) / 2;
+        for (var p = 0; p < pairs; p++)
+        {
+            var left = levels.PeakForChannel(p * 2);
+            var right = p * 2 + 1 < channels ? levels.PeakForChannel(p * 2 + 1) : 0;
+            var peak = Math.Max(left, right);
+            if (peak > MultiChannelMeterPolicy.ActivityThresholdLinear)
+            {
+                aboveCount[p]++;
+                if (aboveCount[p] >= attack)
+                {
+                    pairActive[p] = true;
+                    holdRemaining[p] = hold;
+                }
+            }
+            else
+            {
+                aboveCount[p] = 0;
+                if (pairActive[p])
+                {
+                    if (holdRemaining[p] > 0)
+                        holdRemaining[p]--;
+                    if (holdRemaining[p] == 0)
+                        pairActive[p] = false;
+                }
+            }
+        }
+        for (var p = pairs; p < pairActive.Length; p++)
+        {
+            aboveCount[p] = 0;
+            holdRemaining[p] = 0;
+            pairActive[p] = false;
+        }
+    }
+
+    public int ActivePairMask(int totalChannels)
+    {
+        var pairs = (Math.Clamp(totalChannels, 1, AudioMonitorRoute.MaxSupportedChannels) + 1) / 2;
+        var mask = 1;
+        for (var p = 0; p < pairs; p++)
+        {
+            if (pairActive[p])
+                mask |= 1 << p;
+        }
+        return mask;
+    }
+
+    public ReadOnlySpan<bool> ActivePairs => pairActive;
+}
+
+public sealed class MultiChannelMeterBallistics
+{
+    private const double FloorDb = -60.0;
+    private const double DecayPerFrame = 0.42;
+    private const double PeakHoldDecayPerFrame = 0.22;
+    private const int PeakHoldFrames = 72;
+
+    private readonly double[] targetDb = new double[AudioMonitorRoute.MaxSupportedChannels];
+    private readonly double[] displayedDb = new double[AudioMonitorRoute.MaxSupportedChannels];
+    private readonly double[] peakHoldDb = new double[AudioMonitorRoute.MaxSupportedChannels];
+    private readonly int[] holdCounter = new int[AudioMonitorRoute.MaxSupportedChannels];
+    private readonly long[] rawClips = new long[AudioMonitorRoute.MaxSupportedChannels];
+    private readonly long[] clipBaseline = new long[AudioMonitorRoute.MaxSupportedChannels];
+
+    public int ChannelCount { get; private set; } = 2;
+
+    public MultiChannelMeterBallistics() => Reset();
+
+    public void Reset()
+    {
+        ChannelCount = 2;
+        Array.Fill(targetDb, FloorDb);
+        Array.Fill(displayedDb, FloorDb);
+        Array.Fill(peakHoldDb, FloorDb);
+        Array.Clear(holdCounter);
+        Array.Clear(rawClips);
+        Array.Clear(clipBaseline);
+    }
+
+    public void UpdateInput(StereoLevels audio)
+    {
+        var count = Math.Clamp(audio.ChannelCount, 1, AudioMonitorRoute.MaxSupportedChannels);
+        ChannelCount = count;
+        for (var ch = 0; ch < count; ch++)
+        {
+            var peak = audio.PeakForChannel(ch);
+            var clips = audio.ClipsForChannel(ch);
+            targetDb[ch] = peak > 0 ? Math.Clamp(20 * Math.Log10(peak), FloorDb, 0) : FloorDb;
+            if (clips < clipBaseline[ch])
+                clipBaseline[ch] = 0;
+            rawClips[ch] = clips;
+        }
+        for (var ch = count; ch < AudioMonitorRoute.MaxSupportedChannels; ch++)
+        {
+            targetDb[ch] = FloorDb;
+            rawClips[ch] = 0;
+            clipBaseline[ch] = 0;
+        }
+    }
+
+    public void StepFrame()
+    {
+        for (var ch = 0; ch < ChannelCount; ch++)
+        {
+            displayedDb[ch] = targetDb[ch] >= displayedDb[ch]
+                ? targetDb[ch]
+                : Math.Max(targetDb[ch], displayedDb[ch] - DecayPerFrame);
+
+            if (displayedDb[ch] >= peakHoldDb[ch])
+            {
+                peakHoldDb[ch] = displayedDb[ch];
+                holdCounter[ch] = PeakHoldFrames;
+            }
+            else if (holdCounter[ch] > 0)
+            {
+                holdCounter[ch]--;
+            }
+            else
+            {
+                peakHoldDb[ch] = Math.Max(displayedDb[ch], peakHoldDb[ch] - PeakHoldDecayPerFrame);
+            }
+        }
+    }
+
+    public double NormalizedLevel(int channel) =>
+        channel >= 0 && channel < AudioMonitorRoute.MaxSupportedChannels ? Normalize(displayedDb[channel]) : 0;
+
+    public double NormalizedPeakHold(int channel) =>
+        channel >= 0 && channel < AudioMonitorRoute.MaxSupportedChannels ? Normalize(peakHoldDb[channel]) : 0;
+
+    public long VisibleClips(int channel) =>
+        channel >= 0 && channel < AudioMonitorRoute.MaxSupportedChannels ? Math.Max(0, rawClips[channel] - clipBaseline[channel]) : 0;
+
+    public void ResetClipLatch(int channel)
+    {
+        if (channel >= 0 && channel < AudioMonitorRoute.MaxSupportedChannels)
+            clipBaseline[channel] = rawClips[channel];
+    }
+
+    public void FillClippedPairs(Span<bool> clippedPairs)
+    {
+        var pairs = Math.Min(clippedPairs.Length, (ChannelCount + 1) / 2);
+        clippedPairs.Clear();
+        for (var p = 0; p < pairs; p++)
+        {
+            var left = VisibleClips(p * 2) > 0;
+            var right = p * 2 + 1 < ChannelCount && VisibleClips(p * 2 + 1) > 0;
+            clippedPairs[p] = left || right;
         }
     }
 

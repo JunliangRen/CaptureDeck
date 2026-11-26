@@ -56,7 +56,8 @@ public sealed partial class DirectShowCapabilitiesView
         {
             var sanitized = RecordingFileNaming.SanitizeLabel(label);
             var prefix = sanitized.Length == 0 ? "CaptureRack" : sanitized + "_CaptureRack";
-            return $"{prefix}_YYYYMMDD_HHmmss_DirectShow_{new CaptureRack.Recording.RecordingEncoding(output).FileTag}.mkv";
+            var tag = new CaptureRack.Recording.RecordingEncoding(output).FileTagForAudioChannels(ActiveAudio?.Channels);
+            return $"{prefix}_YYYYMMDD_HHmmss_DirectShow_{tag}.mkv";
         }
         var videoTag = video.IsMpeg2Video ? "MPEG2" : DirectShowPreviewVideo.Encoding(video) ?? "Video";
         var extensions = DirectShowRecording.OutputExtensions(video);
@@ -91,6 +92,8 @@ public sealed partial class DirectShowCapabilitiesView
     }
 
     public void SetAudioMonitor(bool enabled, double volume) => preview?.SetAudioMonitor(enabled, volume);
+
+    public void SetAudioMonitorRoute(AudioMonitorRoute route) => preview?.SetAudioMonitorRoute(route);
 
     public StereoLevels? ReadAudioLevels() => preview?.ReadAudioLevels();
 

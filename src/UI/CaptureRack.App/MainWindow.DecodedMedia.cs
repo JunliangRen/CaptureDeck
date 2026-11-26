@@ -71,6 +71,8 @@ public sealed partial class MainWindow
         {
             appliedDecodedCapabilities = caps;
             decodedFieldOrderAvailable = media.HasDeinterlace;
+            if (previewFullscreen && !caps.SupportsVideoPreview)
+                SetPreviewFullscreen(false);
             ApplyModuleCapabilities();
         }
 
@@ -158,7 +160,10 @@ public sealed partial class MainWindow
         }
         RenderCounts(null);
         if (media.PreviewHint is { } hint)
+        {
             PreviewPlaceholderText.Text = L(hint);
+            SyncFullscreenPreviewWindow();
+        }
         if (media.IsRecording && statusTitle is "StartRecording" or "StopRecording")
             RenderStatus();
         else if (qcStop is null && statusTitle == "WaitingFrames" && liveSignal == VideoSignal.Present)
@@ -173,6 +178,8 @@ public sealed partial class MainWindow
             var directory = OutputPath.Text.Trim();
             if (!Path.IsPathFullyQualified(directory) || !Directory.Exists(directory))
             {
+                if (previewFullscreen)
+                    SetPreviewFullscreen(false);
                 holdRecordingStatus = true;
                 UpdateLivePreviewStatus();
                 SetStatus("ChooseOutput", "ExistingOutput", InfoBarSeverity.Warning);

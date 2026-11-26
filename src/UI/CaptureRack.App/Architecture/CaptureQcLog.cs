@@ -17,13 +17,14 @@ internal static class CaptureQcLog
         };
         var expected = new QcExpectedMedia(saved.VideoFrames, saved.AudioSampleFrames, field,
             (int)saved.AudioFormat, DeckLinkCapture.FormatFourCc((uint)saved.VideoFormat),
-            saved.Mode.Width, saved.Mode.Height);
+            saved.Mode.Width, saved.Mode.Height, (int)saved.AudioChannels);
         return new QcCaptureLog(device, driver, videoSource, audioSource, saved.Mode.Description,
             started, stopped, expected, stats.VideoFrames, stats.NoInputFrames,
             saved.Timing?.SuspectedMissingVideoFrames ?? stats.MissingVideoFrames, stats.TimestampRegressions,
             stats.AudioPackets, stats.AudioLevels?.LeftClips, stats.AudioLevels?.RightClips,
             stats.Events.Select(item => new QcEvent(item.Elapsed, item.Description)).ToArray())
         {
+            ChannelClips = stats.AudioLevels?.ChannelClips,
             InputModeChanged = stats.RecordingModeChanged,
             Timing = saved.Timing,
             CaptureError = captureError ?? stats.Error,

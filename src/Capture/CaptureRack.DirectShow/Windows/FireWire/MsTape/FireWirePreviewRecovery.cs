@@ -28,8 +28,12 @@ public sealed class FireWirePreviewRecovery(bool dv = false)
         return Volatile.Read(ref decoder)?.Offer(sample) ?? true;
     }
 
+    public Task RunAsync(string executable, Action<ReadOnlyMemory<byte>, FireWireFrameInfo> video,
+        Action<ReadOnlyMemory<byte>> audio, Action resetDisplay, CancellationToken stop) =>
+        RunAsync(executable, video, (pcm, _, _) => audio(pcm), resetDisplay, stop);
+
     public async Task RunAsync(string executable, Action<ReadOnlyMemory<byte>, FireWireFrameInfo> video,
-        Action<ReadOnlyMemory<byte>> audio, Action resetDisplay, CancellationToken stop)
+        Action<ReadOnlyMemory<byte>, int, string?> audio, Action resetDisplay, CancellationToken stop)
     {
         try
         {

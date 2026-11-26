@@ -1,28 +1,34 @@
-using Microsoft.UI;
+using CaptureRack.App.Controls;
+using CaptureRack.App.Views;
 using Microsoft.UI.Dispatching;
 using Microsoft.UI.Input;
 using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Automation;
-using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
-using Microsoft.UI.Xaml.Media;
-using Windows.UI.ViewManagement;
 
 namespace CaptureRack.App;
 
 public sealed partial class MainWindow
 {
     private bool previewFullscreen;
-    private bool restoreMaximizedWindow;
+    private bool fullscreenCoversMainDisplay;
+    private bool enteringFullscreen;
+    private FullscreenPreviewWindow? fullscreenWindow;
     private readonly DispatcherQueueTimer previewHoverTimer;
-    private readonly DispatcherQueueTimer fullscreenIdleTimer;
     private readonly ScalarTransition previewFullscreenFade = new() { Duration = TimeSpan.FromMilliseconds(160) };
     private bool previewHoverReady;
     private bool previewTouchControlsVisible;
-    private bool fullscreenBarVisible;
-    private Thickness windowedWorkspacePadding;
-    private double windowedWorkspaceColumnSpacing;
+
+    private bool PauseMainWindowRendering =>
+        FullscreenRenderPolicy.ShouldPauseMainWindowRendering(previewFullscreen, fullscreenCoversMainDisplay);
+
+    private void MainWindow_Activated(object sender, WindowActivatedEventArgs args)
+    {
+        if (args.WindowActivationState != WindowActivationState.Deactivated &&
+            !enteringFullscreen && previewFullscreen && fullscreenCoversMainDisplay)
+            SetPreviewFullscreen(false);
+    }
 
     private void PreviewSurface_PointerEntered(object sender, PointerRoutedEventArgs e)
     {
@@ -34,14 +40,6 @@ public sealed partial class MainWindow
         if (!previewHoverReady && !previewHoverTimer.IsRunning)
             previewHoverTimer.Start();
         UpdatePreviewFullscreenButton();
-        if (previewFullscreen)
-            WakeFullscreenMiniBar();
-    }
-
-    private void PreviewSurface_PointerMoved(object sender, PointerRoutedEventArgs e)
-    {
-        if (previewFullscreen && e.Pointer.PointerDeviceType == PointerDeviceType.Mouse)
-            WakeFullscreenMiniBar();
     }
 
     private void PreviewSurface_PointerExited(object sender, PointerRoutedEventArgs e)
@@ -61,11 +59,6 @@ public sealed partial class MainWindow
 
         previewTouchControlsVisible = !previewTouchControlsVisible;
         UpdatePreviewFullscreenButton();
-        if (previewFullscreen)
-        {
-            fullscreenBarVisible = previewTouchControlsVisible;
-            UpdateFullscreenMiniBar();
-        }
     }
 
     private void PreviewSurface_DoubleTapped(object sender, DoubleTappedRoutedEventArgs e)
@@ -82,11 +75,18 @@ public sealed partial class MainWindow
 
     private void PreviewFullscreen_Invoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
     {
+        if (previewFullscreen)
+        {
+            SetPreviewFullscreen(false);
+            args.Handled = true;
+            return;
+        }
+
         if (activePage != ActiveAppPage.Capture || !ActiveWorkspaceCapabilities.SupportsVideoPreview ||
             EffectiveWorkspaceLayout is not (WorkspaceLayoutMode.Focus or WorkspaceLayoutMode.Split))
             return;
 
-        SetPreviewFullscreen(!previewFullscreen);
+        SetPreviewFullscreen(true);
         args.Handled = true;
     }
 
@@ -99,28 +99,6 @@ public sealed partial class MainWindow
         args.Handled = true;
     }
 
-    private void WakeFullscreenMiniBar()
-    {
-        fullscreenBarVisible = true;
-        UpdateFullscreenMiniBar();
-        fullscreenIdleTimer.Stop();
-        fullscreenIdleTimer.Start();
-    }
-
-    private void UpdateFullscreenMiniBar()
-    {
-        var visible = previewFullscreen && fullscreenBarVisible;
-        FullscreenMiniBar.Visibility = previewFullscreen ? Visibility.Visible : Visibility.Collapsed;
-        var opacity = visible ? 1 : 0;
-        if (FullscreenMiniBar.Opacity != opacity)
-        {
-            FullscreenMiniBar.OpacityTransition = Controls.StudioFeedback.AnimationsEnabled
-                ? previewFullscreenFade : null;
-            FullscreenMiniBar.Opacity = opacity;
-        }
-        FullscreenMiniBar.IsHitTestVisible = visible;
-    }
-
     private void UpdatePreviewFullscreenButton()
     {
         var visible = !previewFullscreen && (previewHoverReady || previewTouchControlsVisible ||
@@ -128,7 +106,7 @@ public sealed partial class MainWindow
         var opacity = visible ? 1 : 0;
         if (PreviewFullscreenButton.Opacity != opacity)
         {
-            PreviewFullscreenButton.OpacityTransition = Controls.StudioFeedback.AnimationsEnabled
+            PreviewFullscreenButton.OpacityTransition = StudioFeedback.AnimationsEnabled
                 ? previewFullscreenFade : null;
             PreviewFullscreenButton.Opacity = opacity;
         }
@@ -142,52 +120,150 @@ public sealed partial class MainWindow
             L(previewFullscreen ? "ExitPreviewFullScreen" : "PreviewFullScreen"));
     }
 
-    private void SetPreviewFullscreen(bool fullscreen)
+    private void CloseFullscreenPreviewWindow(bool suppressRestore) =>
+        SetPreviewFullscreen(false, suppressRestore);
+
+    private void SetPreviewFullscreen(bool fullscreen, bool suppressRestore = false)
     {
+        if (previewFullscreen == fullscreen)
+            return;
+
         if (fullscreen)
         {
-            restoreMaximizedWindow = AppWindow.Presenter is OverlappedPresenter { State: OverlappedPresenterState.Maximized };
-            windowedWorkspacePadding = WorkspacePage.Padding;
-            windowedWorkspaceColumnSpacing = WorkspacePage.ColumnSpacing;
-            AppWindow.SetPresenter(AppWindowPresenterKind.FullScreen);
+            if (closing || closeAfterQc || finishingMediaForClose ||
+                !HasLiveCapture || !ActiveWorkspaceCapabilities.SupportsVideoPreview)
+                return;
+
+            enteringFullscreen = true;
+            try
+            {
+                var mainDisplay = DisplayArea.GetFromWindowId(AppWindow.Id, DisplayAreaFallback.Primary);
+                var window = new FullscreenPreviewWindow(mainDisplay);
+                window.ExitRequested += FullscreenWindow_ExitRequested;
+                window.TogglePreviewRequested += FullscreenWindow_TogglePreviewRequested;
+                window.ToggleRecordRequested += FullscreenWindow_ToggleRecordRequested;
+                window.ToggleAudioMonitorRequested += FullscreenWindow_ToggleAudioMonitorRequested;
+
+                fullscreenWindow = window;
+                previewFullscreen = true;
+                fullscreenCoversMainDisplay = window.TargetDisplayId == mainDisplay.DisplayId;
+
+                // Pause redundant main-window preview, scope, and recording-indicator animations when covered on the same display.
+                if (PauseMainWindowRendering)
+                {
+                    PreviewImage.Source = null;
+                    if (preview is { } feed)
+                        feed.RenderScopes = false;
+                    UpdateRecordingIndicator(recordingClock.IsRunning);
+                }
+
+                SyncFullscreenPreviewWindow();
+                previewTouchControlsVisible = false;
+                UpdatePreviewFullscreenIcon();
+                UpdatePreviewFullscreenButton();
+                window.ShowWithFade();
+            }
+            finally
+            {
+                enteringFullscreen = false;
+            }
         }
         else
         {
-            fullscreenIdleTimer.Stop();
-            AppWindow.SetPresenter(AppWindowPresenterKind.Default);
-            if (restoreMaximizedWindow && AppWindow.Presenter is OverlappedPresenter { State: not OverlappedPresenterState.Maximized } window)
-                window.Maximize();
+            previewFullscreen = false;
+            fullscreenCoversMainDisplay = false;
+            var window = fullscreenWindow;
+            fullscreenWindow = null;
+
+            if (window is not null)
+            {
+                window.ExitRequested -= FullscreenWindow_ExitRequested;
+                window.TogglePreviewRequested -= FullscreenWindow_TogglePreviewRequested;
+                window.ToggleRecordRequested -= FullscreenWindow_ToggleRecordRequested;
+                window.ToggleAudioMonitorRequested -= FullscreenWindow_ToggleAudioMonitorRequested;
+            }
+
+            // Re-attach the live preview bitmap and resume scopes BEFORE closing the overlay window
+            // so the untouched main window underneath appears immediately with zero black flash.
+            var restoreMainWindow = !suppressRestore && !closing;
+            if (restoreMainWindow)
+            {
+                PreviewImage.Source = previewBitmap;
+                if (preview is { } feed)
+                {
+                    feed.RenderScopes = FullscreenRenderPolicy.ShouldRenderVideoScopes(
+                        pauseMainWindowRendering: false,
+                        EffectiveWorkspaceLayout is WorkspaceLayoutMode.Split or WorkspaceLayoutMode.Scopes);
+                }
+                nextMonitorFrame = 0;
+                RenderPreviewCaption();
+                UpdateRecordingIndicator(recordingClock.IsRunning);
+                ApplySafeAreaOverlay();
+                UpdateMonitorLayout();
+            }
+
+            window?.CloseCleanly();
+
+            previewTouchControlsVisible = false;
+            if (restoreMainWindow)
+            {
+                UpdatePreviewFullscreenIcon();
+                UpdatePreviewFullscreenButton();
+                Activate();
+            }
         }
+    }
 
-        previewFullscreen = fullscreen;
-        TitleBarGrid.Visibility = fullscreen ? Visibility.Collapsed : Visibility.Visible;
-        StageToolbar.Visibility = fullscreen ? Visibility.Collapsed : Visibility.Visible;
-        WorkspacePage.Background = fullscreen ? new SolidColorBrush(Colors.Black) : null;
-        WorkspacePage.Padding = fullscreen ? new Thickness(0) : windowedWorkspacePadding;
-        WorkspacePage.ColumnSpacing = fullscreen ? 0 : windowedWorkspaceColumnSpacing;
-        PreviewMonitorHousing.CornerRadius = fullscreen ? new CornerRadius(0) : new CornerRadius(4);
-        PreviewMonitorHousing.BorderThickness = fullscreen ? new Thickness(0) : new Thickness(1.5);
-        PreviewRecFrameGlow.Visibility = !fullscreen && recordingClock.IsRunning ? Visibility.Visible : Visibility.Collapsed;
-        PreviewSurface.BorderThickness = fullscreen ? new Thickness(0) : new Thickness(1);
-        PreviewSurface.CornerRadius = new CornerRadius(0);
-        PreviewHudPill.Visibility = !fullscreen && previewCaption is not null ? Visibility.Visible : Visibility.Collapsed;
-        StereoMeter.Visibility = !fullscreen && HasLiveCapture && ActiveWorkspaceCapabilities.SupportsAudioMeters && lastWindowWidth >= 680
-            ? Visibility.Visible : Visibility.Collapsed;
+    private void SyncFullscreenPreviewWindow()
+    {
+        if (fullscreenWindow is not { } window)
+            return;
 
-        UpdateInspectorLayout();
-        ApplyWorkspaceLayout();
-        UpdateCaptureFooter();
-        UpdateMonitorLayout();
+        var hasFrame = previewCaption is not null && previewBitmap is not null;
+        window.SetPreviewImage(previewBitmap, hasFrame);
+        window.UpdatePlaceholder(
+            PreviewPlaceholderText.Text,
+            IsCaptureInputActive && !hasFrame && (LiveMediaSource?.HasPreview ?? true));
+        window.UpdateGeometry(
+            previewAspectRatio,
+            showSafeArea,
+            LiveMediaSource is null && showNtsc480Guide);
 
-        previewTouchControlsVisible = false;
-        UpdatePreviewFullscreenIcon();
-        UpdatePreviewFullscreenButton();
-        if (fullscreen)
-            WakeFullscreenMiniBar();
-        else
-        {
-            fullscreenBarVisible = false;
-            UpdateFullscreenMiniBar();
-        }
+        var recordingActive = IsCaptureRecording && qcStop is null;
+        var finalizing = (recordingTransition && qcStop is null) || LiveMediaSource?.IsFinalizing == true;
+        window.UpdateChrome(
+            L("PreviewImage"),
+            StageSignalText.Text,
+            signalDotBrushKey,
+            recordingActive,
+            finalizing,
+            RecordingElapsed.Text,
+            recordingClock.IsRunning,
+            RecordButton.Visibility == Visibility.Visible,
+            RecordButton.IsEnabled,
+            RecordActionLabel.Text,
+            RecordButton.Style,
+            L("ExitPreviewFullScreen"));
+    }
+
+    private void FullscreenWindow_ExitRequested(object? sender, EventArgs e) =>
+        SetPreviewFullscreen(false);
+
+    private void FullscreenWindow_TogglePreviewRequested(object? sender, EventArgs e)
+    {
+        if (activePage == ActiveAppPage.Capture && StartButton.IsEnabled)
+            StartButton_Click(StartButton, new RoutedEventArgs());
+    }
+
+    private void FullscreenWindow_ToggleRecordRequested(object? sender, EventArgs e)
+    {
+        if (activePage == ActiveAppPage.Capture && RecordButton.IsEnabled)
+            RecordButton_Click(RecordButton, new RoutedEventArgs());
+    }
+
+    private void FullscreenWindow_ToggleAudioMonitorRequested(object? sender, EventArgs e)
+    {
+        if (activePage == ActiveAppPage.Capture && HasLiveCapture && ActiveWorkspaceCapabilities.SupportsLocalAudioMonitor)
+            ToggleAudioMonitor();
     }
 }

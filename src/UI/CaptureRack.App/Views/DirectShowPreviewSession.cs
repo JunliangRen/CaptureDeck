@@ -62,6 +62,7 @@ internal sealed class DirectShowPreviewSession(PreviewFeed feed)
     private long received, decoded, unreadable;
     private bool audioEnabled;
     private double audioVolume = 0.8;
+    private AudioMonitorRoute audioRoute = AudioMonitorRoute.Default;
 
     internal DirectShowFormat? NegotiatedVideo => Volatile.Read(ref videoFormat);
     internal DirectShowFormat? NegotiatedAudio => Volatile.Read(ref audioFormat);
@@ -89,6 +90,16 @@ internal sealed class DirectShowPreviewSession(PreviewFeed feed)
                 playback.Enabled = enabled;
                 playback.Volume = volume;
             }
+        }
+    }
+
+    internal void SetAudioMonitorRoute(AudioMonitorRoute route)
+    {
+        lock (monitorGate)
+        {
+            audioRoute = route;
+            if (spectrum is not null)
+                spectrum.Route = route;
         }
     }
 
@@ -200,8 +211,16 @@ internal sealed class DirectShowPreviewSession(PreviewFeed feed)
             return true;
         lock (monitorGate)
         {
-            spectrum ??= new StereoMonitor(CaptureAudioFormat.Pcm32, (uint)audio.SampleRate.Value,
-                (uint)(audio.ValidBitsPerSample is > 0 ? audio.ValidBitsPerSample.Value : audio.BitsPerSample!.Value));
+            var channels = Math.Clamp(audio.Channels!.Value, 1, AudioMonitorRoute.MaxSupportedChannels);
+            if (spectrum is null || spectrum.Channels != channels)
+            {
+                spectrum = new StereoMonitor(CaptureAudioFormat.Pcm32, (uint)audio.SampleRate.Value,
+                    (uint)(audio.ValidBitsPerSample is > 0 ? audio.ValidBitsPerSample.Value : audio.BitsPerSample!.Value),
+                    channels: channels)
+                {
+                    Route = audioRoute
+                };
+            }
             var active = monitor;
             if (audioEnabled && active is null)
                 monitor = active = new LocalAudioMonitor((uint)audio.SampleRate.Value) { Enabled = true, Volume = audioVolume };
@@ -212,14 +231,24 @@ internal sealed class DirectShowPreviewSession(PreviewFeed feed)
                 var buffer = ArrayPool<short>.Shared.Rent(length);
                 try
                 {
-                    var stereo = buffer.AsSpan(0, length);
-                    DirectShowPreviewAudio.ReadPeaks(audio, sample.Bytes, stereo, spectrum.Add);
-                    active.SubmitPcm16(stereo);
+                    var playbackIndex = 0;
+                    DirectShowPreviewAudio.ProcessInterleaved(audio, sample.Bytes, frame =>
+                    {
+                        var (l, r) = spectrum.AddFrame(frame);
+                        if (playbackIndex < length - 1)
+                        {
+                            buffer[playbackIndex++] = (short)Math.Clamp((int)Math.Round(l * 32767.0), short.MinValue, short.MaxValue);
+                            buffer[playbackIndex++] = (short)Math.Clamp((int)Math.Round(r * 32767.0), short.MinValue, short.MaxValue);
+                        }
+                    });
+                    active.SubmitPcm16(buffer.AsSpan(0, playbackIndex));
                 }
                 finally { ArrayPool<short>.Shared.Return(buffer); }
             }
             else
-                DirectShowPreviewAudio.ReadPeaks(audio, sample.Bytes, samples: spectrum.Add);
+            {
+                DirectShowPreviewAudio.ProcessInterleaved(audio, sample.Bytes, frame => _ = spectrum.AddFrame(frame));
+            }
         }
         return true;
     }

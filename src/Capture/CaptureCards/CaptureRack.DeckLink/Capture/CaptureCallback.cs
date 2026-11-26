@@ -9,26 +9,29 @@ namespace CaptureRack.DeckLink;
 [ClassInterface(ClassInterfaceType.None)]
 internal sealed class CaptureCallback(PreviewFeed? preview, CapturePixelFormat pixelFormat,
     CaptureAudioFormat audioFormat, VideoMode mode, MovRecording? recording, bool automaticMode,
-    LocalAudioMonitor? localAudioMonitor = null, Func<TimeSpan>? signalClock = null) : IDeckLinkInputCallback
+    LocalAudioMonitor? localAudioMonitor = null, Func<TimeSpan>? signalClock = null,
+    uint audioChannels = CaptureAudio.Channels) : IDeckLinkInputCallback
 {
     private const uint NoInput = 1u << 31;
     private const uint BufferRead = 1;
     private const long Timescale = 48000;
 
     private readonly object gate = new();
-    private readonly CaptureStats stats = new();
+    private readonly CaptureStats stats = new() { AudioChannels = audioChannels };
     private readonly long started = Stopwatch.GetTimestamp();
     private TimeSpan Elapsed => signalClock?.Invoke() ?? Stopwatch.GetElapsedTime(started);
     private TimeSpan recordingStart;
     private TimeSpan lastVideoObservation;
     private readonly FrameTimeline? timeline = preview is null ? null : new(mode);
-    private StereoMonitor? audioMonitor = preview is null ? null : new(audioFormat);
+    private readonly uint audioChannels = audioChannels;
+    private StereoMonitor? audioMonitor = preview is null ? null : new(audioFormat, CaptureAudio.SampleRate, channels: (int)audioChannels);
+    private AudioMonitorRoute monitorRoute = AudioMonitorRoute.Default;
     private readonly CaptureAudioFormat defaultOutputAudioFormat = audioFormat;
     private CaptureAudioFormat inputAudioFormat = audioFormat;
     private StereoLevels? lastLevels;
     private FrameTimeline? recordingTimeline;
     private CaptureStats? recordingBaseline;
-    private (long Left, long Right) recordingClips;
+    private long[] recordingChannelClips = [];
     private bool recordingModeChanged;
     private string? recordingError;
     private bool hasRecordableFrame;
@@ -40,7 +43,21 @@ internal sealed class CaptureCallback(PreviewFeed? preview, CapturePixelFormat p
     internal void UseMonitoringAudioFormat(CaptureAudioFormat format)
     {
         inputAudioFormat = format;
-        audioMonitor = new StereoMonitor(format);
+        audioMonitor = new StereoMonitor(format, CaptureAudio.SampleRate, channels: (int)audioChannels)
+        {
+            Route = monitorRoute
+        };
+    }
+
+    internal void SetAudioMonitorRoute(AudioMonitorRoute route)
+    {
+        var clamped = route.ClampForChannels((int)audioChannels);
+        lock (gate)
+        {
+            monitorRoute = clamped;
+            if (audioMonitor is not null)
+                audioMonitor.Route = clamped;
+        }
     }
 
     internal MovRecording AttachRecording(string path, CaptureAudioFormat? outputAudioFormat = null, RecordingEncoding? encoding = null)
@@ -53,7 +70,7 @@ internal sealed class CaptureCallback(PreviewFeed? preview, CapturePixelFormat p
                 throw new InvalidOperationException("The current preview input does not supply the selected PCM depth.");
         }
 
-        var writer = new MovRecording(path, mode, pixelFormat, output, encoding);
+        var writer = new MovRecording(path, mode, pixelFormat, output, encoding, audioChannels: audioChannels);
         try
         {
             lock (gate)
@@ -66,7 +83,7 @@ internal sealed class CaptureCallback(PreviewFeed? preview, CapturePixelFormat p
                 recordingStart = Elapsed;
                 if (stats.Signal != VideoSignal.Unknown)
                     recordingTimeline.ObserveSignal(TimeSpan.Zero, stats.Signal == VideoSignal.NoInput);
-                recordingClips = audioMonitor?.ClipCounts ?? default;
+                recordingChannelClips = audioMonitor?.CopyChannelClips() ?? new long[audioChannels];
                 recordingAudioTime = recordingVideoTime = null;
                 recordingRegressions = 0;
                 recording = writer;
@@ -111,10 +128,16 @@ internal sealed class CaptureCallback(PreviewFeed? preview, CapturePixelFormat p
         {
             recording = null;
             var baseline = recordingBaseline!;
-            var clips = audioMonitor?.ClipCounts ?? default;
+            var currentClips = audioMonitor?.CopyChannelClips() ?? new long[audioChannels];
+            var deltaClips = new long[currentClips.Length];
+            for (var i = 0; i < currentClips.Length; i++)
+                deltaClips[i] = Math.Max(0, currentClips[i] - (i < recordingChannelClips.Length ? recordingChannelClips[i] : 0));
+            var leftDelta = deltaClips.Length > 0 ? deltaClips[0] : 0;
+            var rightDelta = deltaClips.Length > 1 ? deltaClips[1] : 0;
             var elapsed = Elapsed - recordingStart;
             var result = new CaptureStats
             {
+                AudioChannels = audioChannels,
                 VideoFrames = stats.VideoFrames - baseline.VideoFrames,
                 NoInputFrames = stats.NoInputFrames - baseline.NoInputFrames,
                 UnreadableNoInputFrames = stats.UnreadableNoInputFrames - baseline.UnreadableNoInputFrames,
@@ -125,13 +148,17 @@ internal sealed class CaptureCallback(PreviewFeed? preview, CapturePixelFormat p
                 VideoSignalLossCount = recordingTimeline.SignalLossCount,
                 VideoSignalLossDuration = recordingTimeline.SignalLossDuration(elapsed),
                 VideoSignalLosses = recordingTimeline.SignalLosses(elapsed),
-                AudioLevels = new StereoLevels(0, 0, clips.Left - recordingClips.Left,
-                    clips.Right - recordingClips.Right, null, null),
+                AudioLevels = new StereoLevels(0, 0, leftDelta, rightDelta, null, null)
+                {
+                    ChannelCount = (int)audioChannels,
+                    ChannelClips = deltaClips
+                },
                 RecordingModeChanged = recordingModeChanged,
                 Error = stats.Error ?? recordingError
             };
             recordingBaseline = null;
             recordingTimeline = null;
+            recordingChannelClips = [];
             recordingModeChanged = false;
             recordingError = null;
             return result;
@@ -433,21 +460,28 @@ internal sealed class CaptureCallback(PreviewFeed? preview, CapturePixelFormat p
             }
             catch (Exception error) when (active.IsSoftware && IsRecordingIoError(error)) { recordingError = error.Message; }
         }
-        var sampleCount = checked(sampleFrames * (int)CaptureAudio.Channels);
+        var channels = (int)audioChannels;
+        var sampleCount = checked(sampleFrames * channels);
+        var route = audioMonitor?.Route ?? monitorRoute;
+        var layout = audioMonitor?.Layout ?? AudioChannelLayoutHelper.Detect(null, channels);
         if (inputAudioFormat == CaptureAudioFormat.Pcm32)
         {
             var span = new ReadOnlySpan<int>((void*)bytes, sampleCount);
-            ReadAudioSamples(span);
-            localAudioMonitor?.SubmitPcm32(span);
+            ReadAudioSamples32(span, channels);
+            var activeMask = audioMonitor?.ActivePairMask ?? 1;
+            localAudioMonitor?.SubmitInterleavedPcm32(span, channels, route, layout, activeMask);
         }
         else
         {
             var span = new ReadOnlySpan<short>((void*)bytes, sampleCount);
-            ReadAudioSamples(span);
-            localAudioMonitor?.SubmitPcm16(span);
+            ReadAudioSamples16(span, channels);
+            var activeMask = audioMonitor?.ActivePairMask ?? 1;
+            localAudioMonitor?.SubmitInterleavedPcm16(span, channels, route, layout, activeMask);
         }
 
-        stats.AudioPayload ??= $"{sampleFrames} stereo sample frames in first packet";
+        stats.AudioPayload ??= channels == 2
+            ? $"{sampleFrames} stereo sample frames in first packet"
+            : $"{sampleFrames} {channels}-channel sample frames in first packet";
     }
 
     private void ObserveRecordingTimestamp(ref long? previous, long time)
@@ -457,14 +491,25 @@ internal sealed class CaptureCallback(PreviewFeed? preview, CapturePixelFormat p
         previous = time;
     }
 
-    private void ReadAudioSamples<T>(ReadOnlySpan<T> samples) where T : unmanaged, System.Numerics.IBinaryInteger<T>
+    private void ReadAudioSamples32(ReadOnlySpan<int> samples, int channels)
     {
-        for (var i = 0; i < samples.Length; i += 2)
+        for (var i = 0; i <= samples.Length - channels; i += channels)
         {
-            var left = int.CreateChecked(samples[i]);
-            var right = int.CreateChecked(samples[i + 1]);
-            stats.AudioPeak = Math.Max(stats.AudioPeak, Math.Max(Math.Abs((long)left), Math.Abs((long)right)));
-            audioMonitor?.Add(left, right);
+            var frame = samples.Slice(i, channels);
+            for (var ch = 0; ch < channels; ch++)
+                stats.AudioPeak = Math.Max(stats.AudioPeak, Math.Abs((long)frame[ch]));
+            audioMonitor?.AddFrame(frame);
+        }
+    }
+
+    private void ReadAudioSamples16(ReadOnlySpan<short> samples, int channels)
+    {
+        for (var i = 0; i <= samples.Length - channels; i += channels)
+        {
+            var frame = samples.Slice(i, channels);
+            for (var ch = 0; ch < channels; ch++)
+                stats.AudioPeak = Math.Max(stats.AudioPeak, Math.Abs((long)frame[ch]));
+            audioMonitor?.AddFrame(frame);
         }
     }
 
@@ -477,9 +522,10 @@ public sealed class CaptureStats
     public VideoSignal Signal { get; internal set; }
     public bool CanStartRecording { get; internal set; }
     public CaptureAudioFormat? InputAudioFormat { get; internal set; }
+    public uint AudioChannels { get; internal set; } = CaptureAudio.Channels;
     public CaptureAudioInfo? AudioInfo => AudioPackets > 0 && InputAudioFormat is { } format
-        ? new("PCM", (int)format, (int)CaptureAudio.SampleRate, (int)CaptureAudio.Channels,
-            (long)CaptureAudio.BytesPerFrame(format) * CaptureAudio.SampleRate * 8)
+        ? new("PCM", (int)format, (int)CaptureAudio.SampleRate, (int)AudioChannels,
+            (long)CaptureAudio.BytesPerFrame(format, AudioChannels) * CaptureAudio.SampleRate * 8)
         : null;
     public bool RecordingModeChanged { get; internal set; }
     public string? RecordingError { get; internal set; }

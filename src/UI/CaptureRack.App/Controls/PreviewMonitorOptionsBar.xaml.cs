@@ -1,3 +1,4 @@
+using CaptureRack.DeckLink;
 using Microsoft.UI;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Automation;
@@ -13,11 +14,17 @@ public sealed partial class PreviewMonitorOptionsBar : UserControl
     private Func<string, string> localize = key => key;
     private bool audioEnabled;
     private double audioVolume = 0.8;
+    private int audioChannels = 2;
+    private AudioChannelLayout audioLayout = AudioChannelLayout.Stereo;
+    private AudioMonitorRoute audioRoute = AudioMonitorRoute.Default;
+    private int audioActivePairMask = 1;
+    private bool routeItemsDirty;
 
     public bool HasOpenDropdown =>
         PreviewDeinterlacePicker.IsDropDownOpen ||
         PreviewAspectPicker.IsDropDownOpen ||
-        PreviewMatrixPicker.IsDropDownOpen;
+        PreviewMatrixPicker.IsDropDownOpen ||
+        AudioMonitorRoutePicker.IsDropDownOpen;
 
     public event EventHandler<string>? DeinterlaceChanged;
     public event EventHandler<string>? AspectChanged;
@@ -26,6 +33,7 @@ public sealed partial class PreviewMonitorOptionsBar : UserControl
     public event EventHandler<bool>? Ntsc480GuideChanged;
     public event EventHandler? AudioMonitorToggled;
     public event EventHandler<double>? AudioMonitorVolumeChanged;
+    public event EventHandler<AudioMonitorRoute>? AudioMonitorRouteChanged;
 
     public PreviewMonitorOptionsBar() => InitializeComponent();
 
@@ -97,6 +105,8 @@ public sealed partial class PreviewMonitorOptionsBar : UserControl
         SafeAreaCheckBox.Content = localize("SafeAreaGuides");
         Ntsc480GuideCheckBox.Content = localize("Ntsc480Guide");
         AudioMonitorTitleText.Text = localize("AudioMonitorTitle");
+        AudioMonitorRouteLabel.Text = localize("AudioMonitorRouteLabel");
+        AutomationProperties.SetName(AudioMonitorRoutePicker, localize("AudioMonitorRouteLabel"));
         AudioMonitorNoticeText.Text = localize("AudioMonitorNotice");
         ToolTipService.SetToolTip(AudioMonitorVolumeButton, localize("AudioMonitorTitle"));
 
@@ -112,6 +122,116 @@ public sealed partial class PreviewMonitorOptionsBar : UserControl
         Matrix709Item.Content = localize("MatrixBt709");
 
         SyncState(deinterlaceTag, deinterlaceLocked, aspectTag, matrixTag, safeArea, ntsc480Guide, audioMonitorEnabled, audioMonitorVolume);
+        RebuildAudioRouteItems(force: true);
+    }
+
+    public void UpdateAudioMonitorRoute(int channels, AudioChannelLayout layout, AudioMonitorRoute route, int activePairMask)
+    {
+        var safeChannels = Math.Clamp(channels, 1, AudioMonitorRoute.MaxSupportedChannels);
+        var clamped = route.ClampForChannels(safeChannels);
+        var structureChanged = audioChannels != safeChannels || audioLayout != layout || audioActivePairMask != activePairMask;
+        var routeChanged = audioRoute != clamped;
+        audioChannels = safeChannels;
+        audioLayout = layout;
+        audioRoute = clamped;
+        audioActivePairMask = activePairMask;
+        if (structureChanged || (routeItemsDirty && !AudioMonitorRoutePicker.IsDropDownOpen))
+            RebuildAudioRouteItems(force: false);
+        else if (routeChanged)
+            SelectAudioRouteItem(clamped);
+        UpdateAudioRouteBadge();
+    }
+
+    private void RebuildAudioRouteItems(bool force)
+    {
+        if (audioChannels <= 2)
+        {
+            routeItemsDirty = false;
+            AudioMonitorRouteSection.Visibility = Visibility.Collapsed;
+            UpdateAudioRouteBadge();
+            return;
+        }
+
+        AudioMonitorRouteSection.Visibility = Visibility.Visible;
+        if (AudioMonitorRoutePicker.IsDropDownOpen && !force)
+        {
+            routeItemsDirty = true;
+            return;
+        }
+
+        routeItemsDirty = false;
+        syncing = true;
+        try
+        {
+            var pairCount = (audioChannels + 1) / 2;
+            var items = new List<ComboBoxItem>(pairCount + 1);
+            for (var p = 0; p < pairCount; p++)
+            {
+                var active = (audioActivePairMask & (1 << p)) != 0;
+                var label = $"Ch {AudioChannelLayoutHelper.PairShortLabel(p, audioChannels, audioLayout)}";
+                if (active)
+                    label += " ●";
+                items.Add(new ComboBoxItem { Content = label, Tag = AudioMonitorRoute.Pair(p) });
+            }
+            items.Add(new ComboBoxItem
+            {
+                Content = localize("AudioMonitorDownmix"),
+                Tag = AudioMonitorRoute.Downmix
+            });
+            AudioMonitorRoutePicker.ItemsSource = items;
+            SelectAudioRouteItem(audioRoute);
+        }
+        finally
+        {
+            syncing = false;
+        }
+        UpdateAudioRouteBadge();
+    }
+
+    private void SelectAudioRouteItem(AudioMonitorRoute route)
+    {
+        if (AudioMonitorRoutePicker.ItemsSource is not IEnumerable<ComboBoxItem> items)
+            return;
+        var wasSyncing = syncing;
+        syncing = true;
+        try
+        {
+            AudioMonitorRoutePicker.SelectedItem = items.FirstOrDefault(item => item.Tag is AudioMonitorRoute r && r == route)
+                ?? items.FirstOrDefault();
+        }
+        finally
+        {
+            syncing = wasSyncing;
+        }
+    }
+
+    private void UpdateAudioRouteBadge()
+    {
+        var showBadge = audioChannels > 2 && audioRoute != AudioMonitorRoute.Default;
+        AudioMonitorRouteBadge.Visibility = showBadge ? Visibility.Visible : Visibility.Collapsed;
+        if (showBadge)
+        {
+            AudioMonitorRouteBadgeText.Text = audioRoute.Mode == AudioMonitorMode.Downmix
+                ? localize("AudioMonitorDownmixShort")
+                : AudioChannelLayoutHelper.PairCompactLabel(audioRoute.PairIndex, audioChannels);
+        }
+    }
+
+    private void AudioMonitorRoutePicker_DropDownClosed(object? sender, object e)
+    {
+        if (routeItemsDirty)
+            RebuildAudioRouteItems(force: false);
+    }
+
+    private void AudioMonitorRoutePicker_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (syncing || AudioMonitorRoutePicker.SelectedItem is not ComboBoxItem { Tag: AudioMonitorRoute route })
+            return;
+        if (audioRoute == route)
+            return;
+        audioRoute = route;
+        UpdateAudioRouteBadge();
+        AudioMonitorRouteChanged?.Invoke(this, route);
     }
 
     public void RefreshTheme() => UpdateAudioMonitorVisuals();

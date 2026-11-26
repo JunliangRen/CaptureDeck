@@ -113,7 +113,9 @@ public sealed partial class DirectShowCapabilitiesView
             var videoTag = video.IsMpeg2Video ? "MPEG2" : DirectShowPreviewVideo.Encoding(video) ?? "Video";
             var audioTag = audio is null ? "" : $"_{audio.BitsPerSample}bit-PCM";
             var encoding = recordingEncoding();
-            var filename = encoding.IsSoftware ? $"{prefix}_DirectShow_{encoding.FileTag}" : $"{prefix}_DirectShow_{videoTag}{audioTag}";
+            var filename = encoding.IsSoftware
+                ? $"{prefix}_DirectShow_{encoding.FileTagForAudioChannels(audio?.Channels)}"
+                : $"{prefix}_DirectShow_{videoTag}{audioTag}";
             var extensions = encoding.IsSoftware ? [".mkv"] : DirectShowRecording.OutputExtensions(video);
             var stem = Path.Combine(folder, filename);
             var unique = stem;

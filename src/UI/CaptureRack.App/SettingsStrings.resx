@@ -1790,4 +1790,15 @@
   <data name="EncodingDeinterlace" xml:space="preserve"><value>Software deinterlacing</value></data>
   <data name="EncodingBadBitrate" xml:space="preserve"><value>Enter a bitrate from 1 to 1,000,000 kb/s.</value></data>
   <data name="EncodingSoftware" xml:space="preserve"><value>Software encoding</value></data>
+  <data name="AudioChannels" xml:space="preserve"><value>Audio channels</value></data>
+  <data name="AudioMeterModeAuto" xml:space="preserve"><value>Auto (active pairs)</value></data>
+  <data name="AudioMeterModeAll" xml:space="preserve"><value>Show all channels</value></data>
+  <data name="AudioMeterModeMonitored" xml:space="preserve"><value>Monitored pair only</value></data>
+  <data name="AudioMeterModeTooltip" xml:space="preserve"><value>Choose how multi-channel audio meters are shown</value></data>
+  <data name="AudioMonitorRouteLabel" xml:space="preserve"><value>Monitor channel</value></data>
+  <data name="AudioMonitorDownmix" xml:space="preserve"><value>Stereo downmix</value></data>
+  <data name="AudioMonitorDownmixShort" xml:space="preserve"><value>MIX</value></data>
+  <data name="AudioMonitorPairTooltip" xml:space="preserve"><value>Monitor Ch {0} (also drives spectrum &amp; phase)</value></data>
+  <data name="AudioChannelNumber" xml:space="preserve"><value>Ch {0} ({1})</value></data>
+  <data name="TestSignalMultiChannel" xml:space="preserve"><value>8-ch active pairs (demo)</value></data>
 </root>

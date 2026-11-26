@@ -34,6 +34,7 @@ public sealed partial class FireWireCaptureView : UserControl, ILiveMediaSource
     private bool switchingProgram;
     private bool hasFieldOrder;
     private StereoMonitor? audio;
+    private AudioMonitorRoute audioMonitorRoute = AudioMonitorRoute.Default;
     private readonly object audioGate = new();
 
     public bool IsCapturing => previewStop is not null;
@@ -279,7 +280,11 @@ public sealed partial class FireWireCaptureView : UserControl, ILiveMediaSource
         hasAudio = false;
         switchingProgram = false;
         hasFieldOrder = false;
-        audio = new StereoMonitor(CaptureAudioFormat.Pcm16, FireWirePreviewDecoder.AudioRate);
+        lock (audioGate)
+        {
+            audioMonitorRoute = AudioMonitorRoute.Default;
+            audio = new StereoMonitor(CaptureAudioFormat.Pcm16, FireWirePreviewDecoder.AudioRate);
+        }
         HideNotice();
         Volatile.Write(ref activePreview, feed);
         var previewDecoder = ffmpeg is null ? null : new FireWirePreviewRecovery(device.IsDv);
@@ -361,15 +366,32 @@ public sealed partial class FireWireCaptureView : UserControl, ILiveMediaSource
                     info.TopFieldFirst, fps, info.Width, info.Height, info.DisplayAspectRatio, format,
                     info.TopFieldFirst is null ? PreviewScanMode.Progressive : null);
                 Volatile.Write(ref hasFieldOrder, true);
-            }, pcm =>
+            }, (pcm, channels, layoutName) =>
             {
                 if (Volatile.Read(ref switchingProgram))
                     return;
                 var samples = MemoryMarshal.Cast<byte, short>(pcm.Span);
+                var safeChannels = Math.Clamp(channels, 1, AudioMonitorRoute.MaxSupportedChannels);
+                var layout = AudioChannelLayoutHelper.Detect(layoutName, safeChannels);
+                AudioMonitorRoute activeRoute;
+                int activeMask;
                 lock (audioGate)
-                    for (var i = 0; i < samples.Length; i += 2)
-                        audio!.Add(samples[i], samples[i + 1]);
-                playback.SubmitPcm16(samples);
+                {
+                    if (audio is null || audio.Channels != safeChannels ||
+                        (layout != AudioChannelLayout.Unknown && audio.Layout != layout))
+                    {
+                        audio = new StereoMonitor(CaptureAudioFormat.Pcm16, FireWirePreviewDecoder.AudioRate,
+                            channels: safeChannels, layout: layout)
+                        {
+                            Route = audioMonitorRoute
+                        };
+                    }
+                    activeRoute = audio.Route;
+                    for (var i = 0; i <= samples.Length - safeChannels; i += safeChannels)
+                        audio.AddFrame(samples.Slice(i, safeChannels));
+                    activeMask = audio.ActivePairMask;
+                }
+                playback.SubmitInterleavedPcm16(samples, safeChannels, activeRoute, layout, activeMask);
                 Volatile.Write(ref hasAudio, true);
             }, () =>
             {
@@ -377,7 +399,10 @@ public sealed partial class FireWireCaptureView : UserControl, ILiveMediaSource
                 previous = double.NaN;
                 fps = 0;
                 lock (audioGate)
+                {
+                    audioMonitorRoute = AudioMonitorRoute.Default;
                     audio = new StereoMonitor(CaptureAudioFormat.Pcm16, FireWirePreviewDecoder.AudioRate);
+                }
                 Volatile.Write(ref hasAudio, false);
                 Volatile.Write(ref hasFieldOrder, false);
                 feed = new PreviewFeed();
@@ -408,6 +433,16 @@ public sealed partial class FireWireCaptureView : UserControl, ILiveMediaSource
         {
             current.Enabled = enabled;
             current.Volume = volume;
+        }
+    }
+
+    public void SetAudioMonitorRoute(AudioMonitorRoute route)
+    {
+        lock (audioGate)
+        {
+            audioMonitorRoute = route;
+            if (audio is not null)
+                audio.Route = route;
         }
     }
 

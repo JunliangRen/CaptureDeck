@@ -13,6 +13,7 @@ public sealed partial class MainWindow
     private bool showNtsc480Guide;
     private bool audioMonitorEnabled;
     private double audioMonitorVolume = 0.8;
+    private AudioMonitorRoute audioMonitorRoute = AudioMonitorRoute.Default;
     private LocalAudioMonitor? activeAudioMonitor;
     private int lastSignalWidth;
     private int lastSignalHeight;
@@ -66,6 +67,8 @@ public sealed partial class MainWindow
                 previewTimer.Interval = interval;
         }
         LiveMediaSource?.SetAudioMonitor(audioMonitorEnabled, audioMonitorVolume);
+        LiveMediaSource?.SetAudioMonitorRoute(audioMonitorRoute);
+        previewRecorder?.SetAudioMonitorRoute(audioMonitorRoute);
         if (activeAudioMonitor is { } monitor)
         {
             monitor.Enabled = audioMonitorEnabled;
@@ -131,6 +134,32 @@ public sealed partial class MainWindow
         SettingsChanged();
     }
 
+    private void ResetAudioMonitorRoute()
+    {
+        audioMonitorRoute = AudioMonitorRoute.Default;
+        previewRecorder?.SetAudioMonitorRoute(AudioMonitorRoute.Default);
+        LiveMediaSource?.SetAudioMonitorRoute(AudioMonitorRoute.Default);
+        StereoMeter.SetMonitorRoute(AudioMonitorRoute.Default);
+        monitorOptionsBar.UpdateAudioMonitorRoute(2, AudioChannelLayout.Stereo, AudioMonitorRoute.Default, 1);
+    }
+
+    private void SetAudioMonitorRoute(AudioMonitorRoute route)
+    {
+        var channels = visibleAudio?.ChannelCount ?? 2;
+        var layout = visibleAudio?.ChannelLayout ?? AudioChannelLayout.Stereo;
+        var clamped = route.ClampForChannels(channels);
+        if (audioMonitorRoute == clamped)
+            return;
+
+        audioMonitorRoute = clamped;
+        previewRecorder?.SetAudioMonitorRoute(clamped);
+        LiveMediaSource?.SetAudioMonitorRoute(clamped);
+        StereoMeter.SetMonitorRoute(clamped);
+        monitorOptionsBar.UpdateAudioMonitorRoute(channels, layout, clamped, StereoMeter.ActivePairMask);
+        if (GetDisplayedSecondaryInstrument() == SplitSecondaryInstrument.Spectrum)
+            UpdateSecondaryInstrumentHeader(SplitSecondaryInstrument.Spectrum);
+    }
+
     private void RecomputePreviewAspectRatio() =>
         UpdatePreviewAspectRatio(lastSignalWidth, lastSignalHeight);
 
@@ -149,12 +178,15 @@ public sealed partial class MainWindow
     {
         var show = LiveMediaSource is null && showNtsc480Guide && PreviewPlaceholder.Visibility == Visibility.Collapsed;
         Ntsc480GuideOverlay.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
-        if (!show || PreviewSurface.Height <= 0)
+        if (!show)
             return;
 
-        var h = PreviewSurface.Height;
-        Ntsc480TopShade.Height = Math.Max(2, h * 4.0 / 486.0);
-        Ntsc480BottomShade.Height = Math.Max(1, h * 2.0 / 486.0);
+        var (top, bottom) = FullscreenRenderPolicy.ComputeNtsc480GuideHeights(PreviewSurface.Height);
+        if (top <= 0 || bottom <= 0)
+            return;
+
+        Ntsc480TopShade.Height = top;
+        Ntsc480BottomShade.Height = bottom;
     }
 
     private void ApplySignalAndMonitorLanguage()

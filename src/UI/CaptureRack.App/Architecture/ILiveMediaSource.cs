@@ -36,5 +36,6 @@ internal interface ILiveMediaSource
     Task ToggleRecordingAsync();
     Task StopForCloseAsync();
     void SetAudioMonitor(bool enabled, double volume);
+    void SetAudioMonitorRoute(AudioMonitorRoute route);
     StereoLevels? ReadAudioLevels();
 }

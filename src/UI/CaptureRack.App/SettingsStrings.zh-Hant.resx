@@ -1790,4 +1790,15 @@
   <data name="EncodingDeinterlace" xml:space="preserve"><value>軟體去交錯</value></data>
   <data name="EncodingBadBitrate" xml:space="preserve"><value>請輸入 1 至 1,000,000 kb/s 的位元率。</value></data>
   <data name="EncodingSoftware" xml:space="preserve"><value>軟體壓製</value></data>
+  <data name="AudioChannels" xml:space="preserve"><value>音訊聲道</value></data>
+  <data name="AudioMeterModeAuto" xml:space="preserve"><value>自動（僅活躍聲道對）</value></data>
+  <data name="AudioMeterModeAll" xml:space="preserve"><value>顯示全部聲道</value></data>
+  <data name="AudioMeterModeMonitored" xml:space="preserve"><value>僅顯示監聽聲道對</value></data>
+  <data name="AudioMeterModeTooltip" xml:space="preserve"><value>選擇多聲道音訊電平表的顯示模式</value></data>
+  <data name="AudioMonitorRouteLabel" xml:space="preserve"><value>監聽聲道</value></data>
+  <data name="AudioMonitorDownmix" xml:space="preserve"><value>立體聲下混</value></data>
+  <data name="AudioMonitorDownmixShort" xml:space="preserve"><value>混音</value></data>
+  <data name="AudioMonitorPairTooltip" xml:space="preserve"><value>監聽 Ch {0}（同步切換頻譜與相位）</value></data>
+  <data name="AudioChannelNumber" xml:space="preserve"><value>聲道 {0} ({1})</value></data>
+  <data name="TestSignalMultiChannel" xml:space="preserve"><value>8 聲道活躍對示範</value></data>
 </root>

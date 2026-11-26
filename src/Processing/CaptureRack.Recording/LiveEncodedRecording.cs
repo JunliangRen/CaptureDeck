@@ -15,9 +15,14 @@ public sealed record RecordingEncoding(RecordingOutput Output = RecordingOutput.
 {
     public bool IsSoftware => Output != RecordingOutput.Native;
 
-    public string FileTag => Output switch
+    public bool UsesFlacAudio(int? audioChannels = null) =>
+        Output == RecordingOutput.Ffv1 && (audioChannels ?? 2) <= 8;
+
+    public string FileTag => FileTagForAudioChannels();
+
+    public string FileTagForAudioChannels(int? audioChannels = null) => Output switch
     {
-        RecordingOutput.Ffv1 => "Encoded_FFV1_FLAC8",
+        RecordingOutput.Ffv1 => UsesFlacAudio(audioChannels) ? "Encoded_FFV1_FLAC8" : "Encoded_FFV1_PCM",
         RecordingOutput.H264 => "Encoded_H264",
         RecordingOutput.H265 => "Encoded_H265",
         RecordingOutput.Av1 => "Encoded_AV1",
@@ -25,7 +30,7 @@ public sealed record RecordingEncoding(RecordingOutput Output = RecordingOutput.
         _ => "Native"
     };
 
-    internal string[] Arguments(uint? fieldOrder, int? audioBits)
+    internal string[] Arguments(uint? fieldOrder, int? audioBits, int? audioChannels = null)
     {
         if (VideoKbps is <= 0 or > 1000000)
             throw new ArgumentException("Video bitrate must be between 1 and 1,000,000 kb/s.");
@@ -94,10 +99,12 @@ public sealed record RecordingEncoding(RecordingOutput Output = RecordingOutput.
         }
         if (audioBits is { } bits)
         {
-            args.AddRange(Output == RecordingOutput.Ffv1
+            // FLAC supports up to 8 channels; preserve >8-channel PCM losslessly via stream copy in Matroska.
+            var useFlac = UsesFlacAudio(audioChannels);
+            args.AddRange(useFlac
                 ? ["-c:a", "flac", "-compression_level:a", "8", "-bits_per_raw_sample:a", Math.Max(16, bits).ToString(CultureInfo.InvariantCulture)]
                 : ["-c:a", "copy"]);
-            if (Output == RecordingOutput.Ffv1 && bits == 32)
+            if (useFlac && bits == 32)
                 args.AddRange(["-strict:a", "experimental"]);
         }
         return [.. args];
@@ -167,7 +174,7 @@ internal sealed class LiveEncodedRecording : IDisposable
             throw new IOException($"The recording destination already exists: {path}.");
         var executable = ffmpeg ?? QcReports.FindTools().FfmpegPath ??
             throw new InvalidOperationException("Software encoding requires FFmpeg.");
-        var codecArgs = options.Arguments(video.FieldOrder, audio?.Bits);
+        var codecArgs = options.Arguments(video.FieldOrder, audio?.Bits, audio?.Channels);
         // The MJPEG decoder exposes full-range yuvj formats. Convert the layout without rescaling the signal.
         if (options.Output == RecordingOutput.Ffv1 && video.BitmapHeader.AsSpan().Length >= 20 &&
             video.BitmapHeader.AsSpan(16, 4).SequenceEqual("MJPG"u8))
@@ -401,8 +408,8 @@ internal sealed class LiveEncodedRecording : IDisposable
             options.VideoKbps,
             options.Level,
             deinterlaced = Deinterlaced,
-            flacLevel = audio is not null && options.Output == RecordingOutput.Ffv1 ? 8 : (int?)null,
-            outputAudioBits = audio is null ? (int?)null : options.Output == RecordingOutput.Ffv1 ? Math.Max(16, audio.Bits) : audio.Bits,
+            flacLevel = audio is not null && options.UsesFlacAudio(audio.Channels) ? 8 : (int?)null,
+            outputAudioBits = audio is null ? (int?)null : options.UsesFlacAudio(audio.Channels) ? Math.Max(16, audio.Bits) : audio.Bits,
             queuePeakPackets = queue.PeakPackets,
             queuePeakBytes = queue.PeakBytes,
             queueRejectedPackets = queue.RejectedPackets,

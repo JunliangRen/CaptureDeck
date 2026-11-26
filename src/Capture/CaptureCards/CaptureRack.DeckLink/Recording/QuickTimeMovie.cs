@@ -14,6 +14,7 @@ internal sealed class QuickTimeMovie
     private readonly CapturePixelFormat format;
     private readonly int videoSampleSize;
     private readonly CaptureAudioFormat audioFormat;
+    private readonly uint audioChannels;
     private readonly int audioFrameBytes;
     private readonly long mediaDataOffset;
     private readonly List<long> videoOffsets = [];
@@ -38,7 +39,7 @@ internal sealed class QuickTimeMovie
         audioTiming.MaximumOffsetSamples, firstVideoCorrection, audioTiming.FirstIssue);
 
     public QuickTimeMovie(Stream stream, VideoMode mode, CapturePixelFormat format, int videoSampleSize,
-        CaptureAudioFormat audioFormat)
+        CaptureAudioFormat audioFormat, uint audioChannels = CaptureAudio.Channels)
     {
         this.stream = stream;
         if (mode.FrameDuration is <= 0 or > uint.MaxValue)
@@ -48,7 +49,8 @@ internal sealed class QuickTimeMovie
         this.format = format;
         this.videoSampleSize = videoSampleSize;
         this.audioFormat = audioFormat;
-        audioFrameBytes = CaptureAudio.BytesPerFrame(audioFormat);
+        this.audioChannels = audioChannels;
+        audioFrameBytes = CaptureAudio.BytesPerFrame(audioFormat, audioChannels);
         Atom("ftyp", () =>
         {
             Tag("qt  ");
@@ -352,7 +354,7 @@ internal sealed class QuickTimeMovie
 
     private void WriteAudioEntry()
     {
-        var extended = audioFormat == CaptureAudioFormat.Pcm32;
+        var extended = audioFormat == CaptureAudioFormat.Pcm32 || audioChannels > 2;
         Atom(extended ? "lpcm" : "sowt", () =>
         {
             Zero(6);
@@ -370,7 +372,7 @@ internal sealed class QuickTimeMovie
                 U32(0x00010000);
                 U32(72);
                 U64(BitConverter.DoubleToUInt64Bits(AudioRate));
-                U32(CaptureAudio.Channels);
+                U32(audioChannels);
                 U32(0x7F000000);
                 U32((uint)audioFormat);
                 U32(0xC); // Signed integer | packed.
@@ -379,7 +381,7 @@ internal sealed class QuickTimeMovie
                 return;
             }
 
-            U16((ushort)CaptureAudio.Channels);
+            U16((ushort)audioChannels);
             U16(16);
             U16(0);
             U16(0);

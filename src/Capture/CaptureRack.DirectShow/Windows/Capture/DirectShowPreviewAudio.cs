@@ -32,6 +32,21 @@ public static class DirectShowPreviewAudio
         return (left / 2147483648d, right / 2147483648d);
     }
 
+    public static void ProcessInterleaved(DirectShowFormat format, ReadOnlySpan<byte> data,
+        Action<ReadOnlySpan<int>> onFrame)
+    {
+        int channels = Math.Clamp(format.Channels!.Value, 1, 16);
+        int bytesPerSample = format.BitsPerSample!.Value / 8;
+        int block = format.BlockAlign!.Value;
+        Span<int> frame = stackalloc int[channels];
+        for (int offset = 0; offset <= data.Length - block; offset += block)
+        {
+            for (int ch = 0; ch < channels; ch++)
+                frame[ch] = ReadSample(data[(offset + ch * bytesPerSample)..], bytesPerSample);
+            onFrame(frame);
+        }
+    }
+
     private static int ReadSample(ReadOnlySpan<byte> data, int count) => count switch
     {
         1 => (data[0] - 128) << 24,

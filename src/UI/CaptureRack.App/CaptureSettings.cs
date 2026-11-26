@@ -61,6 +61,7 @@ internal sealed record DeckLinkSettings
     public uint? ModeId { get; init; }
     public uint? VideoFormat { get; init; }
     public uint? AudioFormat { get; init; }
+    public uint AudioChannels { get; init; } = CaptureAudio.Channels;
     public string AnalogNtscIre { get; init; } = "Driver";
     public string AnalogComponentLevel { get; init; } = "Driver";
     public string AnalogAudioLevel { get; init; } = "Driver";

@@ -14,6 +14,7 @@ public sealed partial class MainWindow
 {
     private readonly ObservableCollection<TelemetryChipItem> telemetryItems = [];
     private string statusTitle = "Idle";
+    private string signalDotBrushKey = "StudioTextMutedBrush";
     private Func<string>? statusMessage;
     private string? sdkVersion;
     private CaptureStats? displayedStats;
@@ -58,7 +59,6 @@ public sealed partial class MainWindow
         PreviewPlaceholderHint.Text = LiveMediaSource is null ? L("PreviewBeforeRecording") : "";
         PlaceholderStartLabel.Text = L("StartPreview");
         VectorAxes.Text = L("VectorAxes");
-        FullscreenExitLabel.Text = L("ExitPreviewFullScreen");
 
         RenderCaptureActions();
         RelocalizeQcHistory();
@@ -75,6 +75,7 @@ public sealed partial class MainWindow
         RenderQcSummaryBadge();
         RenderCounts(HasLiveCapture ? displayedStats : null);
         RefreshLocalizedMonitoring();
+        SyncFullscreenPreviewWindow();
     }
 
     private void RelocalizeQcHistory()
@@ -151,15 +152,12 @@ public sealed partial class MainWindow
                 : L(statusTitle is "StartingRecording" or "FinalizingMov" or "StopRecording" ? statusTitle : "QcFinishing");
         }
 
-        FullscreenRecordLabel.Text = RecordActionLabel.Text;
-        FullscreenRecordIcon.Glyph = recordingActive ? "\uE71A" : "\uE7C8";
-        FullscreenRecordButton.Style = RecordButton.Style;
-
         ToolTipService.SetToolTip(CancelQcButton, L("CancelQc"));
         AutomationProperties.SetName(CancelQcButton, L("CancelQc"));
 
         AutomationProperties.SetName(StartButton, PreviewActionLabel.Text);
         AutomationProperties.SetName(RecordButton, RecordActionLabel.Text);
+        SyncFullscreenPreviewWindow();
     }
 
     private void RenderCompactStatus()
@@ -182,25 +180,25 @@ public sealed partial class MainWindow
         if (IsCaptureInputActive)
         {
             var isLocked = liveSignal == VideoSignal.Present;
-            var signalBrush = isLocked
-                ? ThemeBrush("StudioSignalLockBrush")
+            signalDotBrushKey = isLocked
+                ? "StudioSignalLockBrush"
                 : liveSignal == VideoSignal.NoInput
-                    ? ThemeBrush("StudioCautionBrush")
-                    : ThemeBrush("StudioInfoBrush");
-            StageSignalDot.Fill = signalBrush;
-            FullscreenSignalDot.Fill = signalBrush;
-            StageSignalText.Text = FullscreenStatusText.Text = L(isLocked ? "VideoLocked" :
+                    ? "StudioCautionBrush"
+                    : "StudioInfoBrush";
+            StageSignalDot.Fill = ThemeBrush(signalDotBrushKey);
+            StageSignalText.Text = L(isLocked ? "VideoLocked" :
                 liveSignal == VideoSignal.NoInput ? "VideoUnlocked" : "WaitingFrames");
             StageSignalBadge.Background = ThemeBrush(isLocked ? "StudioSignalLockSoftBrush" :
                 liveSignal == VideoSignal.NoInput ? "StudioCautionSoftBrush" : "StudioNeutralPillBrush");
         }
         else
         {
-            StageSignalDot.Fill = ThemeBrush("StudioTextMutedBrush");
-            FullscreenSignalDot.Fill = ThemeBrush("StudioTextMutedBrush");
-            StageSignalText.Text = FullscreenStatusText.Text = L("Idle");
+            signalDotBrushKey = "StudioTextMutedBrush";
+            StageSignalDot.Fill = ThemeBrush(signalDotBrushKey);
+            StageSignalText.Text = L("Idle");
             StageSignalBadge.Background = ThemeBrush("StudioNeutralPillBrush");
         }
+        SyncFullscreenPreviewWindow();
     }
 
     private void RenderPreviewCaption()

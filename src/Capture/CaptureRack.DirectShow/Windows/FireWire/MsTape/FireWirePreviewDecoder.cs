@@ -45,7 +45,7 @@ public sealed class FireWirePreviewDecoder(bool dv = false)
         @",\s*(?<rate>\d+(?:\.\d+)?) (?<unit>[kM]?)b/s\b",
         RegexOptions.CultureInvariant | RegexOptions.Compiled);
     private static readonly Regex DecodedAudioLog = new(
-        @"channels:(?<channels>\d+)\s+chlayout:.*?\s+rate:(?<rate>\d+)\b",
+        @"channels:(?<channels>\d+)\s+chlayout:(?<layout>.+?)\s+rate:(?<rate>\d+)\b",
         RegexOptions.CultureInvariant | RegexOptions.Compiled);
     private static readonly Regex PcmDepth = new(@"^pcm_[suf](\d+)", RegexOptions.CultureInvariant | RegexOptions.Compiled);
     private static readonly Regex FrameLog = new(
@@ -58,12 +58,14 @@ public sealed class FireWirePreviewDecoder(bool dv = false)
     private string? pipelineError;
     private long decodedFrames;
     private CaptureAudioInfo? audioInfo;
+    private string? audioChannelLayout;
     private int videoPid = -1, audioPid = -1;
     public int? VideoPid => Volatile.Read(ref videoPid) is var pid && pid >= 0 ? pid : null;
     public int? AudioPid => Volatile.Read(ref audioPid) is var pid && pid >= 0 ? pid : null;
 
     public long DecodedFrames => Interlocked.Read(ref decodedFrames);
     public CaptureAudioInfo? AudioInfo => Volatile.Read(ref audioInfo);
+    public string? AudioChannelLayout => Volatile.Read(ref audioChannelLayout);
 
     // Never wait for FFmpeg in the DirectShow callback or let preview backpressure reach the recording.
     public bool Offer(CaptureSample sample)
@@ -112,19 +114,29 @@ public sealed class FireWirePreviewDecoder(bool dv = false)
             queue.Writer.TryComplete(error);
     }
 
+    public Task RunAsync(string ffmpeg, Action<ReadOnlyMemory<byte>, FireWireFrameInfo> video,
+        Action<ReadOnlyMemory<byte>> audio, CancellationToken stop) =>
+        RunAsync(ffmpeg, video, (pcm, _, _) => audio(pcm), stop);
+
     public async Task RunAsync(string ffmpeg, Action<ReadOnlyMemory<byte>, FireWireFrameInfo> video,
-        Action<ReadOnlyMemory<byte>> audio, CancellationToken stop)
+        Action<ReadOnlyMemory<byte>, int, string?> audio, CancellationToken stop)
     {
         var start = new ProcessStartInfo(ffmpeg)
         {
             UseShellExecute = false, CreateNoWindow = true, RedirectStandardInput = true,
             RedirectStandardOutput = true, RedirectStandardError = true
         };
-        string[] arguments = ["-hide_banner", "-loglevel", "info", "-nostats", "-nostdin", "-f", dv ? "dv" : "mpegts", "-probesize", "1048576",
-            "-analyzeduration", "1000000", "-i", "pipe:0", "-map", "0:v:0", "-map", "0:a:0?",
+        List<string> arguments = ["-hide_banner", "-loglevel", "info", "-nostats", "-nostdin", "-f", dv ? "dv" : "mpegts", "-probesize", "1048576",
+            "-analyzeduration", "1000000", "-i", "pipe:0", "-map", "0:v:0", "-map", "0:a:0?"];
+        if (dv)
+        {
+            arguments.Add("-map");
+            arguments.Add("0:a:1?");
+        }
+        arguments.AddRange([
             "-vf", VideoFilter, "-fps_mode", "passthrough", "-c:v", "rawvideo", "-pix_fmt", "bgra", "-threads:v", "1",
-            "-af", "ashowinfo", "-c:a", "pcm_s16le", "-ac", "2", "-ar", "48000", "-flush_packets", "1",
-            "-max_interleave_delta", "100000", "-f", "avi", "pipe:1"];
+            "-af", "ashowinfo", "-c:a", "pcm_s16le", "-ar", "48000", "-flush_packets", "1",
+            "-max_interleave_delta", "100000", "-f", "avi", "pipe:1"]);
         foreach (var argument in arguments)
             start.ArgumentList.Add(argument);
 
@@ -196,7 +208,7 @@ public sealed class FireWirePreviewDecoder(bool dv = false)
 
     // FFmpeg's streaming AVI muxer puts all raw video and optional PCM in one interleaved pipe.
     private async Task ReadFrames(Stream source, ChannelReader<FireWireFrameInfo> fields,
-        Action<ReadOnlyMemory<byte>, FireWireFrameInfo> video, Action<ReadOnlyMemory<byte>> audio, CancellationToken stop)
+        Action<ReadOnlyMemory<byte>, FireWireFrameInfo> video, Action<ReadOnlyMemory<byte>, int, string?> audio, CancellationToken stop)
     {
         var header = new byte[12];
         if (!await ReadHeader(source, header, 12, stop).ConfigureAwait(false))
@@ -204,22 +216,54 @@ public sealed class FireWirePreviewDecoder(bool dv = false)
         if (!header.AsSpan(0, 4).SequenceEqual("RIFF"u8) || !header.AsSpan(8, 4).SequenceEqual("AVI "u8))
             throw new IOException("Unexpected FFmpeg preview stream format.");
 
-        var scratch = new byte[8192];
+        var scratch = new byte[16384];
         var inMovie = false;
+        var currentStreamIndex = -1;
+        var currentStreamIsAudio = false;
+        var audioStreams = new Dictionary<int, int>(); // AVI stream index -> channels
+        MultiStreamAudioInterleaver? multiStreamInterleaver = null;
         while (await ReadHeader(source, header, 8, stop).ConfigureAwait(false))
         {
             var size = BinaryPrimitives.ReadUInt32LittleEndian(header.AsSpan(4));
             if (header.AsSpan(0, 4).SequenceEqual("LIST"u8))
             {
                 await source.ReadExactlyAsync(header.AsMemory(8, 4), stop).ConfigureAwait(false);
-                if (header.AsSpan(8, 4).SequenceEqual("movi"u8))
+                var listType = header.AsSpan(8, 4);
+                if (listType.SequenceEqual("movi"u8))
                 {
                     inMovie = true;
+                    if (audioStreams.Count > 1)
+                        multiStreamInterleaver = new MultiStreamAudioInterleaver(audioStreams);
+                    continue;
+                }
+                if (listType.SequenceEqual("hdrl"u8) || listType.SequenceEqual("strl"u8))
+                {
+                    if (listType.SequenceEqual("strl"u8))
+                    {
+                        currentStreamIndex++;
+                        currentStreamIsAudio = false;
+                    }
                     continue;
                 }
                 if (size < 4)
                     throw new IOException("Invalid AVI list in the preview stream.");
                 size -= 4;
+            }
+            else if (!inMovie && header.AsSpan(0, 4).SequenceEqual("strh"u8) && size >= 4 && size <= scratch.Length)
+            {
+                var padded = size + (size & 1);
+                await source.ReadExactlyAsync(scratch.AsMemory(0, (int)padded), stop).ConfigureAwait(false);
+                currentStreamIsAudio = scratch.AsSpan(0, 4).SequenceEqual("auds"u8);
+                continue;
+            }
+            else if (!inMovie && currentStreamIsAudio && header.AsSpan(0, 4).SequenceEqual("strf"u8) && size >= 16 && size <= scratch.Length)
+            {
+                var padded = size + (size & 1);
+                await source.ReadExactlyAsync(scratch.AsMemory(0, (int)padded), stop).ConfigureAwait(false);
+                var ch = BinaryPrimitives.ReadUInt16LittleEndian(scratch.AsSpan(2, 2));
+                if (ch is >= 1 and <= 16 && currentStreamIndex >= 0)
+                    audioStreams[currentStreamIndex] = ch;
+                continue;
             }
             else if (inMovie && (header.AsSpan(0, 4).SequenceEqual("00dc"u8) ||
                 header.AsSpan(0, 4).SequenceEqual("00db"u8)))
@@ -246,17 +290,31 @@ public sealed class FireWirePreviewDecoder(bool dv = false)
                 }
                 continue;
             }
-            else if (inMovie && header.AsSpan(0, 4).SequenceEqual("01wb"u8))
+            else if (inMovie && TryParseAudioChunkStream(header.AsSpan(0, 4), out var audioStreamIdx))
             {
-                if (size % 4 != 0)
+                var streamChannels = audioStreams.TryGetValue(audioStreamIdx, out var ch) ? ch : 2;
+                var frameBytes = streamChannels * 2;
+                if (size % frameBytes != 0)
                     throw new IOException("Unaligned PCM in the FFmpeg preview stream.");
-                while (size > 0)
+                var maxRead = (scratch.Length / frameBytes) * frameBytes;
+                var remaining = size;
+                while (remaining > 0)
                 {
-                    var length = (int)Math.Min(size, scratch.Length);
+                    var length = (int)Math.Min(remaining, maxRead);
                     await source.ReadExactlyAsync(scratch.AsMemory(0, length), stop).ConfigureAwait(false);
-                    audio(scratch.AsMemory(0, length));
-                    size -= (uint)length;
+                    if (multiStreamInterleaver is not null)
+                    {
+                        multiStreamInterleaver.Push(audioStreamIdx, scratch.AsSpan(0, length),
+                            (merged, totalChannels) => audio(merged, totalChannels, null));
+                    }
+                    else
+                    {
+                        audio(scratch.AsMemory(0, length), streamChannels, AudioChannelLayout);
+                    }
+                    remaining -= (uint)length;
                 }
+                if ((size & 1) != 0)
+                    await source.ReadExactlyAsync(scratch.AsMemory(0, 1), stop).ConfigureAwait(false);
                 continue;
             }
 
@@ -269,6 +327,123 @@ public sealed class FireWirePreviewDecoder(bool dv = false)
                 await source.ReadExactlyAsync(scratch.AsMemory(0, length), stop).ConfigureAwait(false);
                 size -= (uint)length;
             }
+        }
+    }
+
+    private static bool TryParseAudioChunkStream(ReadOnlySpan<byte> tag, out int streamIndex)
+    {
+        streamIndex = -1;
+        if (tag.Length != 4 || tag[2] != (byte)'w' || tag[3] != (byte)'b')
+            return false;
+        var hi = HexNibble(tag[0]);
+        var lo = HexNibble(tag[1]);
+        if (hi < 0 || lo < 0)
+            return false;
+        streamIndex = (hi << 4) | lo;
+        return true;
+    }
+
+    private static int HexNibble(byte ch) => ch switch
+    {
+        >= (byte)'0' and <= (byte)'9' => ch - '0',
+        >= (byte)'a' and <= (byte)'f' => ch - 'a' + 10,
+        >= (byte)'A' and <= (byte)'F' => ch - 'A' + 10,
+        _ => -1
+    };
+
+    private sealed class MultiStreamAudioInterleaver
+    {
+        private const int MaxBufferedFrames = 16384;
+        private const int SilentStreamFlushFrames = 4096;
+        private readonly int[] streamOrder;
+        private readonly int[] streamChannels;
+        private readonly Queue<short>[] queues;
+        private readonly int totalChannels;
+        private byte[] outputBuffer = [];
+
+        public MultiStreamAudioInterleaver(Dictionary<int, int> streams)
+        {
+            var ordered = streams.OrderBy(pair => pair.Key).ToArray();
+            var list = new List<(int Id, int Channels)>();
+            var sum = 0;
+            foreach (var pair in ordered)
+            {
+                if (sum + pair.Value > 16)
+                    break;
+                list.Add((pair.Key, pair.Value));
+                sum += pair.Value;
+            }
+            streamOrder = list.Select(x => x.Id).ToArray();
+            streamChannels = list.Select(x => x.Channels).ToArray();
+            queues = Enumerable.Range(0, list.Count).Select(_ => new Queue<short>()).ToArray();
+            totalChannels = Math.Max(1, sum);
+        }
+
+        public void Push(int streamId, ReadOnlySpan<byte> pcmBytes, Action<ReadOnlyMemory<byte>, int> emit)
+        {
+            var slot = Array.IndexOf(streamOrder, streamId);
+            if (slot < 0)
+                return;
+
+            var samples = System.Runtime.InteropServices.MemoryMarshal.Cast<byte, short>(pcmBytes);
+            var q = queues[slot];
+            var maxSamples = MaxBufferedFrames * streamChannels[slot];
+            for (var i = 0; i < samples.Length; i++)
+                q.Enqueue(samples[i]);
+            while (q.Count > maxSamples)
+            {
+                for (var c = 0; c < streamChannels[slot] && q.Count > 0; c++)
+                    q.Dequeue();
+            }
+
+            // Lockstep sync when all streams have queued frames; if any stream is absent or drops out
+            // mid-stream, flush active streams once SilentStreamFlushFrames accumulate so audio never stalls.
+            var minAllFrames = int.MaxValue;
+            var minNonEmptyFrames = int.MaxValue;
+            var maxQueuedFrames = 0;
+            for (var i = 0; i < queues.Length; i++)
+            {
+                var queuedFrames = queues[i].Count / streamChannels[i];
+                if (queuedFrames > maxQueuedFrames)
+                    maxQueuedFrames = queuedFrames;
+                if (queuedFrames < minAllFrames)
+                    minAllFrames = queuedFrames;
+                if (queuedFrames > 0 && queuedFrames < minNonEmptyFrames)
+                    minNonEmptyFrames = queuedFrames;
+            }
+
+            var readyFrames = minAllFrames > 0
+                ? minAllFrames
+                : maxQueuedFrames >= SilentStreamFlushFrames && minNonEmptyFrames < int.MaxValue
+                    ? minNonEmptyFrames
+                    : 0;
+            if (readyFrames <= 0 || readyFrames == int.MaxValue)
+                return;
+
+            var neededBytes = readyFrames * totalChannels * 2;
+            if (outputBuffer.Length < neededBytes)
+                outputBuffer = new byte[neededBytes];
+            var dest = System.Runtime.InteropServices.MemoryMarshal.Cast<byte, short>(outputBuffer.AsSpan(0, neededBytes));
+            var outIdx = 0;
+            for (var f = 0; f < readyFrames; f++)
+            {
+                for (var s = 0; s < queues.Length; s++)
+                {
+                    var sq = queues[s];
+                    var chCount = streamChannels[s];
+                    if (sq.Count >= chCount)
+                    {
+                        for (var c = 0; c < chCount; c++)
+                            dest[outIdx++] = sq.Dequeue();
+                    }
+                    else
+                    {
+                        for (var c = 0; c < chCount; c++)
+                            dest[outIdx++] = 0;
+                    }
+                }
+            }
+            emit(outputBuffer.AsMemory(0, neededBytes), totalChannels);
         }
     }
 
@@ -294,10 +469,13 @@ public sealed class FireWirePreviewDecoder(bool dv = false)
             {
                 if (line.Contains("Parsed_ashowinfo", StringComparison.Ordinal))
                 {
-                    if (AudioInfo is { } current)
+                    var decoded = DecodedAudioLog.Match(line);
+                    if (decoded.Success)
                     {
-                        var decoded = DecodedAudioLog.Match(line);
-                        if (decoded.Success &&
+                        var layout = decoded.Groups["layout"].Value;
+                        if (!string.IsNullOrWhiteSpace(layout))
+                            Volatile.Write(ref audioChannelLayout, layout);
+                        if (AudioInfo is { } current &&
                             int.TryParse(decoded.Groups["channels"].Value, CultureInfo.InvariantCulture, out var channels) && channels > 0 &&
                             int.TryParse(decoded.Groups["rate"].Value, CultureInfo.InvariantCulture, out var rate) && rate > 0 &&
                             (current.SampleRateHz != rate || current.Channels != channels))

@@ -57,6 +57,13 @@ public sealed partial class MainWindow
 
     private void RenderMonitorFrame(object? sender, object args)
     {
+        if (!FullscreenRenderPolicy.ShouldUpdateMainWindowMeters(PauseMainWindowRendering))
+        {
+            if (preview is { } feed && feed.RenderScopes)
+                feed.RenderScopes = false;
+            return;
+        }
+
         var now = Stopwatch.GetTimestamp();
         if (now + RenderToleranceTicks < nextMonitorFrame)
             return;
@@ -94,6 +101,7 @@ public sealed partial class MainWindow
         PaintSpectrumScale(null);
         SpectrumMidFrequency.Text = SpectrumMaxFrequency.Text = "—";
         StereoMeter.Reset();
+        ResetAudioMonitorRoute();
         UpdateSecondaryInstrumentHeader(GetDisplayedSecondaryInstrument());
     }
 
@@ -120,10 +128,25 @@ public sealed partial class MainWindow
             return;
 
         var previous = visibleAudio;
+        var effectiveRoute = audioMonitorRoute.ClampForChannels(audio.ChannelCount);
+        if (audioMonitorRoute != effectiveRoute || audio.MonitorRoute != effectiveRoute)
+        {
+            audioMonitorRoute = effectiveRoute;
+            previewRecorder?.SetAudioMonitorRoute(effectiveRoute);
+            LiveMediaSource?.SetAudioMonitorRoute(effectiveRoute);
+        }
+
         visibleAudio = audio;
-        StereoMeter.UpdateLevels(audio, settingsCulture);
+        StereoMeter.UpdateLevels(audio, settingsCulture, effectiveRoute);
+        monitorOptionsBar.UpdateAudioMonitorRoute(
+            audio.ChannelCount,
+            audio.ChannelLayout,
+            effectiveRoute,
+            StereoMeter.ActivePairMask);
         if (previous?.SampleRate != audio.SampleRate || previous?.SampleBits != audio.SampleBits ||
-            previous.SpectrumFloorDbfs != audio.SpectrumFloorDbfs)
+            previous.SpectrumFloorDbfs != audio.SpectrumFloorDbfs ||
+            previous.ChannelCount != audio.ChannelCount ||
+            previous.MonitorRoute != effectiveRoute)
             RenderSpectrumLabels(audio);
         if (audio.Spectrum is { } spectrum && SpectrumBody.Visibility == Visibility.Visible &&
             EffectiveWorkspaceLayout is WorkspaceLayoutMode.Split or WorkspaceLayoutMode.Spectrum)
@@ -266,9 +289,20 @@ public sealed partial class MainWindow
                 break;
             case SplitSecondaryInstrument.Spectrum:
                 SecondaryInstrumentTitle.Text = L("SpectrumTitle");
-                SecondaryInstrumentSubtitle.Text = visibleAudio is { } audio
-                    ? $"{audio.SampleBits}-bit · {audio.SampleRate / 1000d:0.##} kHz"
-                    : "";
+                if (visibleAudio is { } audio)
+                {
+                    var route = audioMonitorRoute.ClampForChannels(audio.ChannelCount);
+                    var routeSuffix = audio.ChannelCount > 2
+                        ? route.Mode == AudioMonitorMode.Downmix
+                            ? $" · {L("AudioMonitorDownmixShort")}"
+                            : $" · Ch {AudioChannelLayoutHelper.PairCompactLabel(route.PairIndex, audio.ChannelCount)}"
+                        : "";
+                    SecondaryInstrumentSubtitle.Text = $"{audio.SampleBits}-bit · {audio.SampleRate / 1000d:0.##} kHz{routeSuffix}";
+                }
+                else
+                {
+                    SecondaryInstrumentSubtitle.Text = "";
+                }
                 break;
             case SplitSecondaryInstrument.Events:
                 SecondaryInstrumentTitle.Text = L("EventsTab");
@@ -305,7 +339,9 @@ public sealed partial class MainWindow
         if (preview is not { } feed)
             return;
 
-        feed.RenderScopes = EffectiveWorkspaceLayout is WorkspaceLayoutMode.Split or WorkspaceLayoutMode.Scopes;
+        feed.RenderScopes = FullscreenRenderPolicy.ShouldRenderVideoScopes(
+            PauseMainWindowRendering,
+            EffectiveWorkspaceLayout is WorkspaceLayoutMode.Split or WorkspaceLayoutMode.Scopes);
         if (!feed.RenderScopes)
             return;
 

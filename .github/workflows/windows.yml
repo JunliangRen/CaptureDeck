@@ -98,7 +98,7 @@ jobs:
           }
           $env:CAPTURERACK_TEST_SIGNAL_QC = '1'
           dotnet test test/CaptureRack.UT/CaptureRack.UT.csproj -c Release --no-build --filter "FullyQualifiedName~TestSignalTests|FullyQualifiedName~DirectShowRecordingTests|FullyQualifiedName~FireWireSimulationTests|FullyQualifiedName~LiveEncodingTests|FullyQualifiedName~RfRecordingTests"
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v6
         with:
           name: CaptureRack-${{ env.RID }}
           path: |

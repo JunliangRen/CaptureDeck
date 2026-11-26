@@ -1801,4 +1801,46 @@
   <data name="AudioMonitorPairTooltip" xml:space="preserve"><value>監聽 Ch {0}（同步切換頻譜與相位）</value></data>
   <data name="AudioChannelNumber" xml:space="preserve"><value>聲道 {0} ({1})</value></data>
   <data name="TestSignalMultiChannel" xml:space="preserve"><value>8 聲道活躍對示範</value></data>
+  <data name="RfFrequency" xml:space="preserve">
+    <value>中心頻率 (Hz)</value>
+  </data>
+  <data name="RfManualGain" xml:space="preserve">
+    <value>調諧器手動增益 · 0 dB</value>
+  </data>
+  <data name="RfWaveform" xml:space="preserve">
+    <value>示波器 · ADC 碼值</value>
+  </data>
+  <data name="RfNoDevice" xml:space="preserve">
+    <value>未偵測到 RF 裝置。</value>
+  </data>
+  <data name="RfReadyHint" xml:space="preserve">
+    <value>開始預覽可監看電平，選擇輸出資料夾後可錄製。</value>
+  </data>
+  <data name="RfTestRamp" xml:space="preserve"><value>FPGA 測試斜坡（錄後複驗）</value></data>
+  <data name="RfVerifyRamp" xml:space="preserve"><value>正在逐樣本複驗錄製的測試斜坡</value></data>
+  <data name="RfQcQueued" xml:space="preserve"><value>錄製已加入斜坡複驗佇列</value></data>
+  <data name="RfQcSamples" xml:space="preserve"><value>FPGA 測試斜坡 · {0:N0} 個樣本</value></data>
+  <data name="RfFifoLevels" xml:space="preserve"><value>FPGA FIFO 佔用 {0:N0}/{1:N0} 字   ·   本次峰值 {2:N0}（{3:F1}%）   ·   近滿累計 {4}{5:N0} 樣本</value></data>
+  <data name="RfFifoStopped" xml:space="preserve"><value>FIFO 遙測已停止</value></data>
+  <data name="RfMarkerUnlocked" xml:space="preserve"><value>序列未鎖定 · 連續性未驗證</value></data>
+  <data name="RfMarkerLocked" xml:space="preserve"><value>序列已鎖定</value></data>
+  <data name="RfMarkerLost" xml:space="preserve"><value>序列失鎖</value></data>
+  <data name="RfUsbSpeedWarning" xml:space="preserve"><value>40 MSPS 錄製建議使用 USB 3 連接埠和線材。</value></data>
+  <data name="RfSwitchHeader" xml:space="preserve"><value>SW401（撥碼 1–4，1 為 ON）</value></data>
+  <data name="RfSwitchUnknown" xml:space="preserve"><value>未填寫</value></data>
+  <data name="RfLowSpace" xml:space="preserve"><value>磁碟空間不足 · 預計可錄 {0}</value></data>
+  <data name="RfHardwareRate" xml:space="preserve"><value>硬體直採</value></data>
+  <data name="RfSoftwareRate" xml:space="preserve"><value>軟體抽取</value></data>
+  <data name="RfPreviewType" xml:space="preserve"><value>預覽類型</value></data>
+  <data name="RfOnly" xml:space="preserve"><value>僅 RF</value></data>
+  <data name="RfVideoOnly" xml:space="preserve"><value>純視訊</value></data>
+  <data name="RfWaitingAudio" xml:space="preserve"><value>等待音訊</value></data>
+  <data name="RtlCustom" xml:space="preserve"><value>自訂…</value></data>
+  <data name="RtlVgaDefault" xml:space="preserve"><value>VGA（預設值 8）</value></data>
+  <data name="RtlInvalidTuning" xml:space="preserve"><value>請輸入整數 Hz。取樣率支援 225001–300000 或 900001–3200000 Hz。</value></data>
+  <data name="RtlUseIq" xml:space="preserve"><value>此調諧參數請選 I/Q，或讓 Hi-Fi 頻帶落在 0–4 MHz 內。</value></data>
+  <data name="RfLdfFormat" xml:space="preserve"><value>LDF FLAC（LD 標準格式）</value></data>
+  <data name="RfPeakSpan" xml:space="preserve"><value>峰對峰值</value></data>
+  <data name="RfMeasureHeading" xml:space="preserve"><value>RF 量測</value></data>
+  <data name="RfInputSamples" xml:space="preserve"><value>{0} 個樣本 · 輸入 {1:G} MSPS</value></data>
 </root>

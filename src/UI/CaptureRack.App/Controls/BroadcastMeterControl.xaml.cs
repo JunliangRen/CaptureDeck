@@ -56,6 +56,15 @@ public sealed partial class BroadcastMeterControl : UserControl
         RefreshClipBadges();
     }
 
+    public void SetPreviewTrackStatus(string? status, bool waiting = false)
+    {
+        if (PreviewTrackStatus.Text != (status ?? "")) PreviewTrackStatus.Text = status ?? "";
+        var meters = waiting ? Visibility.Collapsed : Visibility.Visible;
+        ClipIndicatorsGrid.Visibility = MeterRailsHost.Visibility = PeakReadouts.Visibility = meters;
+        PhaseReadout.Visibility = waiting || totalChannels == 1 ? Visibility.Collapsed : Visibility.Visible;
+        PreviewTrackStatus.Visibility = status is null ? Visibility.Collapsed : Visibility.Visible;
+    }
+
     public void Reset()
     {
         ballistics.Reset();
@@ -74,6 +83,7 @@ public sealed partial class BroadcastMeterControl : UserControl
         AutomationProperties.SetName(LeftLevel, string.Format(culture, localize("PeakUnavailable"), localize("LeftChannel")));
         AutomationProperties.SetName(RightLevel, string.Format(culture, localize("PeakUnavailable"), localize("RightChannel")));
         PhaseLevel.Text = "—";
+        PhaseReadout.Visibility = RightLevel.Visibility = Visibility.Visible;
         RefreshHeaderAndRouteControls();
         RefreshClipBadges();
         UpdatePhaseBar(null);
@@ -100,6 +110,7 @@ public sealed partial class BroadcastMeterControl : UserControl
 
         RefreshVisibleChannels();
         LeftLevel.Text = audio.LeftPeak > 0 ? (20 * Math.Log10(audio.LeftPeak)).ToString("0.0", culture) : "−∞";
+        PhaseReadout.Visibility = RightLevel.Visibility = totalChannels == 1 ? Visibility.Collapsed : Visibility.Visible;
         RightLevel.Text = audio.RightPeak > 0 ? (20 * Math.Log10(audio.RightPeak)).ToString("0.0", culture) : "−∞";
         AutomationProperties.SetName(LeftLevel, string.Format(culture, localize("PeakValue"), localize("LeftChannel"), LeftLevel.Text));
         AutomationProperties.SetName(RightLevel, string.Format(culture, localize("PeakValue"), localize("RightChannel"), RightLevel.Text));

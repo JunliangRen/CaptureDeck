@@ -1,2 +1,10 @@
 bin/
 obj/
+
+# Visual Studio caches and per-user settings
+.vs/
+*.suo
+*.user
+
+# Local test run output
+TestResults/

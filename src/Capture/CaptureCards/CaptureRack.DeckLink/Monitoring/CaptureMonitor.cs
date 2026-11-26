@@ -298,6 +298,8 @@ public sealed class StereoMonitor(CaptureAudioFormat format, uint sampleRate = C
     private static int SamplesPerDisplayFrame(uint rate) =>
         (int)Math.Clamp(rate / DisplayFramesPerSecond, 1u, 768_000u / DisplayFramesPerSecond);
 
+    public StereoLevels? ReadMeterLevels() => receivedAudio ? ReadLevels() : null;
+
     public AudioWindow? Read() => receivedAudio ? ReadWindow(receivedSamples, ReadLevels()) : null;
 
     // Use overlapping windows so one capture packet can feed several display frames.

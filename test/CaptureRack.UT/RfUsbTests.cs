@@ -27,6 +27,21 @@ public sealed class RfUsbTests
         Assert.Equal(expected, DomesdayUsb.Classify((ushort)vendor, (ushort)product, (ushort)release));
     }
 
+    [Theory]
+    [InlineData("bb2e11a", "3.2.0")]
+    [InlineData("bb2e11aa", "3.2.0")]
+    [InlineData("e61e886", "3.1.0")]
+    [InlineData("e61e8868", "3.1.0")]
+    [InlineData("bb2e11a-dirty", null)]
+    [InlineData("1234567", null)]
+    public void IdentifiesReleaseFromFx3Build(string commit, string? expected)
+    {
+        var probe = new RfUsbProbeResult(new("id", "DdD", 0x1209, 0x2347, "WinUSB"),
+            RfUsbFirmware.ProtocolV1, "0300", "0100", new(0, 0, 0x81, 1024), 2097152, 2)
+            { Fx3Commit = commit };
+        Assert.Equal(expected, probe.FirmwareRelease);
+    }
+
     [Fact]
     public void ValidatesApplicationImageAndRegisterMap()
     {
@@ -38,6 +53,21 @@ public sealed class RfUsbTests
         identity[11] = 1;
         identity[1] = 3;
         Assert.False(DomesdayUsb.IsSupportedIdentity(identity));
+    }
+
+    [Fact]
+    public void LegacySelectionPreservesInterfaceAlternateAndFirstEqualSizeEndpoint()
+    {
+        var small = new RfUsbEndpoint(0, 0, 0x81, 512);
+        var best = new RfUsbEndpoint(3, 2, 0x84, 1024);
+        Assert.Equal(best, DomesdayUsb.SelectStreamEndpoint(RfUsbFirmware.Legacy,
+            [small, best, new(4, 1, 0x82, 1024)]));
+        Assert.Null(DomesdayUsb.SelectStreamEndpoint(RfUsbFirmware.Legacy, []));
+        var probe = new RfUsbProbeResult(new("id", "DdD", 0x1d50, 0x603b, "WinUSB"),
+            RfUsbFirmware.Legacy, "0300", "0000", small, 262144, null);
+        Assert.True(probe.RecommendUsb3);
+        Assert.Contains("High-Speed", probe.LinkSpeedHint);
+        Assert.False((probe with { StreamEndpoint = best }).RecommendUsb3);
     }
 
     [Fact]

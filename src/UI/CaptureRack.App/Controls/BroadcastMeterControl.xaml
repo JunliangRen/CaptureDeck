@@ -93,8 +93,11 @@
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
                 <RowDefinition Height="Auto" />
+                <RowDefinition Height="Auto" />
             </Grid.RowDefinitions>
 
+            <TextBlock x:Name="PreviewTrackStatus" Grid.Row="6" FontSize="11" TextWrapping="Wrap" Visibility="Collapsed"
+                       HorizontalAlignment="Center" TextAlignment="Center"/>
             <!-- Header: AUDIO + dBFS or Multi-Channel Mode Selector -->
             <Grid ColumnSpacing="4">
                 <Grid.ColumnDefinitions>
@@ -131,7 +134,7 @@
             <Grid x:Name="PairRouteGrid" Grid.Row="3" ColumnSpacing="3" Visibility="Collapsed" />
 
             <!-- Monitored Stereo Peak Numeric Readout -->
-            <Grid Grid.Row="4" ColumnSpacing="4">
+            <Grid x:Name="PeakReadouts" Grid.Row="4" ColumnSpacing="4">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*" />
                     <ColumnDefinition Width="*" />
@@ -145,7 +148,7 @@
             </Grid>
 
             <!-- Visual Stereo Phase Correlation Bar (+ active monitor route tag when > 2 ch) -->
-            <StackPanel Grid.Row="5" Spacing="3">
+            <StackPanel x:Name="PhaseReadout" Grid.Row="5" Spacing="3">
                 <Border x:Name="MonitorRouteTag" Visibility="Collapsed" CornerRadius="2" Padding="4,1"
                         HorizontalAlignment="Center"
                         Background="{ThemeResource StudioAccentSoftBrush}"

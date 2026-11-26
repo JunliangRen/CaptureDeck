@@ -27,6 +27,18 @@ public static unsafe class RtlSdrProbe
         return library.WithReceiver(index, (device, receiver) => library.Apply(device, receiver, settings));
     }
 
+    internal static void Stream(RtlSdrDevice selected, RtlSdrSettings settings, Func<int?> vga,
+        Action<byte[], int> consume, CancellationToken stop)
+    {
+        using var library = new Library();
+        library.WithReceiver(selected.Index, (device, receiver) =>
+        {
+            if (device != selected) throw new IOException("RTL-SDR selection changed. Refresh the device list.");
+            library.Stream(device, receiver, settings, vga, consume, stop);
+            return true;
+        });
+    }
+
     private sealed class Library : IDisposable
     {
         private readonly nint handle = Load();
@@ -40,7 +52,7 @@ public static unsafe class RtlSdrProbe
                     .Select(name => Path.Combine(AppContext.BaseDirectory, name)).FirstOrDefault(File.Exists);
             }
             if (string.IsNullOrWhiteSpace(path))
-                throw new IOException("RTL-SDR driver DLL not found. Place rtlsdr.dll beside CaptureRack.Probe or set CAPTURERACK_RTLSDR_LIBRARY to its full path.");
+                throw new IOException("RTL-SDR driver DLL not found. Place rtlsdr.dll beside the CaptureRack executable or set CAPTURERACK_RTLSDR_LIBRARY to its full path.");
             if (!Path.IsPathFullyQualified(path))
                 throw new IOException("CAPTURERACK_RTLSDR_LIBRARY must be a full path.");
 
@@ -154,6 +166,36 @@ public static unsafe class RtlSdrProbe
             return new(capabilities, settings, ReadUnsigned(receiver, "rtlsdr_get_center_freq"),
                 ReadUnsigned(receiver, "rtlsdr_get_sample_rate"), ReadInt(receiver, "rtlsdr_get_freq_correction"),
                 settings.GainTenthsDb.HasValue ? ReadInt(receiver, "rtlsdr_get_tuner_gain") : null, vga);
+        }
+
+        public void Stream(RtlSdrDevice device, nint receiver, RtlSdrSettings settings, Func<int?> vga,
+            Action<byte[], int> consume, CancellationToken stop)
+        {
+            var configured = Apply(device, receiver, settings);
+            if (configured.ActualSampleRateHz != settings.SampleRateHz || configured.ActualFrequencyHz != settings.FrequencyHz)
+                throw new IOException("RTL-SDR tuning or sample rate differs from the requested value.");
+            Check(ReadInt(receiver, "rtlsdr_reset_buffer"), "Reset RTL-SDR buffer");
+            var read = (delegate* unmanaged[Cdecl]<nint, byte*, int, int*, int>)Required("rtlsdr_read_sync");
+            var buffer = new byte[65536];
+            var applied = configured.AppliedVgaIndex;
+            bool settling = true;
+            fixed (byte* data = buffer)
+            {
+                while (!stop.IsCancellationRequested)
+                {
+                    if (applied.HasValue && vga() is int index && index != applied)
+                    {
+                        ArgumentOutOfRangeException.ThrowIfGreaterThan((uint)index, 8u);
+                        Set(receiver, "rtlsdr_set_blog_v4_vga_index", index, "Set VGA");
+                        applied = index;
+                    }
+                    int count;
+                    Check(read(receiver, data, buffer.Length, &count), "Read RTL-SDR I/Q");
+                    if (count != buffer.Length) throw new IOException("Short RTL-SDR I/Q read.");
+                    if (!settling) consume(buffer, count);
+                    settling = false;
+                }
+            }
         }
 
         private int ReadInt(nint receiver, string name) =>

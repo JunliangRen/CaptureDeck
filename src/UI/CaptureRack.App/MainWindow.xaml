@@ -112,10 +112,11 @@
                                         <DataTemplate>
                                             <Button Tag="{Binding BackendId}" IsEnabled="{Binding IsSelectable}"
                                                     Click="SourceRackItem_Click" HorizontalAlignment="Stretch"
-                                                    HorizontalContentAlignment="Stretch" Padding="0" Margin="0,0,0,6">
+                                                    Height="64" HorizontalContentAlignment="Stretch" Padding="0" Margin="0,0,0,8"
+                                                    ToolTipService.ToolTip="{Binding Subtitle}">
                                                 <Button.Template>
                                                     <ControlTemplate TargetType="Button">
-                                                        <ContentPresenter x:Name="RootContent">
+                                                        <ContentPresenter x:Name="RootContent" HorizontalContentAlignment="Stretch" VerticalContentAlignment="Stretch">
                                                             <VisualStateManager.VisualStateGroups>
                                                                 <VisualStateGroup x:Name="CommonStates">
                                                                     <VisualState x:Name="Normal" />
@@ -141,24 +142,24 @@
                                                 </Button.Template>
                                                 <Border Background="{Binding CardBackground}"
                                                         BorderBrush="{Binding CardBorder}"
-                                                        BorderThickness="1" CornerRadius="3" Padding="10,8">
-                                                    <Grid ColumnSpacing="9">
+                                                        BorderThickness="1" CornerRadius="3" Padding="10,4">
+                                                    <Grid ColumnSpacing="9" VerticalAlignment="Center">
                                                         <Grid.ColumnDefinitions>
                                                             <ColumnDefinition Width="Auto" />
                                                             <ColumnDefinition Width="*" />
                                                             <ColumnDefinition Width="Auto" />
                                                         </Grid.ColumnDefinitions>
                                                         <FontIcon Glyph="{Binding IconGlyph}" FontSize="14"
-                                                                  VerticalAlignment="Top" Margin="0,2,0,0"
+                                                                  VerticalAlignment="Center"
                                                                   Foreground="{Binding IconForeground}" />
                                                         <StackPanel Grid.Column="1" Spacing="2">
                                                             <TextBlock Text="{Binding Name}" FontSize="13" FontWeight="SemiBold"
                                                                        Foreground="{ThemeResource StudioTextPrimaryBrush}" />
-                                                            <TextBlock Text="{Binding Subtitle}" FontSize="11" TextWrapping="Wrap"
+                                                            <TextBlock Text="{Binding Subtitle}" FontSize="11" TextWrapping="Wrap" MaxLines="2" TextTrimming="CharacterEllipsis"
                                                                        Foreground="{ThemeResource StudioTextSecondaryBrush}" />
                                                         </StackPanel>
                                                         <Border Grid.Column="2" VerticalAlignment="Top" CornerRadius="2" Padding="6,2"
-                                                                Background="{Binding BadgeBackground}">
+                                                                Visibility="{Binding BadgeVisibility}" Background="{Binding BadgeBackground}">
                                                             <TextBlock Text="{Binding BadgeText}" FontSize="10" FontWeight="SemiBold"
                                                                        Foreground="{Binding BadgeForeground}" />
                                                         </Border>
@@ -279,14 +280,22 @@
 
                     <!-- Stage Body: Video Monitor + Draggable Split Divider + Modular Instruments Deck -->
                     <Grid x:Name="MonitorViewport" Grid.Row="1" SizeChanged="MonitorViewport_SizeChanged">
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
                         <Grid.RowDefinitions>
                             <RowDefinition x:Name="PreviewStageRow" Height="63*" />
                             <RowDefinition x:Name="SplitDividerRow" Height="Auto" />
                             <RowDefinition x:Name="InstrumentsStageRow" Height="37*" />
                         </Grid.RowDefinitions>
+                        <StackPanel x:Name="RfMeterRack" Grid.RowSpan="3" Orientation="Horizontal" Spacing="3" Margin="0,0,6,0" Visibility="Collapsed">
+                            <controls:RfPeakMeter x:Name="RfMeterA"/>
+                            <controls:RfPeakMeter x:Name="RfMeterB" Visibility="Collapsed"/>
+                        </StackPanel>
+                        <Border x:Name="RfBlankPreview" Grid.Column="1" Background="{ThemeResource StudioStageCanvasBrush}" CornerRadius="4"
+                                BorderBrush="{ThemeResource StudioMonitorBezelBrush}" BorderThickness="1" Visibility="Collapsed"/>
+
 
                         <!-- Video Monitor Housing -->
-                        <Border x:Name="PreviewMonitorHousing" Grid.Row="0" CornerRadius="4"
+                        <Border x:Name="PreviewMonitorHousing" Grid.Column="1" Grid.Row="0" CornerRadius="4"
                                 Background="{ThemeResource StudioStageCanvasBrush}"
                                 BorderBrush="{ThemeResource StudioMonitorBezelBrush}" BorderThickness="1.5"
                                 SizeChanged="PreviewMonitorHousing_SizeChanged"
@@ -411,7 +420,7 @@
                         </Border>
 
                         <!-- Draggable Studio Split Divider (Native SizeNorthSouth Resize Cursor) -->
-                        <controls:SplitResizeHandle x:Name="SplitResizeHandle" Grid.Row="1" Height="10" Background="Transparent"
+                        <controls:SplitResizeHandle x:Name="SplitResizeHandle" Grid.Column="1" Grid.Row="1" Height="10" Background="Transparent"
                                                     ManipulationMode="TranslateY"
                                                     ManipulationDelta="SplitResizeHandle_ManipulationDelta"
                                                     ManipulationCompleted="SplitResizeHandle_ManipulationCompleted"
@@ -424,7 +433,7 @@
                         </controls:SplitResizeHandle>
 
                         <!-- Unified Modular Instruments Host (Luma/Parade + Vector/Spectrum/Events) -->
-                        <Grid x:Name="InstrumentsHost" Grid.Row="2" ColumnSpacing="8">
+                        <Grid x:Name="InstrumentsHost" Grid.Column="1" Grid.Row="2" ColumnSpacing="8">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition x:Name="InstrumentCol0" Width="56*" />
                                 <ColumnDefinition x:Name="InstrumentCol1" Width="44*" />
@@ -674,6 +683,21 @@
                                 </Grid>
                             </Border>
                         </Grid>
+                        <Grid x:Name="RfStage" Grid.Column="1" Grid.Row="2" Margin="4" RowSpacing="8" Visibility="Collapsed">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/><RowDefinition Height="*"/>
+                            </Grid.RowDefinitions>
+                            <TextBlock x:Name="RfHeading" Style="{StaticResource StudioSectionHeadingStyle}"/>
+                            <Border Grid.Row="1" Background="{ThemeResource StudioCardBrush}" CornerRadius="4">
+                                <Viewbox Stretch="Fill" Margin="8">
+                                    <Canvas Width="256" Height="100">
+                                        <Line X2="256" Y1="50" Y2="50" Stroke="{ThemeResource StudioHairlineBrush}"/>
+                                        <Polyline x:Name="RfTraceA" Stroke="{ThemeResource StudioSignalLockBrush}" StrokeThickness="0.65"/>
+                                        <Polyline x:Name="RfTraceB" Stroke="{ThemeResource StudioInfoBrush}" StrokeThickness="0.65"/>
+                                    </Canvas>
+                                </Viewbox>
+                            </Border>
+                        </Grid>
                     </Grid>
 
                     <!-- Pluggable Slot: Non-DeckLink / Planned Backend Stage -->
@@ -886,28 +910,73 @@
                 </StackPanel>
 
                 <!-- Center Cluster: Dynamic Backend-Driven Telemetry Strip -->
-                <ItemsControl x:Name="TelemetryStrip" Grid.Column="1" HorizontalAlignment="Center" VerticalAlignment="Center">
-                    <ItemsControl.ItemsPanel>
-                        <ItemsPanelTemplate>
-                            <StackPanel Orientation="Horizontal" Spacing="6" />
-                        </ItemsPanelTemplate>
-                    </ItemsControl.ItemsPanel>
-                    <ItemsControl.ItemTemplate>
-                        <DataTemplate>
-                            <Border Background="{Binding ChipBackground}" BorderBrush="{Binding ChipBorder}"
-                                    BorderThickness="1" CornerRadius="3" Padding="8,4"
-                                    ToolTipService.ToolTip="{Binding Tooltip}">
-                                <StackPanel Orientation="Horizontal" Spacing="6">
-                                    <TextBlock Text="{Binding Label}" FontSize="12"
-                                               Foreground="{ThemeResource StudioTextSecondaryBrush}" VerticalAlignment="Center" />
-                                    <TextBlock Text="{Binding Value}" Style="{StaticResource StudioMonoTextStyle}"
-                                               FontSize="12" FontWeight="SemiBold"
-                                               Foreground="{Binding ValueForeground}" VerticalAlignment="Center" />
+                <StackPanel x:Name="FooterTelemetry" Grid.Column="1" Orientation="Horizontal" Spacing="6" HorizontalAlignment="Center" VerticalAlignment="Center">
+                    <Button x:Name="RfMeasureButton" Visibility="Collapsed" Padding="8,4" CornerRadius="3"
+                            Style="{StaticResource SubtleButtonStyle}" Background="{ThemeResource StudioCardBrush}"
+                            BorderBrush="{ThemeResource StudioHairlineBrush}" BorderThickness="1">
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                            <TextBlock x:Name="RfMeasureLabel" FontSize="12" Foreground="{ThemeResource StudioTextSecondaryBrush}"/>
+                            <TextBlock x:Name="RfPeakSpan" Style="{StaticResource StudioMonoTextStyle}" FontSize="12" FontWeight="SemiBold"/>
+                            <FontIcon Glyph="&#xE70E;" FontSize="9"/>
+                        </StackPanel>
+                        <Button.Flyout>
+                            <Flyout Placement="Top" x:Name="RfMeasureFlyout" Opened="RfMeasureFlyout_Opened">
+                                <StackPanel Spacing="8" Width="260">
+                                    <Grid ColumnSpacing="12" RowSpacing="4">
+                                        <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/>
+                                            <RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/>
+                                        </Grid.RowDefinitions>
+                                        <TextBlock x:Name="RfMeasureHeading" Style="{StaticResource StudioSectionHeadingStyle}"/>
+                                        <TextBlock x:Name="RfChannelA" Grid.Column="1" HorizontalAlignment="Right"/>
+                                        <TextBlock x:Name="RfChannelB" Grid.Column="2" HorizontalAlignment="Right"/>
+                                    <TextBlock Grid.Row="1" Text="Min" Foreground="{ThemeResource StudioTextSecondaryBrush}"/>
+                                    <TextBlock x:Name="RfMinA" Grid.Row="1" Grid.Column="1" HorizontalAlignment="Right" Style="{StaticResource StudioMonoTextStyle}"/>
+                                    <TextBlock x:Name="RfMinB" Grid.Row="1" Grid.Column="2" HorizontalAlignment="Right" Style="{StaticResource StudioMonoTextStyle}"/>
+                                    <TextBlock Grid.Row="2" Text="Max" Foreground="{ThemeResource StudioTextSecondaryBrush}"/>
+                                    <TextBlock x:Name="RfMaxA" Grid.Row="2" Grid.Column="1" HorizontalAlignment="Right" Style="{StaticResource StudioMonoTextStyle}"/>
+                                    <TextBlock x:Name="RfMaxB" Grid.Row="2" Grid.Column="2" HorizontalAlignment="Right" Style="{StaticResource StudioMonoTextStyle}"/>
+                                    <TextBlock Grid.Row="3" Text="P-P" Foreground="{ThemeResource StudioTextSecondaryBrush}"/>
+                                    <TextBlock x:Name="RfPpA" Grid.Row="3" Grid.Column="1" HorizontalAlignment="Right" Style="{StaticResource StudioMonoTextStyle}"/>
+                                    <TextBlock x:Name="RfPpB" Grid.Row="3" Grid.Column="2" HorizontalAlignment="Right" Style="{StaticResource StudioMonoTextStyle}"/>
+                                    <TextBlock Grid.Row="4" Text="RMS" Foreground="{ThemeResource StudioTextSecondaryBrush}"/>
+                                    <TextBlock x:Name="RfRmsA" Grid.Row="4" Grid.Column="1" HorizontalAlignment="Right" Style="{StaticResource StudioMonoTextStyle}"/>
+                                    <TextBlock x:Name="RfRmsB" Grid.Row="4" Grid.Column="2" HorizontalAlignment="Right" Style="{StaticResource StudioMonoTextStyle}"/>
+                                    <TextBlock Grid.Row="5" Text="CLIP" Foreground="{ThemeResource StudioTextSecondaryBrush}"/>
+                                    <TextBlock x:Name="RfClipsA" Grid.Row="5" Grid.Column="1" HorizontalAlignment="Right" Style="{StaticResource StudioMonoTextStyle}"/>
+                                    <TextBlock x:Name="RfClipsB" Grid.Row="5" Grid.Column="2" HorizontalAlignment="Right" Style="{StaticResource StudioMonoTextStyle}"/>
+                                    </Grid>
+                                    <Border Height="1" Background="{ThemeResource StudioHairlineBrush}"/>
+                                    <TextBlock x:Name="RfReading" TextWrapping="Wrap"/>
+                                    <TextBlock x:Name="RfFile" FontSize="12" TextWrapping="Wrap" Foreground="{ThemeResource StudioTextSecondaryBrush}"/>
                                 </StackPanel>
-                            </Border>
-                        </DataTemplate>
-                    </ItemsControl.ItemTemplate>
-                </ItemsControl>
+                            </Flyout>
+                        </Button.Flyout>
+                    </Button>
+                    <ItemsControl x:Name="TelemetryStrip" VerticalAlignment="Center">
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <StackPanel Orientation="Horizontal" Spacing="6" />
+                            </ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Border Background="{Binding ChipBackground}" BorderBrush="{Binding ChipBorder}"
+                                        BorderThickness="1" CornerRadius="3" Padding="8,4"
+                                        ToolTipService.ToolTip="{Binding Tooltip}">
+                                    <StackPanel Orientation="Horizontal" Spacing="6">
+                                        <TextBlock Text="{Binding Label}" FontSize="12"
+                                                   Foreground="{ThemeResource StudioTextSecondaryBrush}" VerticalAlignment="Center" />
+                                        <TextBlock Text="{Binding Value}" Style="{StaticResource StudioMonoTextStyle}"
+                                                   FontSize="12" FontWeight="SemiBold"
+                                                   Foreground="{Binding ValueForeground}" VerticalAlignment="Center" />
+                                    </StackPanel>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </StackPanel>
 
                 <!-- Right Cluster: Storage + Live QC Activity/Result + Status Flyout -->
                 <StackPanel x:Name="FooterRightCluster" Grid.Column="2" Orientation="Horizontal" Spacing="6"

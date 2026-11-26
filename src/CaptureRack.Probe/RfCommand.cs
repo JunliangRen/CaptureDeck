@@ -72,7 +72,13 @@ internal static class RfCommand
         Console.WriteLine($"{result.Device.Model} {result.Device.UsbId} · WinUSB · {result.Firmware}");
         Console.WriteLine($"USB bcdUSB 0x{result.UsbSpecification}, bcdDevice 0x{result.UsbDeviceRelease}");
         Console.WriteLine($"Interface {endpoint.InterfaceNumber}/{endpoint.AlternateSetting} · bulk IN 0x{endpoint.Address:X2} · {endpoint.MaxPacketBytes} bytes per USB packet");
+        Console.WriteLine($"Bulk link speed (packet-size inference): {result.LinkSpeedHint}");
+        if (result.RecommendUsb3) Console.WriteLine("Use a SuperSpeed USB port and cable for 40 MSPS.");
         Console.WriteLine($"WinUSB maximum transfer: {result.MaximumTransferBytes:N0} bytes");
+        if (result.Fx3Commit is { } commit)
+            Console.WriteLine($"FX3: {result.FirmwareRelease ?? "unmapped build"} ({commit})");
+        if (result.GatewareCommit is { } gateware)
+            Console.WriteLine($"FPGA: {gateware}");
         if (result.RegisterMapVersion is byte version)
             Console.WriteLine($"Register map: {version}");
     }

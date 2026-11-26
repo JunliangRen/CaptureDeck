@@ -8,6 +8,7 @@ on:
       - 'src/Processing/CaptureRack.QualityControl/**'
       - 'test/CaptureRack.QualityControl.UT/**'
       - 'global.json'
+      - 'Directory.Build.targets'
       - '.github/workflows/uno-macos.yml'
   workflow_dispatch:
 
@@ -43,6 +44,11 @@ jobs:
           plutil -lint "$plist"
           executable=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$plist")
           lipo "$app/Contents/MacOS/$executable" -verify_arch arm64
+          pdb=$(find "$app" -type f -iname '*.pdb' -print -quit)
+          if [[ -n "$pdb" ]]; then
+            echo "Unexpected debug symbols in release bundle: $pdb"
+            exit 1
+          fi
           mkdir -p bin/uno-macos
           ditto -c -k --keepParent "$app" bin/uno-macos/CaptureRack-QC-macos-arm64.zip
       - uses: actions/upload-artifact@v6

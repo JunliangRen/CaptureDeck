@@ -1,0 +1,33 @@
+<UserControl
+    x:Class="CaptureRack.App.Views.RfInspectorView"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <Border Style="{StaticResource StudioInspectorCardStyle}">
+        <StackPanel Spacing="8">
+            <ComboBox x:Name="DeviceBox" DisplayMemberPath="Label" HorizontalAlignment="Stretch"/>
+            <Button x:Name="RefreshButton" Click="RefreshClick"/>
+            <TextBlock x:Name="Diagnostics" FontSize="12" TextWrapping="Wrap"/>
+            <ComboBox x:Name="PreviewTypeBox" HorizontalAlignment="Stretch"/>
+            <ComboBox x:Name="Format" SelectedIndex="0" HorizontalAlignment="Stretch">
+                <ComboBoxItem Content="FLAC"/><ComboBoxItem Content="RAW"/>
+                <ComboBoxItem x:Name="LdfFormat" Visibility="Collapsed"/>
+            </ComboBox>
+            <ComboBox x:Name="DddRate" DisplayMemberPath="Label" HorizontalAlignment="Stretch"/>
+            <ComboBox x:Name="Sw401" DisplayMemberPath="Label" HorizontalAlignment="Stretch"/>
+            <CheckBox x:Name="TestRamp" />
+            <TextBlock x:Name="TransportReading" TextWrapping="Wrap" FontSize="12" Visibility="Collapsed"/>
+            <StackPanel x:Name="RtlOptions" Spacing="8">
+                <ComboBox x:Name="RtlMode" SelectedIndex="0" HorizontalAlignment="Stretch">
+                    <x:String>Hi-Fi RF · 8 MSPS</x:String><x:String>I/Q</x:String>
+                </ComboBox>
+                <ComboBox x:Name="FrequencyPreset" DisplayMemberPath="Label" HorizontalAlignment="Stretch"/>
+                <NumberBox x:Name="Frequency" Visibility="Collapsed" Value="1500000" Minimum="1" Maximum="4294967295" SpinButtonPlacementMode="Compact"/>
+                <ComboBox x:Name="RatePreset" DisplayMemberPath="Label" HorizontalAlignment="Stretch"/>
+                <NumberBox x:Name="CustomRate" Visibility="Collapsed" Value="1024000" Minimum="1" Maximum="3200000" SpinButtonPlacementMode="Compact"/>
+                <TextBlock x:Name="RtlSettingHint" Visibility="Collapsed" FontSize="12" TextWrapping="Wrap"/>
+                <TextBlock x:Name="GainText"/>
+                <Slider x:Name="Vga" Header="VGA" Minimum="0" Maximum="8" StepFrequency="1" Value="8"/>
+            </StackPanel>
+        </StackPanel>
+    </Border>
+</UserControl>

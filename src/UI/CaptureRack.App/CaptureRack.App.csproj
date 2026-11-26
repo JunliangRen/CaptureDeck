@@ -16,9 +16,17 @@
     <PackageReference Include="CommunityToolkit.WinUI.Controls.SettingsControls" Version="8.2.251219" />
     <PackageReference Include="Microsoft.WindowsAppSDK" Version="2.7.0" />
     <ProjectReference Include="../../Capture/CaptureCards/CaptureRack.DeckLink/CaptureRack.DeckLink.csproj" />
+    <ProjectReference Include="../../Capture/CaptureRack.SignalCapture/CaptureRack.SignalCapture.csproj" />
     <ProjectReference Include="../../Capture/CaptureRack.DirectShow/CaptureRack.DirectShow.csproj" />
     <ProjectReference Include="../../Processing/CaptureRack.QualityControl/CaptureRack.QualityControl.csproj" />
     <ProjectReference Include="../../CaptureRack.DeviceControl/CaptureRack.DeviceControl.csproj" />
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(VhsDecodeFramesProject)' != ''">
+    <ProjectReference Include="$(VhsDecodeFramesProject)" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(VhsDecodeFramesProject)' == ''">
+    <Compile Remove="Architecture/VhsDecodeFilePreview.cs" />
   </ItemGroup>
 
   <!-- The unpackaged MRT Core targets generate the app PRI but omit it from publish (WindowsAppSDK #6720). -->

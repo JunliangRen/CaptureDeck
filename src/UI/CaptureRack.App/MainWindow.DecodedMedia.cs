@@ -9,8 +9,8 @@ public sealed partial class MainWindow
 {
     private ILiveMediaSource? LiveMediaSource => IsDirectShowActive ? directShowCapabilitiesView :
         IsFireWireActive ? fireWireView : null;
-    private bool IsCaptureInputActive => captureTask is not null || LiveMediaSource?.IsCapturing == true;
-    private bool IsCaptureRecording => recordingSession || LiveMediaSource?.IsRecording == true;
+    private bool IsCaptureInputActive => rfPreviewStop is not null || captureTask is not null || LiveMediaSource?.IsCapturing == true;
+    private bool IsCaptureRecording => rfStop is not null || recordingSession || LiveMediaSource?.IsRecording == true;
     private bool finishingMediaForClose;
     private bool decodedInputReady;
     private bool decodedFieldOrderAvailable;
@@ -39,6 +39,7 @@ public sealed partial class MainWindow
     {
         get
         {
+            if (IsRfActive) return workspaceLayout is WorkspaceLayoutMode.Focus or WorkspaceLayoutMode.Spectrum ? workspaceLayout : WorkspaceLayoutMode.Split;
             var caps = ActiveWorkspaceCapabilities;
             return workspaceLayout switch
             {

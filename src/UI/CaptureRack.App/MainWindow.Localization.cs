@@ -245,7 +245,7 @@ public sealed partial class MainWindow
 
     private void RenderCounts(CaptureStats? stats)
     {
-        var metrics = LiveMediaSource is { } media ? BuildDecodedMediaTelemetry(media) :
+        var metrics = IsRfActive ? RfTelemetry() : LiveMediaSource is { } media ? BuildDecodedMediaTelemetry(media) :
             activeModule.BuildTelemetry(stats, displayedPreviewSkips, L, settingsCulture);
         if (!ReferenceEquals(TelemetryStrip.ItemsSource, telemetryItems))
             TelemetryStrip.ItemsSource = telemetryItems;

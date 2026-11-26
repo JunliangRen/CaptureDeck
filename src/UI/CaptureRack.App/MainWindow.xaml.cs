@@ -114,9 +114,21 @@ public sealed partial class MainWindow : Window
             UpdatePreviewFullscreenButton();
         };
 
+        rfAudioTimer = DispatcherQueue.CreateTimer();
+        rfAudioTimer.Interval = TimeSpan.FromMilliseconds(33);
+        rfAudioTimer.Tick += (_, _) => RenderRfAudio();
         InitializeComponent();
         Activated += MainWindow_Activated;
         Closed += OnWindowClosed;
+        rfInspector.Changed += () =>
+        {
+            if (!IsRfActive || !settingsReady || closing) return;
+            ConfigureRfAudioMeter();
+            UpdateConfigurationStatus();
+            RenderCounts(null);
+            UpdateRecordingFilenamePreview();
+            UpdateControls();
+        };
         WireModularViews();
         ConfigureWindowChrome();
         InitializeSettings();
@@ -354,12 +366,14 @@ public sealed partial class MainWindow : Window
     private void MountActiveModuleSlots()
     {
         InspectorSlot.Content = LiveMediaSource as UserControl ?? (IsDeckLinkActive ? deckLinkInspector :
-            IsTestSignalActive ? testSignalInspector : plannedInspectorView);
+            IsTestSignalActive ? testSignalInspector : IsRfActive ? rfInspector : plannedInspectorView);
         MonitorBarSlot.Content = HasLiveCapture ? monitorOptionsBar : null;
         MonitorBarSlot.Visibility = HasLiveCapture ? Visibility.Visible : Visibility.Collapsed;
-        MonitorViewport.Visibility = HasLiveCapture ? Visibility.Visible : Visibility.Collapsed;
+        MonitorViewport.Visibility = HasLiveCapture || IsRfActive ? Visibility.Visible : Visibility.Collapsed;
         StageSlot.Content = HasLiveCapture ? null : plannedStageView;
-        StageSlot.Visibility = HasLiveCapture ? Visibility.Collapsed : Visibility.Visible;
+        RfStage.Visibility = IsRfActive ? Visibility.Visible : Visibility.Collapsed;
+        StartButton.Visibility = Visibility.Visible;
+        StageSlot.Visibility = HasLiveCapture || IsRfActive ? Visibility.Collapsed : Visibility.Visible;
 
         if (IsDirectShowActive)
         {
@@ -376,6 +390,11 @@ public sealed partial class MainWindow : Window
         else if (IsDeckLinkActive)
         {
             deckLinkInspector.RefreshTheme();
+        }
+        else if (IsRfActive)
+        {
+            rfInspector.Bind(L);
+            RfHeading.Text = L("RfWaveform");
         }
         else if (!HasLiveCapture)
         {
@@ -397,7 +416,7 @@ public sealed partial class MainWindow : Window
 
     private void SelectBackendModule(string backendId, bool persist)
     {
-        if (LiveMediaSource is { IsCapturing: true } or { IsRecording: true } ||
+        if (rfPreviewStop is not null || rfStop is not null || LiveMediaSource is { IsCapturing: true } or { IsRecording: true } ||
             !WorkspaceModuleRegistry.CanSwitchBackend(captureTask is not null || vancScanTask is not null || restartPreviewRequested,
             recordingSession, recordingTransition, qcStop is not null))
             return;
@@ -461,52 +480,49 @@ public sealed partial class MainWindow : Window
         LayoutScopesBtn.Visibility = liveStage && caps.SupportsVideoScopes ? Visibility.Visible : Visibility.Collapsed;
         LayoutSpectrumBtn.Visibility = liveStage && caps.SupportsAudioSpectrum ? Visibility.Visible : Visibility.Collapsed;
         LayoutEventsBtn.Visibility = liveStage && caps.SupportsEvents ? Visibility.Visible : Visibility.Collapsed;
+        if (IsRfActive)
+            LayoutSegmentTrack.Visibility = LayoutFocusBtn.Visibility = LayoutSplitBtn.Visibility = LayoutSpectrumBtn.Visibility = Visibility.Visible;
         monitorOptionsBar.ApplyCapabilities(caps, LiveMediaSource?.HasDeinterlace ?? true,
             matrix: LiveMediaSource is null, ntscGuide: LiveMediaSource is null);
         SplitSpectrumBtn.Visibility = caps.SupportsAudioSpectrum ? Visibility.Visible : Visibility.Collapsed;
         SplitEventsBtn.Visibility = caps.SupportsEvents ? Visibility.Visible : Visibility.Collapsed;
         ApplyWorkspaceLayout();
-        StereoMeter.Visibility = liveStage && caps.SupportsAudioMeters && lastWindowWidth >= 680
-            ? Visibility.Visible : Visibility.Collapsed;
+        RfMeasureButton.Visibility = IsRfActive ? Visibility.Visible : Visibility.Collapsed;
+        UpdateResponsiveFooter(lastWindowWidth);
+        ConfigureRfAudioMeter();
         UpdateRecordingFilenamePreview();
     }
 
+    private bool rackShowsRecording;
+    private bool CapturingToFile => rfStop is { IsCancellationRequested: false } && rfWriterActive ||
+        recordingSession && !recordingTransition || LiveMediaSource is { IsRecording: true, IsFinalizing: false };
+
     private void RenderSourceRackList()
     {
-        var canSwitch = LiveMediaSource is not ({ IsCapturing: true } or { IsRecording: true }) && WorkspaceModuleRegistry.CanSwitchBackend(
+        var canSwitch = rfPreviewStop is null && rfStop is null && LiveMediaSource is not ({ IsCapturing: true } or { IsRecording: true }) && WorkspaceModuleRegistry.CanSwitchBackend(
             captureTask is not null || vancScanTask is not null || restartPreviewRequested, recordingSession, recordingTransition, qcStop is not null);
         SourceRackLockNotice.Text = L("SourceRackLockedNotice");
         SourceRackLockNotice.Visibility = canSwitch ? Visibility.Collapsed : Visibility.Visible;
 
+        rackShowsRecording = CapturingToFile;
         SourceRackList.ItemsSource = moduleRegistry.Modules.Select(module =>
         {
             var source = module.Descriptor;
             var selected = source.BackendId == activeModule.Descriptor.BackendId;
-            var badgeKey = selected
-                ? (source.IsImplementedInUi ? "SourceStatusActive" : "SourceStatusSelectedPlanned")
-                : (source.IsImplementedInUi ? "SourceStatusReady" : "SourceStatusPlanned");
-            var badgeBg = selected && source.IsImplementedInUi
-                ? "StudioSignalLockSoftBrush"
-                : selected
-                    ? "StudioInfoSoftBrush"
-                    : "StudioCardBrush";
-            var badgeFg = selected && source.IsImplementedInUi
-                ? "StudioSignalLockBrush"
-                : selected
-                    ? "StudioInfoBrush"
-                    : "StudioTextMutedBrush";
+            bool writing = selected && rackShowsRecording;
             return new SourceRackRow(
                 source.BackendId,
                 source.IconGlyph,
                 L(source.DisplayNameKey),
                 L(source.SubtitleKey),
-                L(badgeKey),
+                L(writing ? "RecordingClock" : "SourceStatusPlanned"),
+                writing || !source.IsImplementedInUi ? Visibility.Visible : Visibility.Collapsed,
+                ThemeBrush(writing ? "StudioRecSoftBrush" : "StudioCardBrush"),
+                ThemeBrush(writing ? "StudioRecTextBrush" : "StudioTextMutedBrush"),
                 canSwitch,
                 ThemeBrush(selected ? "StudioAccentSoftBrush" : "StudioPanelSecondaryBrush"),
                 ThemeBrush(selected ? "StudioAccentBrush" : "StudioHairlineBrush"),
-                ThemeBrush(selected ? "StudioAccentBrush" : "StudioTextSecondaryBrush"),
-                ThemeBrush(badgeBg),
-                ThemeBrush(badgeFg));
+                ThemeBrush(selected ? "StudioAccentBrush" : "StudioTextSecondaryBrush"));
         }).ToArray();
     }
 
@@ -521,18 +537,17 @@ public sealed partial class MainWindow : Window
 
     private void UpdateResponsiveFooter(double width)
     {
-        var compact = width < 1040;
+        var compact = width < (IsRfActive ? 1280 : 1040);
         var narrow = width < 760;
         FooterCenterColumn.Width = compact ? new GridLength(0) : new GridLength(1, GridUnitType.Star);
         FooterLayout.RowSpacing = compact ? 6 : 0;
-        Grid.SetRow(TelemetryStrip, compact ? 1 : 0);
-        Grid.SetColumn(TelemetryStrip, compact ? 0 : 1);
-        Grid.SetColumnSpan(TelemetryStrip, compact ? 3 : 1);
-        TelemetryStrip.HorizontalAlignment = compact ? HorizontalAlignment.Left : HorizontalAlignment.Center;
+        Grid.SetRow(FooterTelemetry, compact ? 1 : 0);
+        Grid.SetColumn(FooterTelemetry, compact ? 0 : 1);
+        Grid.SetColumnSpan(FooterTelemetry, compact ? 3 : 1);
+        FooterTelemetry.HorizontalAlignment = compact ? HorizontalAlignment.Left : HorizontalAlignment.Center;
         FooterStorageButton.Visibility = narrow ? Visibility.Collapsed : Visibility.Visible;
         ConfigurationSummary.Visibility = width < 820 ? Visibility.Collapsed : Visibility.Visible;
-        StereoMeter.Visibility = HasLiveCapture && ActiveWorkspaceCapabilities.SupportsAudioMeters && width >= 680
-            ? Visibility.Visible : Visibility.Collapsed;
+        UpdateAudioMeterVisibility(width);
     }
 
     private void StopInspectorAnimations()
@@ -852,13 +867,16 @@ public sealed partial class MainWindow : Window
         ApplySegmentState(LayoutSpectrumBtn, layout == WorkspaceLayoutMode.Spectrum);
         ApplySegmentState(LayoutEventsBtn, layout == WorkspaceLayoutMode.Events);
 
+        RfMeterRack.Visibility = IsRfActive ? Visibility.Visible : Visibility.Collapsed;
+        RfBlankPreview.Visibility = IsRfActive && layout != WorkspaceLayoutMode.Spectrum ? Visibility.Visible : Visibility.Collapsed;
+        RfStage.Visibility = IsRfActive && layout != WorkspaceLayoutMode.Focus ? Visibility.Visible : Visibility.Collapsed;
         var showPreview = layout is WorkspaceLayoutMode.Focus or WorkspaceLayoutMode.Split;
         var showInstruments = layout != WorkspaceLayoutMode.Focus;
         var showSplitDivider = layout == WorkspaceLayoutMode.Split;
 
-        PreviewMonitorHousing.Visibility = showPreview ? Visibility.Visible : Visibility.Collapsed;
+        PreviewMonitorHousing.Visibility = !IsRfActive && showPreview ? Visibility.Visible : Visibility.Collapsed;
         SplitResizeHandle.Visibility = showSplitDivider ? Visibility.Visible : Visibility.Collapsed;
-        InstrumentsHost.Visibility = showInstruments ? Visibility.Visible : Visibility.Collapsed;
+        InstrumentsHost.Visibility = !IsRfActive && showInstruments ? Visibility.Visible : Visibility.Collapsed;
 
         if (layout == WorkspaceLayoutMode.Focus)
         {
@@ -1215,6 +1233,11 @@ public sealed partial class MainWindow : Window
 
         var sanitized = RecordingFileNaming.SanitizeLabel(label);
         var samplePrefix = sanitized.Length == 0 ? "CaptureRack_YYYYMMDD_HHmmss" : $"{sanitized}_CaptureRack_YYYYMMDD_HHmmss";
+        if (IsRfActive)
+        {
+            RecordingFilenamePreview.Text = samplePrefix + rfInspector.Selection?.Suffix;
+            return;
+        }
         if (SupportsSoftwareOutput && SelectedRecordingOutput != RecordingOutput.Native)
         {
             var tag = new RecordingEncoding(SelectedRecordingOutput).FileTagForAudioChannels((int)ActiveDeckLinkAudioChannels);
@@ -1282,6 +1305,11 @@ public sealed partial class MainWindow : Window
             SetStatus("Idle", media.CanStart ? "PreviewBeforeRecording" : "SelectInputs");
             return;
         }
+        if (IsRfActive)
+        {
+            SetStatus("Idle", "RfReadyHint");
+            return;
+        }
         if (!IsDeckLinkActive)
         {
             SetStatus("BackendPlannedStatus", "PlannedBackendStageNotice", InfoBarSeverity.Informational);
@@ -1308,6 +1336,12 @@ public sealed partial class MainWindow : Window
 
     private async void StartButton_Click(object sender, RoutedEventArgs e)
     {
+        if (IsRfActive)
+        {
+            if (rfPreviewStop is not null) rfPreviewStop.Cancel();
+            else if (rfInspector.Selection is { } request) await (rfPreviewTask = PreviewRfAsync(request));
+            return;
+        }
         if (LiveMediaSource is { } media)
         {
             if (media.IsCapturing)
@@ -1331,6 +1365,12 @@ public sealed partial class MainWindow : Window
     {
         if (qcStop is not null)
             return;
+        if (IsRfActive)
+        {
+            if (rfStop is not null) { rfStop.Cancel(); UpdateControls(); }
+            else if (rfInspector.Selection is { } selected) await (rfTask = RecordRfAsync(selected));
+            return;
+        }
         if (LiveMediaSource is { } media)
         {
             await RecordDecodedMediaAsync(media);
@@ -1675,12 +1715,27 @@ public sealed partial class MainWindow : Window
 
     private void OnWindowClosed(object sender, WindowEventArgs args)
     {
+        rfAudioTimer.Stop();
         closing = true;
         CloseFullscreenPreviewWindow(suppressRestore: true);
     }
 
     private async void OnClosing(AppWindow sender, AppWindowClosingEventArgs e)
     {
+        if (rfStop is not null || rfPreviewStop is not null)
+        {
+            e.Cancel = true;
+            if (!finishingMediaForClose)
+            {
+                finishingMediaForClose = true;
+                rfStop?.Cancel();
+                if (rfTask is not null) await rfTask;
+                rfPreviewStop?.Cancel();
+                if (rfPreviewTask is not null) await rfPreviewTask;
+                DispatcherQueue.TryEnqueue(() => Close());
+            }
+            return;
+        }
         if (previewFullscreen)
         {
             var willDeferClose = LiveMediaSource is { IsCapturing: true } or { IsRecording: true } ||
@@ -1720,7 +1775,7 @@ public sealed partial class MainWindow : Window
 
         if (closing)
         {
-            e.Cancel = captureTask is { IsCompleted: false } || vancScanTask is { IsCompleted: false };
+            e.Cancel = !rfQcTail.IsCompleted || captureTask is { IsCompleted: false } || vancScanTask is { IsCompleted: false };
             return;
         }
 
@@ -1731,6 +1786,7 @@ public sealed partial class MainWindow : Window
         closing = true;
         StopPreviewClock();
         var task = (Task?)captureTask ?? vancScanTask;
+        if (!rfQcTail.IsCompleted) task = Task.WhenAll(task ?? Task.CompletedTask, rfQcTail);
         if (task is null)
         {
             bitmapPixels?.Dispose();
@@ -2353,6 +2409,7 @@ public sealed partial class MainWindow : Window
 
     private void UpdateControls()
     {
+        if (rackShowsRecording != CapturingToFile) RenderSourceRackList();
         UpdateRecordingEncodingControls();
         var media = LiveMediaSource;
         var active = IsCaptureInputActive;
@@ -2377,7 +2434,9 @@ public sealed partial class MainWindow : Window
         var previewCanStop = active && !closing && !changingRecording &&
             (media is null ? captureStop is { IsCancellationRequested: false } : !media.IsStopping);
         RenderCaptureActions();
-        StartButton.IsEnabled = active ? previewCanStop : canStart;
+        StartButton.IsEnabled = IsRfActive
+            ? !closing && !changingRecording && (rfPreviewStop is { IsCancellationRequested: false } || idle && rfInspector.Ready)
+            : active ? previewCanStop : canStart;
         PlaceholderStartButton.IsEnabled = canStart;
         PlaceholderStartButton.Visibility = HasLiveCapture && !active && canStart ? Visibility.Visible : Visibility.Collapsed;
         var waitingForFirstFrame = active && PreviewPlaceholder.Visibility == Visibility.Visible && (media?.HasPreview ?? true);
@@ -2392,7 +2451,9 @@ public sealed partial class MainWindow : Window
                 previewRecorder is not null && !pickingOutput &&
                 captureStop is { IsCancellationRequested: false } && !string.IsNullOrWhiteSpace(OutputPath.Text)));
         RecordButton.Visibility = media?.SupportsRecording == false ? Visibility.Collapsed : Visibility.Visible;
-        RecordButton.IsEnabled = recordEnabled;
+        RecordButton.IsEnabled = IsRfActive
+            ? rfStop is { IsCancellationRequested: false } || ((idle || rfPreviewReady && rfPreviewStop is { IsCancellationRequested: false }) && rfStop is null && !closing && qcStop is null && rfInspector.Ready && Directory.Exists(OutputPath.Text.Trim()))
+            : recordEnabled;
         CancelQcButton.IsEnabled = qcStop is { IsCancellationRequested: false };
         QcCenterPage.IsCancelEnabled = CancelQcButton.IsEnabled;
         FooterQcActivePill.Visibility = qcStop is null ? Visibility.Collapsed : Visibility.Visible;
@@ -2471,12 +2532,13 @@ public sealed partial class MainWindow : Window
         string Name,
         string Subtitle,
         string BadgeText,
+        Visibility BadgeVisibility,
+        Brush BadgeBackground,
+        Brush BadgeForeground,
         bool IsSelectable,
         Brush CardBackground,
         Brush CardBorder,
-        Brush IconForeground,
-        Brush BadgeBackground,
-        Brush BadgeForeground);
+        Brush IconForeground);
 
     private static bool IsSessionError(Exception ex) =>
         ex is COMException or InvalidOperationException or InvalidCastException or IOException or

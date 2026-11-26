@@ -5,7 +5,26 @@ namespace CaptureRack.SignalCapture;
 public enum RfUsbFirmware { Legacy, ProtocolV1, UnsupportedProtocol }
 
 public sealed record RfUsbProbeResult(RfUsbDevice Device, RfUsbFirmware Firmware, string UsbSpecification,
-    string UsbDeviceRelease, RfUsbEndpoint StreamEndpoint, uint MaximumTransferBytes, byte? RegisterMapVersion);
+    string UsbDeviceRelease, RfUsbEndpoint StreamEndpoint, uint MaximumTransferBytes, byte? RegisterMapVersion)
+{
+    // The bulk packet size describes the active link; bcdUSB only declares USB capability.
+    public string LinkSpeedHint => StreamEndpoint.MaxPacketBytes switch
+    {
+        1024 => "SuperSpeed or faster",
+        512 => "High-Speed (USB 2.0)",
+        <= 64 => "Full-Speed or slower",
+        _ => "Unknown"
+    };
+    public bool RecommendUsb3 => StreamEndpoint.MaxPacketBytes != 1024;
+    public string? Fx3Commit { get; init; }
+    public string? GatewareCommit { get; init; }
+    public string? FirmwareRelease => Fx3Commit?.ToLowerInvariant() switch
+    {
+        "bb2e11a" or "bb2e11aa" => "3.2.0",
+        "e61e886" or "e61e8868" => "3.1.0",
+        _ => null
+    };
+}
 
 internal static class DomesdayUsb
 {

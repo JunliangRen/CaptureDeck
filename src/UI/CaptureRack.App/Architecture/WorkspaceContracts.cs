@@ -281,7 +281,7 @@ public sealed class WorkspaceModuleRegistry
             new FireWireWorkspaceModule(),
             new PlannedWorkspaceModule(
                 new("windows.signalcapture", CaptureBackendCategory.SignalCapture,
-                    "BackendRfName", "BackendRfDesc", IsImplementedInUi: false,
+                    "BackendRfName", "BackendRfDesc", IsImplementedInUi: true,
                     new(false, false, false, true, true, false, false, true, true),
                     IconGlyph: "\uE959",
                     CliCommandHint: "CaptureRack.Probe.exe rf list"),
@@ -440,7 +440,7 @@ public static class RecordingFileNaming
     }
 }
 
-public enum QcEntryKind { Mov, TransportStream, Dv }
+public enum QcEntryKind { Mov, TransportStream, Dv, RfRamp }
 
 public sealed record QcSessionHistoryEntry(
     Guid Id,

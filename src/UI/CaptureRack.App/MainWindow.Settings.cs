@@ -364,18 +364,11 @@ public sealed partial class MainWindow
     private void UpdateConfigurationStatus()
     {
         QuickSourceIcon.Glyph = activeModule.Descriptor.IconGlyph;
+        var modeName = L(activeModule.Descriptor.DisplayNameKey);
+        ConfigurationSummary.Text = modeName;
+        AutomationProperties.SetName(QuickSourceButton, $"{L("Capture")} · {modeName}");
         if (!IsDeckLinkActive)
         {
-            var backendName = L(activeModule.Descriptor.DisplayNameKey);
-            var liveSummary = LiveMediaSource?.ConfigurationSummaryText;
-            var text = IsTestSignalActive
-                ? $"{backendName} · {L(TestSignalScenarioKey)} · {TestSignal.Mode.Description} · " +
-                    $"{LocalFormat("ShortVideoFormat", "v210", 10)} / {LocalFormat("ShortPcmFormat", (uint)TestSignal.AudioFormat)}"
-                : LiveMediaSource is not null
-                    ? string.IsNullOrWhiteSpace(liveSummary) ? backendName : $"{backendName} · {liveSummary}"
-                    : $"{backendName} · {L("SourceStatusPlanned")}";
-            ConfigurationSummary.Text = text;
-            AutomationProperties.SetName(QuickSourceButton, $"{L("Capture")} · {text}");
             QuickSourceDot.Fill = !HasLiveCapture
                 ? ThemeBrush("StudioInfoBrush")
                 : IsCaptureInputActive && liveSignal == VideoSignal.Present
@@ -405,21 +398,6 @@ public sealed partial class MainWindow
         var video = deckLinkInspector.SelectedVideoSource;
         var audio = deckLinkInspector.SelectedAudioSource;
         var mode = deckLinkInspector.SelectedMode;
-        var modeLabel = mode is { Id: null } && observedPreviewMode is { } activeMode
-            ? observedPreviewModeIsFallback
-                ? LocalFormat("AutoFallbackMode", mode.Label, activeMode.Description)
-                : $"{mode.Label} ({activeMode.Description})"
-            : mode?.Label;
-        var pcmSummary = deckLinkInspector.SelectedAudioChannels > 2
-            ? $"{LocalFormat("ShortPcmFormat", (uint)deckLinkInspector.SelectedAudioFormat)} {LocalFormat("PreviewAudioChannels", deckLinkInspector.SelectedAudioChannels)}"
-            : LocalFormat("ShortPcmFormat", (uint)deckLinkInspector.SelectedAudioFormat);
-        var summary = device is null || video is null || audio is null || mode is null
-            ? L("Configure")
-            : $"{device.Name} · {video.Name} / {audio.Name} · {modeLabel} · " +
-                $"{LocalFormat("ShortVideoFormat", DeckLinkCapture.FormatFourCc((uint)deckLinkInspector.SelectedVideoFormat), deckLinkInspector.SelectedVideoFormat == CapturePixelFormat.V210 ? 10 : 8)} / {pcmSummary}";
-        ConfigurationSummary.Text = summary;
-        AutomationProperties.SetName(QuickSourceButton, $"{L("Capture")} · {summary}");
-
         var selectedMode = mode?.Id is { } id
             ? video?.ModesFor(deckLinkInspector.SelectedVideoFormat).FirstOrDefault(option => option.Id == id)
             : mode is not null ? observedPreviewMode : null;
@@ -514,13 +492,23 @@ public sealed partial class MainWindow
             InspectorStorageStatus.Text = HasLiveCapture && LiveMediaSource is null ? $"{free} · {estimate}" : free;
             StorageStatus.Text = HasLiveCapture && LiveMediaSource is null && selectedMode is not null ? estimate : free;
 
+            var ddd = IsRfActive ? rfInspector.Selection : null;
+            bool low = false;
+            if (ddd?.Ddd is not null)
+            {
+                double seconds = ddd.EstimatedSecondsRemaining(space.AvailableBytes);
+                low = seconds < CaptureRack.SignalCapture.RfRecording.LowSpaceSeconds;
+                StorageStatus.Text = LocalFormat(low ? "RfLowSpace" : "StorageDuration", FormatRecordingTime(seconds));
+                InspectorStorageStatus.Text = $"{free} · {StorageStatus.Text}";
+            }
+
             if (space.TotalBytes > 0)
             {
                 var usedPct = Math.Clamp((1.0 - (double)space.AvailableBytes / space.TotalBytes) * 100.0, 0, 100);
                 var freePct = 100.0 - usedPct;
                 InspectorStorageBar.Value = FooterStorageBar.Value = usedPct;
                 InspectorStorageBar.Visibility = FooterStorageBar.Visibility = Visibility.Visible;
-                var barBrush = freePct < 5
+                var barBrush = low || freePct < 5
                     ? ThemeBrush("StudioDangerBrush")
                     : freePct < 15
                         ? ThemeBrush("StudioCautionBrush")

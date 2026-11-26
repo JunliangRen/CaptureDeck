@@ -27,7 +27,18 @@ public static class WinUsbRfProbe
 
         var path = RfUsbDiscovery.GetInterfacePath(device.InstanceId);
         using var usb = WinUsbDevice.Open(path);
-        var (usbVersion, vendor, product, release) = usb.ReadDeviceDescriptor();
+        var session = new DomesdaySession(path);
+        RfUsbProbeResult? result = null;
+        try { result = Inspect(device, usb); }
+        catch (Exception ex) { session.Fail(ex); }
+        session.Cleanup("Restore probe alternate setting", usb.RestoreAlternate);
+        session.ThrowIfFailed();
+        return result!;
+    }
+
+    internal static RfUsbProbeResult Inspect(RfUsbDevice device, WinUsbDevice usb)
+    {
+        var (usbVersion, vendor, product, release, productIndex) = usb.ReadDeviceDescriptor();
         if (vendor != device.VendorId || product != device.ProductId)
             throw new InvalidDataException("The opened USB device no longer matches the selected instance.");
 
@@ -35,25 +46,34 @@ public static class WinUsbRfProbe
         if (firmware == RfUsbFirmware.UnsupportedProtocol)
             throw new InvalidDataException($"Unsupported RF firmware protocol (bcdDevice 0x{release:X4}).");
 
-        var endpoint = DomesdayUsb.SelectStreamEndpoint(firmware, usb.ReadBulkInEndpoints())
+        var endpoint = firmware == RfUsbFirmware.Legacy ? usb.SelectLegacyEndpoint() : DomesdayUsb.SelectStreamEndpoint(firmware, usb.ReadBulkInEndpoints())
             ?? throw new InvalidDataException(firmware == RfUsbFirmware.ProtocolV1
                 ? "Protocol-v1 requires exactly one 0x81 bulk IN endpoint with 1024-byte packets on interface 0, alternate setting 0."
                 : "The active legacy USB interface has no bulk IN endpoint.");
         var maximumTransfer = usb.ReadMaximumTransferSize(endpoint.Address);
-        byte? registerMap = firmware == RfUsbFirmware.ProtocolV1 ? ReadRegisterIdentity(usb) : null;
+        byte[]? identity = firmware == RfUsbFirmware.ProtocolV1 ? ReadRegisterIdentity(usb) : null;
+        var productName = identity is null ? null : usb.ReadProductString(productIndex);
+        int bracket = productName?.LastIndexOf('(') ?? -1;
+        string? fx3 = bracket >= 0 && productName!.EndsWith(')') ? productName[(bracket + 1)..^1] : null;
+        string? gateware = identity is not null && (identity[2] & 2) != 0
+            ? System.Text.Encoding.ASCII.GetString(identity, 3, 8).TrimEnd('\0') : null;
 
         return new RfUsbProbeResult(device, firmware, $"{usbVersion:X4}", $"{release:X4}",
-            endpoint, maximumTransfer, registerMap);
+            endpoint, maximumTransfer, identity?[1])
+        {
+            Fx3Commit = fx3,
+            GatewareCommit = gateware is null ? null : gateware + ((identity![2] & 1) != 0 ? "-dirty" : "")
+        };
     }
 
-    private static byte ReadRegisterIdentity(WinUsbDevice usb)
+    private static byte[] ReadRegisterIdentity(WinUsbDevice usb)
     {
         usb.SetControlTimeout(1000);
         // Read-only firmware handshake from MISRC-GUI.
-        Span<byte> identity = stackalloc byte[12];
+        var identity = new byte[12];
         if (usb.ReadVendorControl(0xb7, identity, "Read RF firmware identity") != identity.Length ||
             !DomesdayUsb.IsSupportedIdentity(identity))
             throw new InvalidDataException("The RF device did not return an application image with register map 2.");
-        return identity[1];
+        return identity;
     }
 }

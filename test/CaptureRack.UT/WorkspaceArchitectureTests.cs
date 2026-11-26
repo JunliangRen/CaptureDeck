@@ -322,7 +322,7 @@ public sealed class WorkspaceArchitectureTests
         Assert.Single(catalog.ByCategory(CaptureBackendCategory.Audio));
 
         var activeSources = catalog.Sources.Where(s => s.IsImplementedInUi).ToArray();
-        Assert.Equal([DeckLinkBackend.BackendId, TestSignal.BackendId, "windows.directshow", "windows.firewire"], activeSources.Select(s => s.BackendId));
+        Assert.Equal([DeckLinkBackend.BackendId, TestSignal.BackendId, "windows.directshow", "windows.firewire", "windows.signalcapture"], activeSources.Select(s => s.BackendId));
     }
 
     [Fact]

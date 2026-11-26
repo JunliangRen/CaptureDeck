@@ -1801,4 +1801,46 @@
   <data name="AudioMonitorPairTooltip" xml:space="preserve"><value>Ch {0} をモニター（スペクトル・位相も連動）</value></data>
   <data name="AudioChannelNumber" xml:space="preserve"><value>Ch {0} ({1})</value></data>
   <data name="TestSignalMultiChannel" xml:space="preserve"><value>8ch アクティブペア（デモ）</value></data>
+  <data name="RfFrequency" xml:space="preserve">
+    <value>中心周波数 (Hz)</value>
+  </data>
+  <data name="RfManualGain" xml:space="preserve">
+    <value>手動チューナーゲイン · 0 dB</value>
+  </data>
+  <data name="RfWaveform" xml:space="preserve">
+    <value>オシロスコープ · ADC コード</value>
+  </data>
+  <data name="RfNoDevice" xml:space="preserve">
+    <value>RF デバイスが見つかりません。</value>
+  </data>
+  <data name="RfReadyHint" xml:space="preserve">
+    <value>プレビューでレベルを確認できます。録画するには出力フォルダーを選択してください。</value>
+  </data>
+  <data name="RfTestRamp" xml:space="preserve"><value>FPGA テストランプ（収録後に検証）</value></data>
+  <data name="RfVerifyRamp" xml:space="preserve"><value>収録したテストランプを検証中</value></data>
+  <data name="RfQcQueued" xml:space="preserve"><value>録画をランプ検証キューに追加しました</value></data>
+  <data name="RfQcSamples" xml:space="preserve"><value>FPGA テストランプ · {0:N0} サンプル</value></data>
+  <data name="RfFifoLevels" xml:space="preserve"><value>FPGA FIFO 使用量 {0:N0}/{1:N0} ワード   ·   最大 {2:N0}（{3:F1}%）   ·   ニアフル累計 {4}{5:N0} サンプル</value></data>
+  <data name="RfFifoStopped" xml:space="preserve"><value>FIFO テレメトリ停止</value></data>
+  <data name="RfMarkerUnlocked" xml:space="preserve"><value>シーケンス未ロック · 連続性未確認</value></data>
+  <data name="RfMarkerLocked" xml:space="preserve"><value>シーケンスロック中</value></data>
+  <data name="RfMarkerLost" xml:space="preserve"><value>シーケンスロック喪失</value></data>
+  <data name="RfUsbSpeedWarning" xml:space="preserve"><value>40 MSPS では USB 3 ポートとケーブルを使用してください。</value></data>
+  <data name="RfSwitchHeader" xml:space="preserve"><value>SW401（スイッチ 1～4、1 は ON）</value></data>
+  <data name="RfSwitchUnknown" xml:space="preserve"><value>未入力</value></data>
+  <data name="RfLowSpace" xml:space="preserve"><value>空き容量が少なくなっています · 残り約 {0}</value></data>
+  <data name="RfHardwareRate" xml:space="preserve"><value>ハードウェア直接取得</value></data>
+  <data name="RfSoftwareRate" xml:space="preserve"><value>ソフトウェア間引き</value></data>
+  <data name="RfPreviewType" xml:space="preserve"><value>プレビューの種類</value></data>
+  <data name="RfOnly" xml:space="preserve"><value>RF のみ</value></data>
+  <data name="RfVideoOnly" xml:space="preserve"><value>映像のみ</value></data>
+  <data name="RfWaitingAudio" xml:space="preserve"><value>音声を待機中</value></data>
+  <data name="RtlCustom" xml:space="preserve"><value>カスタム…</value></data>
+  <data name="RtlVgaDefault" xml:space="preserve"><value>VGA（既定値 8）</value></data>
+  <data name="RtlInvalidTuning" xml:space="preserve"><value>整数 Hz で入力してください。対応レートは 225001–300000 または 900001–3200000 Hz です。</value></data>
+  <data name="RtlUseIq" xml:space="preserve"><value>この設定では I/Q を選ぶか、Hi-Fi 帯域を 0～4 MHz 内に収めてください。</value></data>
+  <data name="RfLdfFormat" xml:space="preserve"><value>LDF FLAC（LD 標準形式）</value></data>
+  <data name="RfPeakSpan" xml:space="preserve"><value>P-P</value></data>
+  <data name="RfMeasureHeading" xml:space="preserve"><value>RF 計測</value></data>
+  <data name="RfInputSamples" xml:space="preserve"><value>{0} サンプル · 入力 {1:G} MSPS</value></data>
 </root>

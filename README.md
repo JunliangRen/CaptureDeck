@@ -6,7 +6,7 @@ CaptureRack is a .NET 11 video capture and preservation tool. The Windows deskto
 
 | Platform | Build | Features |
 | --- | --- | --- |
-| Windows x64 | [Native WinUI 3](../../actions/workflows/windows.yml?query=branch%3Amain+is%3Asuccess) | DeckLink, DirectShow and FireWire capture, real-time software recording, and offline QC. |
+| Windows x64 | [Native WinUI 3](../../actions/workflows/windows.yml?query=branch%3Amain+is%3Asuccess) | DeckLink, DirectShow, FireWire, Domesday Duplicator and RTL-SDR capture, real-time recording, and offline QC. |
 | Windows ARM64 | [Native WinUI 3](../../actions/workflows/windows.yml?query=branch%3Amain+is%3Asuccess) | Offline QC. DeckLink capture is unavailable. |
 | macOS ARM64 | [Uno Desktop prototype](../../actions/workflows/uno-macos.yml?query=branch%3Amain+is%3Asuccess) | Offline MOV and TS QC, report viewing, and TS JSON export |
 
@@ -95,6 +95,36 @@ dotnet publish src/CaptureRack.Probe -c Release -r $rid --self-contained
 
 On Windows ARM64, CaptureRack can open settings and check existing MOV files. DeckLink capture is currently available on Windows x64 with a compatible Blackmagic Desktop Video installation. Device support for future backends is validated separately.
 
+## Windows RF recording
+
+In **RF / Baseband SignalCapture**, select the receiver, choose the recording format and an output folder, then start recording. The waveform shows a 256-sample ADC trace. Min, max, peak-to-peak and RMS cover all samples between measurement updates. CLIP counts rail hits throughout the recording. RTL-SDR displays I and Q separately.
+
+| Source | RAW output | Capture controls |
+| --- | --- | --- |
+| Domesday Duplicator | Signed little-endian 16-bit mono. Direct modes preserve the 10-bit ADC codes | Protocol-v1: 40/20 MSPS direct, 10/5 MSPS software-filtered from 20. Legacy: 40 MSPS direct, 20/10/5 from 40 |
+| RTL-SDR Hi-Fi RF | Signed little-endian 16-bit mono, interpolated and mixed back to the tuned frequency at 8 MSPS | Selectable I/Q input rate (default 1.024 MSPS), manual tuner gain 0 dB, digital AGC off, live VGA 0–8 (default 8) on supported Blog V4 receivers |
+| RTL-SDR I/Q | Native interleaved unsigned 8-bit I/Q pairs (.cu8) | Same gain and VGA controls, adjustable center frequency |
+
+RTL-SDR frequency and input rate each have a preset menu and a custom entry in Hz. The initial tuning is 1.500 MHz (NTSC Hi-Fi). Native I/Q records at the selected input rate. Hi-Fi reconstruction produces 8 MSPS mono and requires the tuned input band to fit within 0–4 MHz. Select I/Q for FM and ADS-B tuning.
+
+RF preview opens the selected receiver and monitors its ADC signal with an empty video canvas. The left meter shows positive and negative peaks about zero, one-second peak holds and separately resettable rail-hit indicators (ADC or I/Q). Studio Split puts the time-domain oscilloscope below the canvas; Spectrum expands the oscilloscope. The capture inspector shows transport telemetry. Starting a recording from preview attaches a separate writer, and stopping it leaves the receiver and instruments running. DdD reports identify the shared preview session and the zero-based position of the clip's first sample in that session. Writer, clip and FIFO statistics belong to the individual recording; the first FIFO latch is its baseline. Direct recording from idle releases the receiver at stop.
+
+DdD software rates use a streaming low-pass filter before decimation on the writer thread. ADC levels, clips and sequence checks use the hardware input. File naming, storage estimates and RF sample-rate tags use the output rate. The sidecar separates input and written sample counts, hardware and software decimation, and hardware and file rates. SW401 choices show nominal amplifier gain in descending order.
+
+**RF preview audio.** Choose BETAMAX_HIFI or LD in the RF inspector to show the existing broadcast audio meter on the right. The decoder supplies the selected track name, PCM channel count and interleaved samples before speaker volume or mute. The meter waits for audio until the selected track supplies PCM, displays digital silence at −∞ dBFS, and clears peak holds and clip latches on lock loss or track replacement. Pure video and RF-only selections collapse the entire column. The decoder input and WinUI behavior have been verified with simulated mono and stereo PCM. Live Betamax Hi-Fi and LD decoding are pending.
+
+Domesday Duplicator offers RAW, native FLAC, and LDF FLAC (LD standard). LDF writes mono signed 16-bit RF samples losslessly as FLAC in an Ogg container with the historical `.ldf` extension. Select 40 MSPS for full-rate LaserDisc capture. The selector shows the full device name with Legacy or the identified firmware release.
+
+Each DdD RAW, FLAC or LDF recording includes a `.fifo.json` sidecar. Its `Source` records the Windows USB instance, protocol, identified firmware release, FX3 and FPGA commits, output format, physical file sample rate, decimation, test mode and optional manually declared SW401 setting. Read switches 1 through 4 left to right (1 = ON). Leave the selector undeclared when the board setting is unknown. FLAC also carries the DDD sample-rate, decimation, test-mode and available version and front-end gain tags.
+
+The RF inspector and footer estimate remaining DdD recording time on the selected output volume. RAW uses two bytes per sample and FLAC assumes 2:1 compression. A warning appears below ten estimated minutes. Actual FLAC duration depends on the signal.
+
+FLAC uses FFmpeg and the MISRC-GUI RF rate convention (physical Hz divided by 1,000 in STREAMINFO). The filename and RF_SAMPLE_RATE_HZ tag carry the physical rate. RAW works independently of FFmpeg. Failed captures retain a partial file when data was written. The RTL-SDR DLL setup below applies to both the native app and Probe.
+
+Enable **FPGA test ramp** in the DdD inspector to record a known pattern. CaptureRack checks the ADC codes and firmware sequence markers during capture. After an orderly stop it drains the outstanding WinUSB reads, finishes the writer, and releases the recorder for the next take. QC Center queues each closed file and verifies one at a time in the background, reading the entire RAW file or decoding the entire FLAC. Its session history shows queued, running, passed and failed checks. It checks the first code, every signed PCM sample, and the total against the live ramp before publishing the file. Test captures have `TestData_DdD` in the filename and a `.ramp.json` report. A short bulk read, exhaustion of the in-flight USB reads, a broken sequence, or failed verification ends the run with a partial file.
+
+Protocol-v1 DdD recordings save a `.fifo.json` report beside the media on orderly shutdown or a handled capture error. CaptureRack uses one independent overlapped WinUSB control request to poll the FPGA FIFO every 250 ms. A slow reading stays in flight while bulk reads continue. Two cumulative failed or short USB control reads disable telemetry for the session while bulk capture continues. OverflowEvents and DroppedSamples count valid, distinct intervals after the baseline. ReadFailures, PollingDisabled, UnrecognizedReadings, MissedIntervals and CounterSaturated qualify the totals. Zero observed drops with no valid intervals provides no evidence of FIFO integrity. The RF measurement shows current FIFO words and depth, the largest interval peak after the baseline, and near-full samples accumulated in units of 256. The last reading and its timestamp remain available in the report. On a capture failure the same report includes the detected zero-based sample position (after startup discard), sequence marker context, USB operation and outstanding requests, FIFO snapshot, samples submitted to the writer and maximum pending write blocks and configured capacity. DdD allows 256 queued blocks (up to 64 MiB); the USB pool still holds 16 transfers. UsbCallbackMaxMs and UsbCallbackMeanMs measure wall time inside the bulk consumer, including validation, conversion, copy and enqueue. USB completion waits, telemetry and file I/O are outside this timer. Sequence validation remains active independently and a marker error ends recording. On a transfer failure, outstanding reads are cancelled individually and share a one-second completion deadline. A failed cancellation, unreaped request or failed hardware rollback locks the affected WinUSB interface path for the lifetime of the process. Any unreaped request retains its native handles, event and pinned storage. The error includes the original failure and cleanup diagnostics.
+
 ## Windows RF USB probe
 
 ```powershell
@@ -104,13 +134,15 @@ $probe = '.\src\CaptureRack.Probe\bin\Release\net11.0-windows\win-x64\CaptureRac
 & $probe rf probe '<instance-id from rf list>' --json
 ```
 
-The probe targets Domesday Duplicator firmware through 3.2 using the legacy USB ID `1D50:603B` or the protocol-v1 runtime ID `1209:2347`. It identifies the protocol using the device descriptor and verifies the register map and application image for protocol-v1. A USB protocol version does not identify the physical board revision. Use the Windows WinUSB driver for the selected device. The probe reports the active driver and opens only the selected runtime instance.
+For legacy DdD, WinUSB searches the primary and associated interfaces and their alternate settings for the bulk IN endpoint with the largest packet size. Equal sizes keep descriptor order. Capture selects the interface/alternate, configures test mode and clears the selected pipe's halt before posting reads. A changed alternate setting is restored after capture. Probe and the inspector indicate the link class inferred from the bulk packet size and warn about non-SuperSpeed links at 40 MSPS. Legacy marker diagnostics in the RF readout and report start unlocked, lock at the first observed modulo-64 advance, and end the capture on a discontinuity. After lock each marker must cover 65,536 samples. Constant marker bits from startup leave continuity unverified while ADC recording continues.
+
+The probe targets Domesday Duplicator firmware through 3.2 using the legacy USB ID `1D50:603B` or the protocol-v1 runtime ID `1209:2347`. The WinUI RF selector and Probe identify official 3.1.0 and 3.2.0 builds by the FX3 commit in the USB product string. Probe also reports the FPGA commit independently. It identifies the protocol using the device descriptor and verifies the register map and application image for protocol-v1. A USB protocol version does not identify the physical board revision. Use the Windows WinUSB driver for the selected device. The probe reports the active driver and opens only the selected runtime instance.
 
 Probing reads USB descriptors, the stream endpoint, and protocol-v1 firmware identity. It does not start collection, write device registers, rebind drivers, or enter bootloader mode. Device capture and preview are outside this probe. See the [Domesday Duplicator Windows setup guide](https://domesday86.github.io/DomesdayDuplicator/capture-gui/install-msi/) for driver binding.
 
 ## Windows RTL-SDR probe
 
-RTL-SDR uses a matching-architecture `rtlsdr.dll` or `librtlsdr.dll` beside the probe, or an absolute path set in `CAPTURERACK_RTLSDR_LIBRARY`. Place its native dependencies next to the library and bind the receiver to WinUSB. This optional library is supplied separately.
+RTL-SDR uses a matching-architecture `rtlsdr.dll` or `librtlsdr.dll` beside the App or Probe executable, or an absolute path set in `CAPTURERACK_RTLSDR_LIBRARY`. Place its native dependencies next to the library and bind the receiver to WinUSB. This optional library is supplied separately.
 
 ```powershell
 & $probe rf sdr rtl-sdr list

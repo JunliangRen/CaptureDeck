@@ -1801,4 +1801,46 @@
   <data name="AudioMonitorPairTooltip" xml:space="preserve"><value>Monitor Ch {0} (also drives spectrum &amp; phase)</value></data>
   <data name="AudioChannelNumber" xml:space="preserve"><value>Ch {0} ({1})</value></data>
   <data name="TestSignalMultiChannel" xml:space="preserve"><value>8-ch active pairs (demo)</value></data>
+  <data name="RfFrequency" xml:space="preserve">
+    <value>Center frequency (Hz)</value>
+  </data>
+  <data name="RfManualGain" xml:space="preserve">
+    <value>Manual tuner gain · 0 dB</value>
+  </data>
+  <data name="RfWaveform" xml:space="preserve">
+    <value>Oscilloscope · ADC codes</value>
+  </data>
+  <data name="RfNoDevice" xml:space="preserve">
+    <value>No RF device detected.</value>
+  </data>
+  <data name="RfReadyHint" xml:space="preserve">
+    <value>Start preview to monitor levels, or select an output folder to record.</value>
+  </data>
+  <data name="RfTestRamp" xml:space="preserve"><value>FPGA test ramp (verify recording)</value></data>
+  <data name="RfVerifyRamp" xml:space="preserve"><value>Verifying recorded FPGA ramp</value></data>
+  <data name="RfQcQueued" xml:space="preserve"><value>Recording queued for ramp QC</value></data>
+  <data name="RfQcSamples" xml:space="preserve"><value>FPGA ramp · {0:N0} samples</value></data>
+  <data name="RfFifoLevels" xml:space="preserve"><value>FPGA FIFO {0:N0}/{1:N0} words   ·   Run peak {2:N0} ({3:F1}%)   ·   Near-full {4}{5:N0} samples</value></data>
+  <data name="RfFifoStopped" xml:space="preserve"><value>FIFO telemetry stopped</value></data>
+  <data name="RfMarkerUnlocked" xml:space="preserve"><value>Sequence unlocked · continuity unverified</value></data>
+  <data name="RfMarkerLocked" xml:space="preserve"><value>Sequence locked</value></data>
+  <data name="RfMarkerLost" xml:space="preserve"><value>Sequence lock lost</value></data>
+  <data name="RfUsbSpeedWarning" xml:space="preserve"><value>Use a USB 3 port and cable for 40 MSPS.</value></data>
+  <data name="RfSwitchHeader" xml:space="preserve"><value>SW401 (switches 1–4, 1 = ON)</value></data>
+  <data name="RfSwitchUnknown" xml:space="preserve"><value>Not declared</value></data>
+  <data name="RfLowSpace" xml:space="preserve"><value>Low disk space · {0} remaining</value></data>
+  <data name="RfHardwareRate" xml:space="preserve"><value>Hardware</value></data>
+  <data name="RfSoftwareRate" xml:space="preserve"><value>Software</value></data>
+  <data name="RfPreviewType" xml:space="preserve"><value>Preview type</value></data>
+  <data name="RfOnly" xml:space="preserve"><value>RF only</value></data>
+  <data name="RfVideoOnly" xml:space="preserve"><value>Video only</value></data>
+  <data name="RfWaitingAudio" xml:space="preserve"><value>Waiting for audio</value></data>
+  <data name="RtlCustom" xml:space="preserve"><value>Custom…</value></data>
+  <data name="RtlVgaDefault" xml:space="preserve"><value>VGA (default 8)</value></data>
+  <data name="RtlInvalidTuning" xml:space="preserve"><value>Enter a whole-Hz frequency and an RTL-SDR supported input rate (225001–300000 or 900001–3200000 Hz).</value></data>
+  <data name="RtlUseIq" xml:space="preserve"><value>Use I/Q for this tuning, or choose a Hi-Fi band inside 0–4 MHz.</value></data>
+  <data name="RfLdfFormat" xml:space="preserve"><value>LDF FLAC (LD standard)</value></data>
+  <data name="RfPeakSpan" xml:space="preserve"><value>P-P</value></data>
+  <data name="RfMeasureHeading" xml:space="preserve"><value>RF levels</value></data>
+  <data name="RfInputSamples" xml:space="preserve"><value>{0} samples · Input {1:G} MSPS</value></data>
 </root>

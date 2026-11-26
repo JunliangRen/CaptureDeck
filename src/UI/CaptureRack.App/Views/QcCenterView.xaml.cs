@@ -285,7 +285,7 @@ public sealed partial class QcCenterView : UserControl
                 item.Id,
                 item.FileName,
                 $"{item.CheckedAt.ToLocalTime():HH:mm:ss} · {localize(item.TitleKey)}",
-                item.Kind == QcEntryKind.TransportStream ? "TS" : Path.GetExtension(item.FilePath).TrimStart('.').ToUpperInvariant(),
+                item.Kind == QcEntryKind.TransportStream ? "TS" : Path.GetExtension(item.FileName).TrimStart('.').ToUpperInvariant(),
                 StudioBrushes.Resolve(this, item.Severity switch
                 {
                     TelemetrySeverity.Normal => "StudioSignalLockBrush",

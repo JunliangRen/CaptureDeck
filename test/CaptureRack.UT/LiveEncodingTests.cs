@@ -1,5 +1,8 @@
 using System.Buffers.Binary;
 using System.Diagnostics;
+using System.Runtime.InteropServices;
+using System.Text.Json;
+using System.Threading.Channels;
 using CaptureRack.App;
 using CaptureRack.DeckLink;
 using CaptureRack.QualityControl;
@@ -26,6 +29,60 @@ public sealed class LiveEncodingTests
     {
         using var input = new MemoryStream(System.Text.Encoding.UTF8.GetBytes(json));
         Assert.Equal(expected, CaptureSettingsStore.Read(input).RecordingEncoding.Output);
+    }
+
+    [Fact]
+    public async Task QueuePeakNeverCountsAPacketThatTheConsumerHasRemoved()
+    {
+        const int packets = 40_000, packetBytes = 17;
+        var queue = Channel.CreateBounded<int>(new BoundedChannelOptions(1) { SingleReader = true });
+        var diagnostics = new LiveEncodingDiagnostics();
+        var accepted = 0;
+        var consumer = Task.Run(async () =>
+        {
+            var read = 0;
+            await foreach (var packet in diagnostics.ReadAllAsync(queue.Reader, static bytes => bytes))
+            {
+                Assert.Equal(packetBytes, packet);
+                read++;
+            }
+            return read;
+        });
+
+        try
+        {
+            for (var i = 0; i < packets; i++)
+            {
+                if (diagnostics.TryEnqueue(queue.Writer, packetBytes, packetBytes, video: true))
+                    accepted++;
+                else
+                    await Task.Yield();
+            }
+        }
+        finally { diagnostics.Complete(queue.Writer); }
+
+        Assert.Equal(accepted, await consumer);
+        var peak = diagnostics.Queue;
+        Assert.Equal(1, peak.PeakPackets);
+        Assert.Equal(packetBytes, peak.PeakBytes);
+        Assert.Equal(packets - accepted, peak.RejectedVideoPackets);
+        Assert.Throws<InvalidOperationException>(() =>
+            diagnostics.TryEnqueue(queue.Writer, packetBytes, packetBytes, video: true));
+        Assert.Equal(peak, diagnostics.Queue);
+    }
+
+    [Fact]
+    public void LastCompleteClusterTimestampUsesTheSegmentTimestampScale()
+    {
+        using var media = new MemoryStream();
+        var writer = new NativeMatroskaWriter(media, new(new byte[40], 2, 2, 400000, 0, null), null);
+        writer.Write(true, 0, 400000, new byte[8]);
+        writer.Write(true, 12_345_000, 12_745_000, new byte[8]);
+        writer.Finish();
+
+        var recovery = new LiveMatroskaRecovery();
+        recovery.Scan(media, media.Length, verifyIntegrity: true);
+        Assert.Equal(1234.5, recovery.LastCompleteClusterTimestampMilliseconds);
     }
 
     [Fact]
@@ -93,7 +150,10 @@ public sealed class LiveEncodingTests
             var partial = path + ".partial.mkv";
             var frame = new byte[width * height * 2];
             var audio = new byte[1920 * audioTrack.BlockAlign];
-            using (var recording = new LiveEncodedRecording(path, new(output, 500, level), video, audioTrack, ffmpeg))
+            var injectDiskStall = output == RecordingOutput.Ffv1 && bits == 16;
+            var diskWrites = 0;
+            using (var recording = new LiveEncodedRecording(path, new(output, 500, level), video, audioTrack, ffmpeg,
+                beforeDiskWrite: injectDiskStall ? () => ++diskWrites == 1 ? Task.Delay(300) : Task.CompletedTask : null))
             {
                 for (var i = 0; i < 80; i++)
                 {
@@ -120,7 +180,25 @@ public sealed class LiveEncodingTests
             var broken = Path.Combine(folder.FullName, "broken.mkv");
             var recovered = Path.Combine(folder.FullName, "recovered.mkv");
             using var evidence = System.Text.Json.JsonDocument.Parse(await File.ReadAllTextAsync(path + ".encoding.json"));
-            var truncation = evidence.RootElement.GetProperty("completeClusterBytes").GetInt32() - 17;
+            var report = evidence.RootElement;
+            Assert.Equal(80, report.GetProperty("videoFramesToEncoder").GetInt64());
+            Assert.Equal(JsonValueKind.Null, report.GetProperty("decodedVideoFrames").ValueKind);
+            var lastTimestamp = report.GetProperty("lastCompleteClusterTimestampMilliseconds").GetDouble();
+            Assert.InRange(lastTimestamp, 500, 3200);
+            if (injectDiskStall)
+            {
+                var write = report.GetProperty("longestDiskWriteMilliseconds").GetDouble();
+                Assert.True(write >= 250, $"Expected the injected disk delay, measured {write} ms.");
+                Assert.Equal(Math.Max(write, report.GetProperty("longestDiskFlushMilliseconds").GetDouble()),
+                    report.GetProperty("longestDiskStallMilliseconds").GetDouble());
+            }
+            var truncation = report.GetProperty("completeClusterBytes").GetInt32() - 17;
+            using var scan = new MemoryStream(bytes);
+            var progress = new LiveMatroskaRecovery();
+            progress.Scan(scan, truncation);
+            Assert.True(progress.LastCompleteClusterTimestampMilliseconds < lastTimestamp);
+            progress.Scan(scan, bytes.Length);
+            Assert.Equal(lastTimestamp, progress.LastCompleteClusterTimestampMilliseconds);
             await File.WriteAllBytesAsync(broken, bytes[..truncation]);
             var count = await LiveMatroskaRecovery.RecoverAsync(broken, recovered);
             Assert.True(count > 0);
@@ -169,6 +247,64 @@ public sealed class LiveEncodingTests
 
     [Fact]
     [Trait("Category", "FFmpegIntegration")]
+    public async Task OutputWriteFaultCheckpointsTheLastSuccessfullyWrittenCluster()
+    {
+        if (QcReports.FindTools().FfmpegPath is not { } ffmpeg)
+            return;
+        var folder = Directory.CreateTempSubdirectory("capturerack-live-output-fault-");
+        try
+        {
+            const int width = 128, height = 96, frameTicks = 400000;
+            const string fault = "Injected media write failure";
+            var bitmap = new byte[40];
+            BinaryPrimitives.WriteInt32LittleEndian(bitmap, 40);
+            BinaryPrimitives.WriteInt32LittleEndian(bitmap.AsSpan(4), width);
+            BinaryPrimitives.WriteInt32LittleEndian(bitmap.AsSpan(8), height);
+            BinaryPrimitives.WriteInt16LittleEndian(bitmap.AsSpan(12), 1);
+            BinaryPrimitives.WriteInt16LittleEndian(bitmap.AsSpan(14), 16);
+            "UYVY"u8.CopyTo(bitmap.AsSpan(16));
+            var video = new NativeVideoTrack(bitmap, width, height, frameTicks, 0, null);
+            var path = Path.Combine(folder.FullName, "encoded.mkv");
+            var partial = path + ".partial.mkv";
+            var observed = new LiveMatroskaRecovery();
+            using (var recorder = new LiveEncodedRecording(path, new(RecordingOutput.Ffv1), video, null, ffmpeg,
+                beforeDiskWrite: () =>
+                {
+                    using var media = new FileStream(partial, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+                    observed.Scan(media, media.Length);
+                    if (observed.LastCompleteClusterTimestampMilliseconds is > 0)
+                        throw new IOException(fault);
+                    return Task.CompletedTask;
+                }))
+            {
+                var frame = new byte[width * height * 2];
+                var failure = Assert.Throws<IOException>(() =>
+                {
+                    for (var i = 0; i < 150; i++)
+                    {
+                        var start = (long)i * frameTicks;
+                        recorder.Write(true, start, start + frameTicks, frame);
+                    }
+                    recorder.Finish();
+                });
+                Assert.Contains(fault, failure.Message, StringComparison.Ordinal);
+            }
+            Assert.False(File.Exists(path));
+            using var checkpoint = JsonDocument.Parse(await File.ReadAllTextAsync(partial + ".checkpoint.json"));
+            var report = checkpoint.RootElement;
+            Assert.Equal(fault, report.GetProperty("error").GetString());
+            Assert.Equal(observed.CompletePrefix, report.GetProperty("completeClusterBytes").GetInt64());
+            Assert.Equal(observed.LastCompleteClusterTimestampMilliseconds,
+                report.GetProperty("lastCompleteClusterTimestampMilliseconds").GetDouble());
+
+            var recovered = Path.Combine(folder.FullName, "recovered.mkv");
+            Assert.Equal(observed.CompletePrefix, await LiveMatroskaRecovery.RecoverAsync(partial, recovered));
+        }
+        finally { folder.Delete(recursive: true); }
+    }
+
+    [Fact]
+    [Trait("Category", "FFmpegIntegration")]
     public async Task DeckLinkInterruptedRecordingLeavesAnExplicitlyMarkedPartial()
     {
         if (QcReports.FindTools() is not (string, string ffprobe))
@@ -178,7 +314,7 @@ public sealed class LiveEncodingTests
         {
             var path = Path.Combine(folder.FullName, "capture.mkv");
             var recorder = new PreviewRecorder();
-            using var input = new TestSignal.Session(TestSignalScenario.Normal, new PreviewFeed(), recorder);
+            using var input = new TestSignal.Session(TestSignalScenario.TimingFaults, new PreviewFeed(), recorder);
             input.Emit(0);
             recorder.Start(path, encoding: new(RecordingOutput.Ffv1));
             for (var frame = 1; frame <= 32; frame++)
@@ -193,6 +329,65 @@ public sealed class LiveEncodingTests
             Assert.Contains("ffv1", await Probe(ffprobe, partial));
             using var journal = System.Text.Json.JsonDocument.Parse(await File.ReadAllTextAsync(partial + ".checkpoint.json"));
             Assert.Equal(error, journal.RootElement.GetProperty("error").GetString());
+            Assert.Equal(31, journal.RootElement.GetProperty("captureVideoPackets").GetInt64());
+            Assert.Equal(1, journal.RootElement.GetProperty("captureEstimatedMissingVideoFrames").GetInt64());
+            Assert.Equal(31, journal.RootElement.GetProperty("videoFramesToEncoder").GetInt64());
+            Assert.Equal(0, journal.RootElement.GetProperty("queueRejectedPackets").GetInt64());
+        }
+        finally { folder.Delete(recursive: true); }
+    }
+
+    [Fact]
+    [Trait("Category", "FFmpegIntegration")]
+    public async Task EncoderInputStallFillsTheDeckLinkQueueWithoutACaptureGap()
+    {
+        if (QcReports.FindTools().FfmpegPath is null)
+            return;
+        var folder = Directory.CreateTempSubdirectory("capturerack-encoder-input-stall-");
+        try
+        {
+            var path = Path.Combine(folder.FullName, "capture.mkv");
+            var mode = new VideoMode(0, "Synthetic 25p", 128, 96, 1, 25, 0x70726f67);
+            using var entered = new ManualResetEventSlim();
+            using var resume = new ManualResetEventSlim();
+            using var recorder = new MovRecording(path, mode, CapturePixelFormat.Uyvy, CaptureAudioFormat.Pcm16,
+                new(RecordingOutput.Ffv1), beforeEncoderWrite: () =>
+                {
+                    if (entered.IsSet)
+                        return;
+                    entered.Set();
+                    if (!resume.Wait(TimeSpan.FromSeconds(10)))
+                        throw new TimeoutException("Test did not release the encoder.");
+                });
+            var source = new byte[128 * 96 * 2];
+            var pin = GCHandle.Alloc(source, GCHandleType.Pinned);
+            try
+            {
+                void Emit(int index) => recorder.SubmitVideo(pin.AddrOfPinnedObject(), 128, 96, 256, index, 1);
+                Emit(0);
+                Assert.True(entered.Wait(TimeSpan.FromSeconds(5)));
+                for (var index = 1; index <= 16; index++)
+                    Emit(index);
+                Assert.Contains("queue filled", Assert.Throws<IOException>(() => Emit(17)).Message);
+                await Task.Delay(300);
+            }
+            finally
+            {
+                resume.Set();
+                pin.Free();
+            }
+
+            Assert.Throws<IOException>(() => recorder.Finish());
+            Assert.False(File.Exists(path));
+            using var journal = JsonDocument.Parse(await File.ReadAllTextAsync(path + ".partial.mkv.checkpoint.json"));
+            var report = journal.RootElement;
+            Assert.Equal(18, report.GetProperty("captureVideoPackets").GetInt64());
+            Assert.Equal(0, report.GetProperty("captureEstimatedMissingVideoFrames").GetInt64());
+            Assert.Equal(16, report.GetProperty("queuePeakPackets").GetInt32());
+            Assert.Equal(16 * source.Length, report.GetProperty("queuePeakBytes").GetInt64());
+            Assert.Equal(1, report.GetProperty("queueRejectedVideoPackets").GetInt64());
+            Assert.Equal(17, report.GetProperty("videoFramesToEncoder").GetInt64());
+            Assert.True(report.GetProperty("longestEncoderWriteMilliseconds").GetDouble() >= 250);
         }
         finally { folder.Delete(recursive: true); }
     }
@@ -265,10 +460,40 @@ public sealed class LiveEncodingTests
             using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(30));
             var log = CaptureQcLog.Create(stats, started, DateTimeOffset.UtcNow,
                 "CaptureRack test signal", "Built-in", "SD interlaced test pattern", "Stereo test tone");
-            var qc = await QcReports.RunAsync(path, log, cancellation: timeout.Token);
+            var qc = await QcReports.RunAsync(path, log, cancellation: timeout.Token, stageChanged: stage =>
+            {
+                if (stage == QcStage.Analyzing)
+                {
+                    using var sidecar = JsonDocument.Parse(File.ReadAllText(path + ".encoding.json"));
+                    Assert.Equal(45, sidecar.RootElement.GetProperty("decodedVideoFrames").GetInt64());
+                }
+            });
             Assert.True(qc.Status == QcStatus.Passed, qc.Summary);
             Assert.Equal(45, qc.DecodedVideoFrames);
             Assert.Equal(72072, qc.DecodedAudioSampleFrames);
+            var reportPath = path + ".encoding.json";
+            var originalReport = await File.ReadAllTextAsync(reportPath);
+            using var encodingReport = JsonDocument.Parse(originalReport);
+            var report = encodingReport.RootElement;
+            Assert.Equal("completed", report.GetProperty("decodeStatus").GetString());
+            Assert.Equal(45, report.GetProperty("decodedVideoFrames").GetInt64());
+            Assert.Equal(72072, report.GetProperty("decodedAudioSampleFrames").GetInt64());
+            Assert.Equal(45, report.GetProperty("videoFramesToEncoder").GetInt64());
+            Assert.Equal(45, report.GetProperty("captureVideoPackets").GetInt64());
+            Assert.Equal(0, report.GetProperty("captureEstimatedMissingVideoFrames").GetInt64());
+            Assert.True(report.GetProperty("queuePeakBytes").GetInt64() > 0);
+
+            using var cancelled = new CancellationTokenSource();
+            cancelled.Cancel();
+            Assert.Equal(QcStatus.Cancelled, (await QcReports.RunAsync(path, cancellation: cancelled.Token)).Status);
+            Assert.Equal(originalReport, await File.ReadAllTextAsync(reportPath));
+            if (output == RecordingOutput.Ffv1)
+            {
+                var rerun = await QcReports.RunAsync(path, log, cancellation: timeout.Token);
+                Assert.True(rerun.Status == QcStatus.Passed, rerun.Summary);
+                Assert.Equal(45, rerun.DecodedVideoFrames);
+                Assert.Equal(originalReport, await File.ReadAllTextAsync(reportPath));
+            }
 
             if (output == RecordingOutput.Ffv1)
             {
@@ -284,6 +509,12 @@ public sealed class LiveEncodingTests
                 }
                 nativeRecorder.Finish();
                 Assert.Equal(await HashDecoded(ffmpeg, nativePath), await HashDecoded(ffmpeg, path));
+
+                await File.WriteAllBytesAsync(path, [0, 1, 2, 3]);
+                var failedRerun = await QcReports.RunAsync(path, cancellation: timeout.Token);
+                Assert.Equal(QcStatus.Failed, failedRerun.Status);
+                Assert.Null(failedRerun.DecodedVideoFrames);
+                Assert.Equal(originalReport, await File.ReadAllTextAsync(reportPath));
             }
         }
         finally { folder.Delete(recursive: true); }

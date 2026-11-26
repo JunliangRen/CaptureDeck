@@ -153,6 +153,16 @@ Under **Output → Recording output**, choose how to save DeckLink, DirectShow o
 
 On a clean stop, CaptureRack drains the queue, writes the seek index, and publishes the MKV and its `.encoding.json` report. If the queue fills or the software encoder exits early, the recording stops and preview can continue. CaptureRack keeps the `.partial.mkv` and records the failure reason in its checkpoint when available.
 
+The encoding report and the live checkpoint record the same capture diagnostics.
+
+| Fields | How to read them |
+| --- | --- |
+| `captureVideoPackets`, `captureEstimatedMissingVideoFrames`, `captureVideoDiscontinuities` | A gap in source timestamps is evidence of frames missing before encoding. The estimated count is null when no usable consecutive timestamps are available. Missing, repeated and regressing timestamps have separate counters. |
+| `queuePeakPackets`, `queuePeakBytes`, `queueRejectedPackets`, `queueRejectedVideoPackets` | Peak queued audio and video packets and their payload bytes, excluding the packet already held by the encoder writer. DirectShow reserves memory for that packet until the write ends. A rejection means the queue could not accept a sample. |
+| `videoFramesToEncoder`, `decodedVideoFrames` | Compare complete frames sent to FFmpeg with frames decoded from the saved MKV. DirectShow MPEG-2 uses `videoPacketsToEncoder` because a sample can contain partial or multiple pictures. QC fills the decoded count after a successful full decode, with no second decode. The first completed decode is retained across QC reruns. Until then the count is null and `decodeStatus` records progress or failure. |
+| `longestEncoderWriteMilliseconds`, `longestDiskStallMilliseconds` | Compare the longest FFmpeg input write with the longer of the media write and durable flush peaks. A slow disk can also block FFmpeg input. Idle waits for encoded output are excluded. |
+| `lastCompleteClusterTimestampMilliseconds`, `completeClusterBytes` | Start timestamp of the last structurally complete Cluster and the byte position just after it, measured at the latest successful media checkpoint. On a handled write failure CaptureRack tries to checkpoint acknowledged writes through the last complete Cluster. Recovery also checks the available CRCs. |
+
 To recover an interrupted CaptureRack software recording, choose a new destination:
 
 ```powershell

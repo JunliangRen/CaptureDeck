@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.IO.Compression;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Xml;
 using System.Xml.Linq;
 using CaptureRack.Core;
@@ -136,6 +137,8 @@ public static class QcReports
                 counts = await WriteAtomicallyAsync(output.FrameMd5, stream =>
                     DecodeAndHashAsync(ffmpeg, path, media, stream, cancellation, native is not null || !isMov));
                 hashesPath = output.FrameMd5;
+                if (!isMov)
+                    await UpdateEncodingReportAsync(path, counts, status, began, warnings);
 
                 Compare("Decoded video frames", counts.VideoFrames, capture?.Expected.VideoFrames ?? native?.ExpectedVideoFrames ?? media.VideoFrames, problems);
                 Compare("Decoded PCM sample frames", counts.AudioSampleFrames,
@@ -170,6 +173,9 @@ public static class QcReports
                 problems.Add($"{stage}: {ex.Message}");
             }
         }
+
+        if (!isMov && counts is null)
+            await UpdateEncodingReportAsync(path, null, status, began, warnings);
 
         var summary = status switch
         {
@@ -655,6 +661,63 @@ public static class QcReports
         while ((count = await reader.ReadAsync(buffer.AsMemory())) > 0)
             result.Append(buffer, 0, Math.Min(count, 4096 - result.Length));
         return result.ToString().Trim();
+    }
+
+    private static async Task UpdateEncodingReportAsync(string mediaPath, DecodedCounts? counts, QcStatus status,
+        DateTimeOffset began, List<string> warnings)
+    {
+        var path = mediaPath + ".encoding.json";
+        if (status == QcStatus.ToolsUnavailable || !File.Exists(path))
+            return;
+        try
+        {
+            await Task.Run(() => UpdateEncodingReport(path, counts, status, began));
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException or InvalidOperationException
+            or TimeoutException or WaitHandleCannotBeOpenedException)
+        {
+            warnings.Add($"Could not update the live encoding report: {ex.Message}");
+        }
+    }
+
+    private static void UpdateEncodingReport(string path, DecodedCounts? counts, QcStatus status, DateTimeOffset began)
+    {
+        // QC can run in the App and Probe at the same time. Protect the read and replacement as one operation.
+        using var mutex = new Mutex(false, "CaptureRack.EncodingReportUpdate");
+        try
+        {
+            if (!mutex.WaitOne(TimeSpan.FromSeconds(5)))
+                throw new TimeoutException("Another process is updating an encoding report.");
+        }
+        catch (AbandonedMutexException)
+        {
+            // A previous process exited during the update. The published report is still atomic.
+        }
+
+        try
+        {
+            var report = JsonNode.Parse(File.ReadAllText(path)) as JsonObject;
+            if (report is null || report["mode"]?.GetValue<string>() != "software_realtime" ||
+                report["decodedVideoFrames"] is not null)
+                return;
+
+            report["decodedVideoFrames"] = counts?.VideoFrames;
+            report["decodedAudioSampleFrames"] = counts?.AudioSampleFrames;
+            report["decodeStatus"] = counts is not null ? "completed" : status == QcStatus.Cancelled ? "cancelled" : "failed";
+            report["decodeAttemptUtc"] = began;
+            var temp = $"{path}.{Guid.NewGuid():N}.partial";
+            try
+            {
+                using (var output = new FileStream(temp, FileMode.CreateNew, FileAccess.Write, FileShare.None))
+                {
+                    JsonSerializer.Serialize(output, report);
+                    output.Flush(flushToDisk: true);
+                }
+                File.Move(temp, path, overwrite: true);
+            }
+            finally { File.Delete(temp); }
+        }
+        finally { mutex.ReleaseMutex(); }
     }
 
     private static async Task<T> WriteAtomicallyAsync<T>(string path, Func<Stream, Task<T>> write)

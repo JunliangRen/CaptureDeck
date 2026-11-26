@@ -12,10 +12,12 @@ public sealed class LiveMatroskaRecovery
 
     private long scanPosition;
     private long segmentStart;
+    private ulong timestampScaleNanoseconds = 1_000_000;
     private readonly List<(long Time, long Cluster, long Block)> cues = [];
     private bool header, info, tracks;
     private bool stopped;
     internal long CompletePrefix { get; private set; }
+    internal double? LastCompleteClusterTimestampMilliseconds { get; private set; }
     internal bool IsComplete(long fileLength) => !stopped && CompletePrefix > 0 && scanPosition == fileLength;
 
     internal void Scan(Stream input, long limit, bool verifyIntegrity = false, CancellationToken cancellation = default)
@@ -57,25 +59,56 @@ public sealed class LiveMatroskaRecovery
             {
                 if (id is Info or Tracks)
                 {
+                    var payload = input.Position;
                     var valid = size != 0 && (crcBuffer is null || ValidateMetadata(input, end, crcBuffer, cancellation));
                     if (id == Info)
-                        info = valid;
+                    {
+                        input.Position = payload;
+                        info = valid && ReadTimestampScale(input, end);
+                    }
                     else
                         tracks = valid;
                 }
                 if (id == Cluster)
                 {
-                    if (!info || !tracks || !ScanCluster(input, entry, end, crcBuffer, cancellation))
+                    if (!info || !tracks || !ScanCluster(input, entry, end, crcBuffer, cancellation, out var timestamp))
                     {
                         stopped = true;
                         return;
                     }
                     CompletePrefix = end;
+                    LastCompleteClusterTimestampMilliseconds = timestamp * (timestampScaleNanoseconds / 1_000_000d);
                 }
             }
             scanPosition = end;
             input.Position = scanPosition;
         }
+    }
+
+    private bool ReadTimestampScale(Stream input, long end)
+    {
+        while (input.Position < end)
+        {
+            if (!ReadVint(input, end, false, out var id, out _) ||
+                !ReadVint(input, end, true, out var size, out var unknown) || unknown ||
+                size > (ulong)(end - input.Position))
+                return false;
+            var next = input.Position + (long)size;
+            if (id == 0x2AD7B1)
+            {
+                if (size is < 1 or > 8)
+                    return false;
+                ulong scale = 0;
+                while (input.Position < next)
+                    scale = scale << 8 | (uint)input.ReadByte();
+                if (scale == 0)
+                    return false;
+                timestampScaleNanoseconds = scale;
+                return true;
+            }
+            input.Position = next;
+        }
+        return true;
     }
 
     private static bool ValidateMetadata(Stream input, long end, byte[] crcBuffer, CancellationToken cancellation)
@@ -126,8 +159,10 @@ public sealed class LiveMatroskaRecovery
             NativeMatroskaWriter.WriteCueIndex(output, cues.OrderBy(cue => cue.Time));
     }
 
-    private bool ScanCluster(Stream input, long clusterPosition, long end, byte[]? crcBuffer, CancellationToken cancellation)
+    private bool ScanCluster(Stream input, long clusterPosition, long end, byte[]? crcBuffer,
+        CancellationToken cancellation, out long timestamp)
     {
+        timestamp = 0;
         var payload = input.Position;
         long? time = null;
         (long Time, long Cluster, long Block)? cue = null;
@@ -151,12 +186,12 @@ public sealed class LiveMatroskaRecovery
                 case 0xE7: // Timestamp
                     if (time.HasValue || size is < 1 or > 8)
                         return false;
-                    ulong timestamp = 0;
+                    ulong ticks = 0;
                     while (input.Position < next)
-                        timestamp = timestamp << 8 | (uint)input.ReadByte();
-                    if (timestamp > long.MaxValue - short.MaxValue)
+                        ticks = ticks << 8 | (uint)input.ReadByte();
+                    if (ticks > long.MaxValue - short.MaxValue)
                         return false;
-                    time = (long)timestamp;
+                    time = (long)ticks;
                     break;
                 case 0xA3: // SimpleBlock
                     if (!ReadVint(input, next, true, out var track, out _) || track == 0 || next - input.Position < 4)
@@ -177,6 +212,7 @@ public sealed class LiveMatroskaRecovery
         }
         if (!time.HasValue || !hasBlock)
             return false;
+        timestamp = time.Value;
         if (cue is { } point)
             cues.Add(point);
         return true;

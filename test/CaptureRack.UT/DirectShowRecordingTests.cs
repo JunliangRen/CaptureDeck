@@ -82,7 +82,8 @@ public sealed class DirectShowRecordingTests
             for (var i = 0; i < 25; i++)
             {
                 var time = TimeSpan.FromMilliseconds(i * 40);
-                recording.Accept(true, new(video, false, time));
+                var videoTime = i < 10 ? time : time + TimeSpan.FromMilliseconds(40);
+                recording.Accept(true, new(video, i == 10, videoTime));
                 recording.Accept(false, new(audio, false, time));
             }
             recording.Complete();
@@ -91,6 +92,12 @@ public sealed class DirectShowRecordingTests
             Assert.True(result.Status == QcStatus.Passed, result.Summary);
             Assert.Equal(25, result.DecodedVideoFrames);
             Assert.Equal(48000, result.DecodedAudioSampleFrames);
+            using var sidecar = JsonDocument.Parse(await File.ReadAllTextAsync(path + ".encoding.json"));
+            Assert.Equal(25, sidecar.RootElement.GetProperty("captureVideoPackets").GetInt64());
+            Assert.Equal(1, sidecar.RootElement.GetProperty("captureEstimatedMissingVideoFrames").GetInt64());
+            Assert.Equal(1, sidecar.RootElement.GetProperty("captureVideoDiscontinuities").GetInt64());
+            Assert.Equal(25, sidecar.RootElement.GetProperty("videoFramesToEncoder").GetInt64());
+            Assert.Equal(25, sidecar.RootElement.GetProperty("decodedVideoFrames").GetInt64());
         }
         finally { folder.Delete(recursive: true); }
     }
@@ -118,6 +125,10 @@ public sealed class DirectShowRecordingTests
             Assert.False(File.Exists(path));
             using var checkpoint = JsonDocument.Parse(await File.ReadAllTextAsync(recording.PartialPath + ".checkpoint.json"));
             Assert.Equal(35, checkpoint.RootElement.GetProperty("videoPacketsToEncoder").GetInt64());
+            Assert.Equal(36, checkpoint.RootElement.GetProperty("captureVideoPackets").GetInt64());
+            Assert.Equal(1, checkpoint.RootElement.GetProperty("queueRejectedVideoPackets").GetInt64());
+            Assert.Equal(0, checkpoint.RootElement.GetProperty("captureEstimatedMissingVideoFrames").GetInt64());
+            Assert.True(checkpoint.RootElement.GetProperty("queuePeakBytes").GetInt64() > 0);
             Assert.Contains("did not keep up", checkpoint.RootElement.GetProperty("error").GetString());
             var recovered = Path.Combine(folder.FullName, "recovered.mkv");
             Assert.True(await LiveMatroskaRecovery.RecoverAsync(recording.PartialPath, recovered) > 0);

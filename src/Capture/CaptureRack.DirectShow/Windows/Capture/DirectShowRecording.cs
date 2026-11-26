@@ -31,6 +31,7 @@ public sealed class DirectShowRecording
     private bool startedVideo;
     private readonly bool compressed;
     private readonly bool software;
+    private readonly LiveEncodingDiagnostics? encodingDiagnostics;
     private readonly (string? FfmpegPath, string? FfprobePath) tools;
 
     private DirectShowRecording(string path, FileStream? file, LiveEncodedRecording? live, NativeVideoTrack video, NativePcmTrack? audio,
@@ -40,6 +41,7 @@ public sealed class DirectShowRecording
         Path = path;
         PartialPath = path + (live is null ? ".partial" : ".partial.mkv");
         software = live is not null;
+        encodingDiagnostics = live?.CaptureDiagnostics;
         this.video = video;
         this.audio = audio;
         compressed = IsCompressed(inputVideo);
@@ -132,6 +134,8 @@ public sealed class DirectShowRecording
             if (completed)
                 return;
             (isVideo ? videoEvidence : audioEvidence).Observe(sample);
+            if (isVideo)
+                encodingDiagnostics?.ObserveVideo(sample.StartTime?.Ticks, video.Mpeg2 ? 0 : video.FrameTicks, sample.Discontinuity);
             if (video.Mpeg2 && !startedVideo)
             {
                 if (!isVideo || sample.Bytes.IndexOf(Mpeg2SequenceHeader) < 0)
@@ -140,6 +144,7 @@ public sealed class DirectShowRecording
             }
             if (length > QueueBudget - Volatile.Read(ref queuedBytes))
             {
+                encodingDiagnostics?.Reject(isVideo);
                 Complete(new IOException(software
                     ? "The software recording queue filled. The encoder or storage did not keep up with capture."
                     : "The DirectShow recording queue filled before samples could be written."));
@@ -153,8 +158,13 @@ public sealed class DirectShowRecording
             var bytes = ArrayPool<byte>.Shared.Rent(length);
             sample.Bytes.CopyTo(bytes);
             Interlocked.Add(ref queuedBytes, length);
-            queue.Writer.TryWrite(new Packet(isVideo, bytes, length, sample.StartTime?.Ticks,
-                sample.EndTime?.Ticks, Stopwatch.GetElapsedTime(started).Ticks));
+            var packet = new Packet(isVideo, bytes, length, sample.StartTime?.Ticks,
+                sample.EndTime?.Ticks, Stopwatch.GetElapsedTime(started).Ticks);
+            var added = encodingDiagnostics is null
+                ? queue.Writer.TryWrite(packet)
+                : encodingDiagnostics.TryEnqueue(queue.Writer, packet, length, isVideo);
+            if (!added)
+                Release(packet);
         }
     }
 
@@ -192,7 +202,10 @@ public sealed class DirectShowRecording
                 long? nativeOrigin = null;
                 try
                 {
-                    await foreach (var packet in queue.Reader.ReadAllAsync().ConfigureAwait(false))
+                    var packets = encodingDiagnostics is null
+                        ? queue.Reader.ReadAllAsync()
+                        : encodingDiagnostics.ReadAllAsync(queue.Reader, static packet => packet.Length);
+                    await foreach (var packet in packets.ConfigureAwait(false))
                     {
                         try
                         {
@@ -246,7 +259,7 @@ public sealed class DirectShowRecording
         finally
         {
             Complete();
-            while (queue.Reader.TryRead(out var packet))
+            while (TryDequeue(out var packet))
                 Release(packet);
             var reportMedia = savedPath ?? PartialPath;
             try
@@ -265,6 +278,10 @@ public sealed class DirectShowRecording
             }
         }
     }
+
+    private bool TryDequeue(out Packet packet) => encodingDiagnostics is null
+        ? queue.Reader.TryRead(out packet)
+        : encodingDiagnostics.TryDequeue(queue.Reader, static packet => packet.Length, out packet);
 
     private void Release(Packet packet)
     {

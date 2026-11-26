@@ -124,8 +124,13 @@ internal sealed class LiveEncodedRecording : IDisposable
     private readonly Timer watchdog;
     private long writeStarted;
     private bool finished;
+    private bool interruptedCheckpointPending;
     private string? interruption;
-    private long videoPackets, audioPackets;
+    private long videoPackets, audioPackets, durablePosition;
+    private long longestEncoderWrite, longestDiskWrite, longestDiskFlush;
+    private readonly Action? beforeEncoderWrite;
+    private readonly Func<Task>? beforeDiskWrite;
+    internal LiveEncodingDiagnostics CaptureDiagnostics { get; } = new();
     internal bool Deinterlaced => options.AppliesDeinterlacing(video.FieldOrder);
     internal string PartialPath => partial;
     internal Task OutputEnded => writing;
@@ -148,7 +153,7 @@ internal sealed class LiveEncodedRecording : IDisposable
     }
 
     internal LiveEncodedRecording(string outputPath, RecordingEncoding options, NativeVideoTrack video, NativePcmTrack? audio,
-        string? ffmpeg = null)
+        string? ffmpeg = null, Action? beforeEncoderWrite = null, Func<Task>? beforeDiskWrite = null)
     {
         path = outputPath;
         partial = outputPath + ".partial.mkv";
@@ -156,6 +161,8 @@ internal sealed class LiveEncodedRecording : IDisposable
         this.options = options;
         this.video = video;
         this.audio = audio;
+        this.beforeEncoderWrite = beforeEncoderWrite;
+        this.beforeDiskWrite = beforeDiskWrite;
         if (File.Exists(path) || File.Exists(checkpoint) || File.Exists(path + ".encoding.json"))
             throw new IOException($"The recording destination already exists: {path}.");
         var executable = ffmpeg ?? QcReports.FindTools().FfmpegPath ??
@@ -221,10 +228,20 @@ internal sealed class LiveEncodedRecording : IDisposable
         CheckHealth();
         if (encoder.HasExited)
             throw Failure();
-        Volatile.Write(ref writeStarted, Stopwatch.GetTimestamp());
+        var startTimestamp = Stopwatch.GetTimestamp();
+        Volatile.Write(ref writeStarted, startTimestamp);
         try
         {
-            input.Write(isVideo, start, end, bytes, keyframe);
+            try
+            {
+                beforeEncoderWrite?.Invoke();
+                input.Write(isVideo, start, end, bytes, keyframe);
+            }
+            finally
+            {
+                Volatile.Write(ref writeStarted, 0);
+                RecordDuration(ref longestEncoderWrite, startTimestamp);
+            }
             if (isVideo)
                 Interlocked.Increment(ref videoPackets);
             else
@@ -236,7 +253,6 @@ internal sealed class LiveEncodedRecording : IDisposable
                 throw Failure();
             throw new IOException($"The live encoder stopped accepting samples. Recording prefix: {partial}.", error);
         }
-        finally { Volatile.Write(ref writeStarted, 0); }
     }
 
     internal void Finish(bool publish = true)
@@ -282,7 +298,9 @@ internal sealed class LiveEncodedRecording : IDisposable
             if (published)
                 throw new IOException($"Recording saved to '{path}'. The encoding report remains at '{checkpoint}'. {error.Message}", error);
             RecordInterruption(error.Message);
-            TrySaveInterruptedCheckpoint();
+            interruptedCheckpointPending = !writing.IsCompleted;
+            if (!interruptedCheckpointPending)
+                TrySaveInterruptedCheckpoint();
             if (error.Message.Contains(partial, StringComparison.Ordinal))
                 throw;
             throw new IOException($"{error.Message} Recording prefix: {partial}.", error);
@@ -295,7 +313,7 @@ internal sealed class LiveEncodedRecording : IDisposable
         {
             var buffer = new byte[128 * 1024];
             var flushTick = Task.Delay(1000);
-            long flushed = 0;
+            long flushed = 0, writtenPosition = 0;
             try
             {
                 var output = encoder.StandardOutput.BaseStream;
@@ -312,7 +330,15 @@ internal sealed class LiveEncodedRecording : IDisposable
                     var read = await next.ConfigureAwait(false);
                     if (read == 0)
                         break;
-                    await file.WriteAsync(buffer.AsMemory(0, read)).ConfigureAwait(false);
+                    var startedWriting = Stopwatch.GetTimestamp();
+                    try
+                    {
+                        if (beforeDiskWrite is not null)
+                            await beforeDiskWrite().ConfigureAwait(false);
+                        await file.WriteAsync(buffer.AsMemory(0, read)).ConfigureAwait(false);
+                        writtenPosition = file.Position;
+                    }
+                    finally { RecordDuration(ref longestDiskWrite, startedWriting); }
                     if (flushTick.IsCompleted)
                     {
                         Checkpoint(file);
@@ -323,35 +349,51 @@ internal sealed class LiveEncodedRecording : IDisposable
                 Checkpoint(file);
                 return file.Length;
             }
-            catch
+            catch (Exception error)
             {
-                if (!encoder.HasExited)
-                    encoder.Kill();
+                RecordInterruption(error.Message);
+                AbortEncoder();
+                if (writtenPosition > durablePosition)
+                {
+                    // A failing write may have left a partial buffer. Scan only acknowledged writes.
+                    try { Checkpoint(file, writtenPosition); }
+                    catch (Exception checkpointError) when (checkpointError is IOException or UnauthorizedAccessException or InvalidDataException) { }
+                }
                 throw;
             }
         }
     }
 
-    private void Checkpoint(FileStream file)
+    private void Checkpoint(FileStream file) => Checkpoint(file, file.Position);
+
+    private void Checkpoint(FileStream file, long writtenPosition)
     {
-        file.Flush(flushToDisk: true);
-        if (file.Position == 0)
+        var startedFlushing = Stopwatch.GetTimestamp();
+        try { file.Flush(flushToDisk: true); }
+        finally { RecordDuration(ref longestDiskFlush, startedFlushing); }
+        var flushedPosition = Math.Min(writtenPosition, file.Length);
+        if (flushedPosition == 0)
             return;
+        durablePosition = flushedPosition;
         using (var media = new FileStream(partial, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
-            recovery.Scan(media, file.Position);
-        WriteCheckpoint(file.Position);
+            recovery.Scan(media, durablePosition);
+        WriteCheckpoint(durablePosition);
     }
 
     private void TrySaveInterruptedCheckpoint()
     {
-        if (!writing.IsCompletedSuccessfully || writing.Result == 0)
+        if (!writing.IsCompleted || durablePosition == 0)
             return;
-        try { WriteCheckpoint(writing.Result); }
+        try { WriteCheckpoint(durablePosition); }
         catch (Exception error) when (error is IOException or UnauthorizedAccessException) { }
     }
 
     private void WriteCheckpoint(long durableBytes)
     {
+        var queue = CaptureDiagnostics.Queue;
+        var videoSent = Interlocked.Read(ref videoPackets);
+        var diskWrite = ReadMilliseconds(ref longestDiskWrite);
+        var diskFlush = ReadMilliseconds(ref longestDiskFlush);
         var state = JsonSerializer.SerializeToUtf8Bytes(new
         {
             mode = "software_realtime",
@@ -361,12 +403,32 @@ internal sealed class LiveEncodedRecording : IDisposable
             deinterlaced = Deinterlaced,
             flacLevel = audio is not null && options.Output == RecordingOutput.Ffv1 ? 8 : (int?)null,
             outputAudioBits = audio is null ? (int?)null : options.Output == RecordingOutput.Ffv1 ? Math.Max(16, audio.Bits) : audio.Bits,
-            videoPacketsToEncoder = Interlocked.Read(ref videoPackets),
+            queuePeakPackets = queue.PeakPackets,
+            queuePeakBytes = queue.PeakBytes,
+            queueRejectedPackets = queue.RejectedPackets,
+            queueRejectedVideoPackets = queue.RejectedVideoPackets,
+            captureVideoPackets = queue.CapturedVideoPackets,
+            captureEstimatedMissingVideoFrames = queue.ComparableVideoIntervals > 0 ? queue.EstimatedMissingFrames : (long?)null,
+            captureComparableVideoIntervals = queue.ComparableVideoIntervals,
+            captureVideoDiscontinuities = queue.CaptureDiscontinuities,
+            captureVideoTimestampsMissing = queue.TimestampsMissing,
+            captureVideoTimestampsRepeated = queue.TimestampsRepeated,
+            captureVideoTimestampsRegressed = queue.TimestampsRegressed,
+            videoPacketsToEncoder = videoSent,
+            videoFramesToEncoder = video.Mpeg2 ? (long?)null : videoSent,
+            decodedVideoFrames = (long?)null,
+            decodedAudioSampleFrames = (long?)null,
+            decodeStatus = "pending",
+            longestEncoderWriteMilliseconds = ReadMilliseconds(ref longestEncoderWrite),
+            longestDiskWriteMilliseconds = diskWrite,
+            longestDiskFlushMilliseconds = diskFlush,
+            longestDiskStallMilliseconds = Math.Max(diskWrite, diskFlush),
             audioPacketsToEncoder = Interlocked.Read(ref audioPackets),
             started,
             error = Volatile.Read(ref interruption),
             durableBytes,
             completeClusterBytes = recovery.CompletePrefix,
+            lastCompleteClusterTimestampMilliseconds = recovery.LastCompleteClusterTimestampMilliseconds,
             input = new { video.Width, video.Height, video.FrameTicks, video.FieldOrder, audio }
         });
         var pending = checkpoint + "." + Guid.NewGuid().ToString("N") + ".tmp";
@@ -386,8 +448,22 @@ internal sealed class LiveEncodedRecording : IDisposable
         }
     }
 
-    private IOException Failure() => new(
-        $"Live FFmpeg encoding failed. Recording prefix: {partial}.{Environment.NewLine}{diagnostics.GetAwaiter().GetResult().Trim()}");
+    private static void RecordDuration(ref long peak, long timestamp)
+    {
+        var elapsed = Stopwatch.GetElapsedTime(timestamp).Ticks;
+        // Each peak has one writer. Checkpoint serialization can read the encoder peak concurrently.
+        if (elapsed > Interlocked.Read(ref peak))
+            Interlocked.Exchange(ref peak, elapsed);
+    }
+
+    private static double ReadMilliseconds(ref long peak) =>
+        TimeSpan.FromTicks(Interlocked.Read(ref peak)).TotalMilliseconds;
+
+    private IOException Failure()
+    {
+        var reason = Volatile.Read(ref interruption) ?? "Live FFmpeg encoding failed.";
+        return new IOException($"{reason} Recording prefix: {partial}.{Environment.NewLine}{diagnostics.GetAwaiter().GetResult().Trim()}");
+    }
 
     private void AbortStalledEncoder()
     {
@@ -425,6 +501,8 @@ internal sealed class LiveEncodedRecording : IDisposable
             AbortEncoder();
             try { writing.GetAwaiter().GetResult(); }
             catch (Exception error) when (error is IOException or UnauthorizedAccessException or InvalidDataException) { }
+            if (interruptedCheckpointPending)
+                TrySaveInterruptedCheckpoint();
             encoder.Dispose();
         }
     }

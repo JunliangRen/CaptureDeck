@@ -2,6 +2,7 @@ using System.Buffers;
 using System.Buffers.Binary;
 using System.Collections.Concurrent;
 using System.Runtime.InteropServices;
+using System.Threading.Channels;
 using CaptureRack.Core;
 using CaptureRack.Recording;
 using CaptureRack.Recording.Matroska;
@@ -24,6 +25,7 @@ internal sealed class MovRecording : IDisposable
     private readonly int audioFrameBytes;
     private readonly CaptureAudioFormat audioFormat;
     private readonly BlockingCollection<Packet> packets = new(16);
+    private readonly Channel<Packet>? encodedPackets;
     private readonly Task<RecordingResult> writer;
     private readonly bool software;
     private readonly LiveEncodedRecording? liveEncoder;
@@ -34,7 +36,7 @@ internal sealed class MovRecording : IDisposable
     internal bool IsSoftware => software;
 
     public MovRecording(string outputPath, VideoMode mode, CapturePixelFormat format, CaptureAudioFormat audioFormat,
-        RecordingEncoding? encoding = null)
+        RecordingEncoding? encoding = null, Action? beforeEncoderWrite = null)
     {
         path = Path.GetFullPath(outputPath);
         software = encoding?.IsSoftware == true;
@@ -58,7 +60,8 @@ internal sealed class MovRecording : IDisposable
             {
                 var video = EncodedInput(mode, format, rowBytes);
                 var audio = new NativePcmTrack(48000, 2, (int)audioFormat, audioFrameBytes);
-                liveEncoder = new LiveEncodedRecording(path, encoding!, video, audio);
+                encodedPackets = Channel.CreateBounded<Packet>(new BoundedChannelOptions(16) { SingleReader = true });
+                liveEncoder = new LiveEncodedRecording(path, encoding!, video, audio, beforeEncoderWrite: beforeEncoderWrite);
                 writer = Task.Run(() => WriteEncoded(liveEncoder, format));
                 return;
             }
@@ -82,6 +85,8 @@ internal sealed class MovRecording : IDisposable
     {
         if (width != mode.Width || height != mode.Height || stride < rowBytes)
             throw new InvalidOperationException("The captured frame geometry changed during recording.");
+
+        liveEncoder?.CaptureDiagnostics.ObserveVideo(time, mode.FrameDuration);
 
         var length = checked(rowBytes * height);
         var data = ArrayPool<byte>.Shared.Rent(length);
@@ -137,7 +142,10 @@ internal sealed class MovRecording : IDisposable
     private void Enqueue(Packet packet)
     {
         CheckWriter();
-        if (!packets.TryAdd(packet))
+        var added = liveEncoder is null
+            ? packets.TryAdd(packet)
+            : liveEncoder.CaptureDiagnostics.TryEnqueue(encodedPackets!.Writer, packet, packet.Length, packet.AudioSamples == 0);
+        if (!added)
         {
             var message = software
                 ? "The software recording queue filled. The encoder or storage did not keep up with capture."
@@ -145,10 +153,18 @@ internal sealed class MovRecording : IDisposable
             if (software)
             {
                 Interlocked.CompareExchange(ref interruption, message, null);
-                packets.CompleteAdding();
+                CompleteQueue();
             }
             throw new IOException(message);
         }
+    }
+
+    private void CompleteQueue()
+    {
+        if (encodedPackets is null)
+            packets.CompleteAdding();
+        else
+            liveEncoder!.CaptureDiagnostics.Complete(encodedPackets.Writer);
     }
 
     public void CheckWriter()
@@ -162,7 +178,7 @@ internal sealed class MovRecording : IDisposable
     {
         if (software && captureError is not null)
             Interlocked.CompareExchange(ref interruption, captureError, null);
-        packets.CompleteAdding();
+        CompleteQueue();
         var result = writer.GetAwaiter().GetResult();
         finalized = true;
         if (software)
@@ -200,7 +216,7 @@ internal sealed class MovRecording : IDisposable
         return new(bitmap, mode.Width, mode.Height, frameTicks, order, null);
     }
 
-    private RecordingResult WriteEncoded(LiveEncodedRecording live, CapturePixelFormat format)
+    private async Task<RecordingResult> WriteEncoded(LiveEncodedRecording live, CapturePixelFormat format)
     {
         using (live)
         {
@@ -210,7 +226,8 @@ internal sealed class MovRecording : IDisposable
             long previousVideo = -1, previousAudio = -1;
             long videoEnd = 0, audioEnd = 0;
             long videoOffset = 0, audioOffset = 0;
-            foreach (var packet in packets.GetConsumingEnumerable())
+            await foreach (var packet in live.CaptureDiagnostics.ReadAllAsync(encodedPackets!.Reader, static packet => packet.Length)
+                .ConfigureAwait(false))
             {
                 try
                 {
@@ -285,7 +302,7 @@ internal sealed class MovRecording : IDisposable
         {
             if (software)
                 Interlocked.CompareExchange(ref interruption, "Recording disposed before a clean stop.", null);
-            packets.CompleteAdding();
+            CompleteQueue();
             try
             {
                 writer.GetAwaiter().GetResult();
@@ -295,8 +312,16 @@ internal sealed class MovRecording : IDisposable
                 // Capture or Finish owns reporting the original error.
             }
 
-            while (packets.TryTake(out var packet))
-                ArrayPool<byte>.Shared.Return(packet.Bytes);
+            if (encodedPackets is not null)
+            {
+                while (liveEncoder!.CaptureDiagnostics.TryDequeue(encodedPackets.Reader, static packet => packet.Length, out var packet))
+                    ArrayPool<byte>.Shared.Return(packet.Bytes);
+            }
+            else
+            {
+                while (packets.TryTake(out var packet))
+                    ArrayPool<byte>.Shared.Return(packet.Bytes);
+            }
             File.Delete(stagingPath);
         }
         packets.Dispose();

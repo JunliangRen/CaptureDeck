@@ -1,6 +1,6 @@
 using System.Runtime.CompilerServices;
 
-namespace CaptureRack.DeckLink;
+namespace CaptureRack.Audio;
 
 public enum AudioMonitorMode
 {

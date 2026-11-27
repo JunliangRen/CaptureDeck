@@ -1,3 +1,4 @@
+using CaptureRack.Audio;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Text;
@@ -732,8 +733,6 @@ public sealed record VancInputOptions(bool Enabled = false, int Line1 = 18, int 
 }
 
 public enum CapturePixelFormat : uint { V210 = 0x76323130, Uyvy = 0x32767579, Bgra = 0x42475241 }
-
-public enum CaptureAudioFormat : uint { Pcm16 = 16, Pcm32 = 32 }
 
 public static class CaptureAudio
 {

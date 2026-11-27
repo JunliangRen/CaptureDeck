@@ -1,3 +1,4 @@
+using CaptureRack.Audio;
 using System.Runtime.InteropServices;
 using CaptureRack.Core;
 

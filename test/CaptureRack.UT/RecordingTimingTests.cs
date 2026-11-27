@@ -1,3 +1,4 @@
+using CaptureRack.Audio;
 using System.Buffers.Binary;
 using CaptureRack.DeckLink;
 using Xunit;

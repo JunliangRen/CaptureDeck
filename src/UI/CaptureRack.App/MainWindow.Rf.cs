@@ -1,4 +1,5 @@
 #if REALTIME_RF
+using CaptureRack.Audio;
 using VHSDecode.Preview;
 #endif
 using CaptureRack.Core;

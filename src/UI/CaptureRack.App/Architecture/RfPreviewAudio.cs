@@ -1,4 +1,4 @@
-using CaptureRack.DeckLink;
+using CaptureRack.Audio;
 
 namespace CaptureRack.App;
 

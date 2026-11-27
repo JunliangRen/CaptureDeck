@@ -1,3 +1,4 @@
+using CaptureRack.Audio;
 using System.Globalization;
 using CaptureRack.App.Controls;
 using CaptureRack.DeckLink;

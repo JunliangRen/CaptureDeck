@@ -1,3 +1,4 @@
+using CaptureRack.Audio;
 using System.Runtime.InteropServices.WindowsRuntime;
 using System.Buffers;
 using System.Threading.Channels;

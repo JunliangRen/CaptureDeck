@@ -1,4 +1,5 @@
 #if REALTIME_RF
+using CaptureRack.Audio;
 using System.Buffers;
 using System.Runtime.InteropServices;
 using System.Threading.Channels;
@@ -17,7 +18,7 @@ internal sealed class RfPreviewDecoder
     });
     private readonly CancellationTokenSource stop = new();
     private readonly Task worker;
-    private readonly CaptureRack.DeckLink.LocalAudioMonitor? speaker;
+    private readonly LocalAudioMonitor? speaker;
     internal sealed record FieldPair(PreviewField First, PreviewField Second, short[]? SwitchTrace)
     {
         public PreviewField Top => First.IsTopField ? First : Second;
@@ -111,7 +112,7 @@ internal sealed class RfPreviewDecoder
             field.FieldsPerSecond / 2, upper.Width, height, upper.Width * field.PixelAspectRatio / fullHeight, sourceTag: pair);
     }
 
-    public RfPreviewDecoder(RealtimePreviewOptions options, RfPreviewAudio? audio, string? trackLabel = null, CaptureRack.DeckLink.LocalAudioMonitor? speaker = null)
+    public RfPreviewDecoder(RealtimePreviewOptions options, RfPreviewAudio? audio, string? trackLabel = null, LocalAudioMonitor? speaker = null)
     {
         Options = options;
         this.speaker = speaker;

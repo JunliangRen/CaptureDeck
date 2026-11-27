@@ -25,6 +25,7 @@
   <ItemGroup>
     <PackageReference Include="CommunityToolkit.WinUI.Controls.SettingsControls" Version="8.2.251219" />
     <PackageReference Include="Microsoft.WindowsAppSDK" Version="2.7.0" />
+    <ProjectReference Include="../../Capture/CaptureRack.Audio/CaptureRack.Audio.csproj" />
     <ProjectReference Include="../../Capture/CaptureCards/CaptureRack.DeckLink/CaptureRack.DeckLink.csproj" />
     <ProjectReference Include="../../Capture/CaptureRack.SignalCapture/CaptureRack.SignalCapture.csproj" />
     <ProjectReference Include="../../Capture/CaptureRack.DirectShow/CaptureRack.DirectShow.csproj" />

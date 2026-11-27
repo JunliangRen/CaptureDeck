@@ -19,7 +19,7 @@ This is the repository handoff for coding agents. Start with the current Git sta
 | CaptureRack.DeckLink | `src/Capture/CaptureCards/CaptureRack.DeckLink` | Blackmagic COM interop, capture, monitoring, and current MOV writer |
 | CaptureRack.DirectShow | `src/Capture/CaptureRack.DirectShow` | Windows generic DirectShow diagnostics and FireWire / MSTape source |
 | CaptureRack.SignalCapture | `src/Capture/CaptureRack.SignalCapture` | Sampled signal sources and diagnostics for Domesday Duplicator and RTL-SDR |
-| CaptureRack.Audio | `src/Capture/CaptureRack.Audio` | Shared WASAPI playback and future standalone audio inputs |
+| CaptureRack.Audio | `src/Capture/CaptureRack.Audio` | Shared-mode WASAPI speaker monitoring, PCM meters and gain, channel-pair routing and surround downmix |
 | CaptureRack.Recording | `src/Processing/CaptureRack.Recording` | Windows TS writer and file finalization |
 | CaptureRack.QualityControl | `src/Processing/CaptureRack.QualityControl` | Portable MOV QC orchestration, TS parsing, and offline analysis |
 | CaptureRack.DeviceControl | `src/CaptureRack.DeviceControl` | Independent tape transport contracts |

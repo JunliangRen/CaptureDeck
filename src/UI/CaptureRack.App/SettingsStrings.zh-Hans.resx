@@ -1836,6 +1836,7 @@
   <data name="RfVideoOnly" xml:space="preserve"><value>纯视频</value></data>
   <data name="RfWaitingAudio" xml:space="preserve"><value>等待音频</value></data>
   <data name="RtlCustom" xml:space="preserve"><value>自定义…</value></data>
+  <data name="RtlDefaultRateFormat" xml:space="preserve"><value>{0}（默认）</value></data>
   <data name="RtlVgaDefault" xml:space="preserve"><value>VGA（默认值 8）</value></data>
   <data name="RtlInvalidTuning" xml:space="preserve"><value>请输入整数 Hz。采样率支持 225001–300000 或 900001–3200000 Hz。</value></data>
   <data name="RtlUseIq" xml:space="preserve"><value>此调谐参数请选 I/Q，或让 Hi-Fi 频带落在 0–4 MHz 内。</value></data>

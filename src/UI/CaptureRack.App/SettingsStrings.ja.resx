@@ -1836,6 +1836,7 @@
   <data name="RfVideoOnly" xml:space="preserve"><value>映像のみ</value></data>
   <data name="RfWaitingAudio" xml:space="preserve"><value>音声を待機中</value></data>
   <data name="RtlCustom" xml:space="preserve"><value>カスタム…</value></data>
+  <data name="RtlDefaultRateFormat" xml:space="preserve"><value>{0}（既定）</value></data>
   <data name="RtlVgaDefault" xml:space="preserve"><value>VGA（既定値 8）</value></data>
   <data name="RtlInvalidTuning" xml:space="preserve"><value>整数 Hz で入力してください。対応レートは 225001–300000 または 900001–3200000 Hz です。</value></data>
   <data name="RtlUseIq" xml:space="preserve"><value>この設定では I/Q を選ぶか、Hi-Fi 帯域を 0～4 MHz 内に収めてください。</value></data>

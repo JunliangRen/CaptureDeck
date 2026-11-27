@@ -115,6 +115,12 @@ internal static unsafe class CaptureMediaType
         if (alternatives.Length > 0)
             return alternatives.Length == 1 ? format with { FallbackInterlaceFlags = alternatives[0] } : format;
 
+        // OBS Studio's virtual camera delivers complete compositor frames through this software filter.
+        const string obsVirtualCamera = @"@device:sw:{860BB310-5D01-11D0-BD3B-00A0C911CE86}\{A3FCE0F5-3493-419F-958A-ABA1250EC20B}";
+        if (deviceId.Equals(obsVirtualCamera, StringComparison.OrdinalIgnoreCase) &&
+            format.PinId == "Output Pin" && format.FourCc is "NV12" or "I420" or "YUY2")
+            return format with { FallbackInterlaceFlags = 0 };
+
         // The Blackmagic AVStream pin omits scan metadata for these two native SD modes.
         if (!deviceId.StartsWith(@"@device:pnp:\\?\decklink#avstream#", StringComparison.OrdinalIgnoreCase) ||
             format.FourCc is not ("UYVY" or "v210") || format.Width != 720)

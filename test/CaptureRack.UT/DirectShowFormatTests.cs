@@ -114,6 +114,22 @@ public sealed unsafe class DirectShowFormatTests
         Assert.Null(CaptureMediaType.ResolveScanMode(format, "generic capture", []).FieldOrder);
     }
 
+    [Fact]
+    public void ObsVirtualCameraProgressiveFallbackKeepsDriverFlagsDistinct()
+    {
+        const string device = @"@device:sw:{860BB310-5D01-11D0-BD3B-00A0C911CE86}\{A3FCE0F5-3493-419F-958A-ABA1250EC20B}";
+        var obs = LegacyUyvy(1080, 166833) with
+        {
+            Width = 1920, PinId = "Output Pin", FourCc = "NV12", Subtype = new("3231564e-0000-0010-8000-00aa00389b71")
+        };
+        var resolved = CaptureMediaType.ResolveScanMode(obs, device, []);
+        Assert.Null(resolved.InterlaceFlags);
+        Assert.Equal("progressive", resolved.FieldOrder);
+        Assert.Null(CaptureMediaType.ResolveScanMode(obs, "OBS Virtual Camera", []).FieldOrder);
+        Assert.Null(CaptureMediaType.ResolveScanMode(obs with { PinId = "Other" }, device, []).FieldOrder);
+        Assert.Equal("top-first", CaptureMediaType.ResolveScanMode(obs with { InterlaceFlags = 0x25 }, device, []).FieldOrder);
+    }
+
     private static DirectShowFormat LegacyUyvy(int height, long interval) => new(0, "0", "Capture", "video",
         new("73646976-0000-0010-8000-00AA00389B71"), new("59565955-0000-0010-8000-00AA00389B71"),
         new("05589F80-C356-11CE-BF01-00AA0055595A"))

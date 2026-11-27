@@ -254,7 +254,12 @@ public sealed partial class RfInspectorView : UserControl
                 custom
             };
             var ratePresets = new uint[] { 250_000, 1_024_000, 1_200_000, 1_536_000, 2_000_000, 2_048_000, 2_400_000 }
-                .Select(rate => new Preset($"{rate / 1e6:F3} MSPS", rate)).Append(custom).ToArray();
+                .Select(rate =>
+                {
+                    var label = $"{rate / 1e6:F3} MSPS";
+                    return new Preset(rate == RfRecording.DefaultRtlSampleRate
+                        ? string.Format(labels("RtlDefaultRateFormat"), label) : label, rate);
+                }).Append(custom).ToArray();
 
             var prevFreqPreset = FrequencyPreset.SelectedItem as Preset;
             var prevRatePreset = RatePreset.SelectedItem as Preset;

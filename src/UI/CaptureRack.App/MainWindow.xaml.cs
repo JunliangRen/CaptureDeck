@@ -138,8 +138,8 @@ public sealed partial class MainWindow : Window
         rfInspector.PreviewOptions.DisplayChanged += RefreshRfInspection;
         rfInspector.PreviewOptions.DecoderChanged += () =>
         {
-            if (settingsReady && !closing && IsRfActive && rfPreviewStop is null) DiscardRfInspection();
-            if (settingsReady && !closing && IsRfActive && rfPreviewStop is null && rfInspector.PreviewOptions.PreviewType == RfPreviewType.LaserDisc)
+            if (settingsReady && !closing && IsRfActive && !rfSession.PreviewActive) DiscardRfInspection();
+            if (settingsReady && !closing && IsRfActive && !rfSession.PreviewActive && rfInspector.PreviewOptions.PreviewType == RfPreviewType.LaserDisc)
                 ConfigureRfAudioMeter(newSession: true);
         };
         rfInspector.Changed += () =>
@@ -151,7 +151,7 @@ public sealed partial class MainWindow : Window
                 ResetRfMonitor();
             }
 #if REALTIME_RF
-            if (heldDecoder is not null && rfPreviewStop is null &&
+            if (heldDecoder is not null && !rfSession.PreviewActive &&
                 (!rfInspector.IsPlayback || heldDecoder.Options.InputSampleRateHz != rfInspector.PlaybackFile?.Rate))
                 DiscardRfInspection();
 #endif
@@ -248,6 +248,11 @@ public sealed partial class MainWindow : Window
         SettingsPage.PreviewDeinterlaceChanged += (_, tag) => SetPreviewDeinterlace(tag);
         SettingsPage.PreviewAspectChanged += (_, tag) => SetPreviewAspect(tag);
         SettingsPage.PreviewMatrixChanged += (_, tag) => SetPreviewMatrix(tag);
+        rfSession.VerificationQueued += (qc, previous, result) =>
+        {
+            var display = RunRfQcAsync(qc, previous, result);
+            rfQcTail = rfQcTail.IsCompleted ? display : Task.WhenAll(rfQcTail, display);
+        };
         SettingsPage.AudioOutputsRequested += (_, _) => RefreshAudioOutputs();
         SettingsPage.AudioOutputChanged += (_, device) =>
         {
@@ -461,7 +466,7 @@ public sealed partial class MainWindow : Window
 
     private void SelectBackendModule(string backendId, bool persist)
     {
-        if (rfPreviewStop is not null || rfStop is not null || LiveMediaSource is { IsCapturing: true } or { IsRecording: true } ||
+        if (rfSession.PreviewActive || rfSession.RecordingActive || LiveMediaSource is { IsCapturing: true } or { IsRecording: true } ||
             !WorkspaceModuleRegistry.CanSwitchBackend(captureTask is not null || vancScanTask is not null || restartPreviewRequested,
             recordingSession, recordingTransition, qcStop is not null))
             return;
@@ -552,12 +557,12 @@ public sealed partial class MainWindow : Window
     }
 
     private bool rackShowsRecording;
-    private bool CapturingToFile => rfStop is { IsCancellationRequested: false } && rfWriterActive ||
+    private bool CapturingToFile => (rfSession.RecordingActive && !rfSession.RecordingStopping) && rfWriterActive ||
         recordingSession && !recordingTransition || LiveMediaSource is { IsRecording: true, IsFinalizing: false };
 
     private void RenderSourceRackList()
     {
-        var canSwitch = rfPreviewStop is null && rfStop is null && LiveMediaSource is not ({ IsCapturing: true } or { IsRecording: true }) && WorkspaceModuleRegistry.CanSwitchBackend(
+        var canSwitch = !rfSession.PreviewActive && !rfSession.RecordingActive && LiveMediaSource is not ({ IsCapturing: true } or { IsRecording: true }) && WorkspaceModuleRegistry.CanSwitchBackend(
             captureTask is not null || vancScanTask is not null || restartPreviewRequested, recordingSession, recordingTransition, qcStop is not null);
         SourceRackLockNotice.Text = L("SourceRackLockedNotice");
         SourceRackLockNotice.Visibility = canSwitch ? Visibility.Collapsed : Visibility.Visible;
@@ -1404,10 +1409,10 @@ public sealed partial class MainWindow : Window
     {
         if (IsRfActive)
         {
-            if (rfPreviewStop is not null) rfPreviewStop.Cancel();
+            if (rfSession.PreviewActive) rfSession.StopPreview();
             else if (StartButton.IsEnabled && rfInspector.IsPlayback && rfInspector.PlaybackFile is { } file)
-                await (rfPreviewTask = PreviewRfAsync(null, file));
-            else if (StartButton.IsEnabled && rfInspector.Selection is { } request) await (rfPreviewTask = PreviewRfAsync(request));
+                await PreviewRfAsync(null, file);
+            else if (StartButton.IsEnabled && rfInspector.Selection is { } request) await PreviewRfAsync(request);
             return;
         }
         if (LiveMediaSource is { } media)
@@ -1436,8 +1441,8 @@ public sealed partial class MainWindow : Window
         if (IsRfActive)
         {
             if (rfInspector.IsPlayback) return;
-            if (rfStop is not null) { rfStop.Cancel(); UpdateControls(); }
-            else if (rfInspector.Selection is { } selected) await (rfTask = RecordRfAsync(selected));
+            if (rfSession.RecordingActive) { rfSession.StopRecording(); UpdateControls(); }
+            else if (rfInspector.Selection is { } selected) await RecordRfAsync(selected);
             return;
         }
         if (LiveMediaSource is { } media)
@@ -1793,16 +1798,13 @@ public sealed partial class MainWindow : Window
 
     private async void OnClosing(AppWindow sender, AppWindowClosingEventArgs e)
     {
-        if (rfStop is not null || rfPreviewStop is not null)
+        if (rfSession.RecordingActive || rfSession.PreviewActive)
         {
             e.Cancel = true;
             if (!finishingMediaForClose)
             {
                 finishingMediaForClose = true;
-                rfStop?.Cancel();
-                if (rfTask is not null) await rfTask;
-                rfPreviewStop?.Cancel();
-                if (rfPreviewTask is not null) await rfPreviewTask;
+                await rfSession.StopForCloseAsync();
                 DispatcherQueue.TryEnqueue(() => Close());
             }
             return;
@@ -2594,7 +2596,7 @@ public sealed partial class MainWindow : Window
             (media is null ? captureStop is { IsCancellationRequested: false } : !media.IsStopping);
         RenderCaptureActions();
         StartButton.IsEnabled = IsRfActive
-            ? !closing && !changingRecording && (rfPreviewStop is { IsCancellationRequested: false } || idle && !inspectingField && !openingPlayback && rfInspector.Ready)
+            ? !finishingMediaForClose && !closing && !rfSession.RecordingActive && !changingRecording && ((rfSession.PreviewActive && !rfSession.PreviewStopping) || idle && !inspectingField && !openingPlayback && rfInspector.Ready)
             : active ? previewCanStop : canStart;
         UpdateRfPlaybackBar(fileMode);
         PlaceholderStartButton.IsEnabled = canStart;
@@ -2619,7 +2621,7 @@ public sealed partial class MainWindow : Window
                 captureStop is { IsCancellationRequested: false } && !string.IsNullOrWhiteSpace(OutputPath.Text)));
         RecordButton.Visibility = media?.SupportsRecording == false || fileMode ? Visibility.Collapsed : Visibility.Visible;
         RecordButton.IsEnabled = IsRfActive
-            ? !fileMode && (rfStop is { IsCancellationRequested: false } || ((idle || rfPreviewReady && rfPreviewStop is { IsCancellationRequested: false }) && rfStop is null && !closing && qcStop is null && rfInspector.Ready && Directory.Exists(OutputPath.Text.Trim())))
+            ? !finishingMediaForClose && !fileMode && ((rfSession.RecordingActive && !rfSession.RecordingStopping) || ((idle || rfPreviewReady && (rfSession.PreviewActive && !rfSession.PreviewStopping)) && !rfSession.RecordingActive && !closing && qcStop is null && rfInspector.Ready && Directory.Exists(OutputPath.Text.Trim())))
             : recordEnabled;
         CancelQcButton.IsEnabled = qcStop is { IsCancellationRequested: false };
         CancelQcButton.Visibility = qcStop is not null ? Visibility.Visible : Visibility.Collapsed;

@@ -9,8 +9,8 @@ public sealed partial class MainWindow
 {
     private ILiveMediaSource? LiveMediaSource => IsDirectShowActive ? directShowCapabilitiesView :
         IsFireWireActive ? fireWireView : null;
-    private bool IsCaptureInputActive => rfPreviewStop is not null || captureTask is not null || LiveMediaSource?.IsCapturing == true;
-    private bool IsCaptureRecording => rfStop is not null || recordingSession || LiveMediaSource?.IsRecording == true;
+    private bool IsCaptureInputActive => rfSession.PreviewActive || captureTask is not null || LiveMediaSource?.IsCapturing == true;
+    private bool IsCaptureRecording => rfSession.RecordingActive || recordingSession || LiveMediaSource?.IsRecording == true;
     private bool finishingMediaForClose;
     private bool decodedInputReady;
     private bool decodedFieldOrderAvailable;

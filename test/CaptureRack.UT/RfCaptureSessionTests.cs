@@ -47,21 +47,38 @@ public sealed class RfCaptureSessionTests
     public async Task ConsecutiveClipsUseOnePreviewAndIndependentCountersWhileVerificationIsPending()
     {
         var directory = Directory.CreateTempSubdirectory();
-        var session = new RfPreviewSession(Ramp);
         var receiver = new Receiver();
-        using var stop = new CancellationTokenSource(Timeout);
-        var preview = Task.Run(() => session.Run(receiver.Read, m => receiver.Meter.Writer.TryWrite(m), stop.Token));
+        var releaseQc = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var verifying = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var jobs = new List<(RfRampQc Qc, Task Result)>();
+        int verificationCount = 0;
+        async Task VerifyFile(RfRampQc qc)
+        {
+            Interlocked.Increment(ref verificationCount);
+            verifying.TrySetResult();
+            await releaseQc.Task.WaitAsync(Timeout);
+            await Task.Run(qc.VerifyAndPublish);
+        }
+        var session = new RfCaptureSession(VerifyFile,
+            (_, _, _, _, _, _) => throw new InvalidOperationException("Opened another receiver"), receiver.Read);
+        session.VerificationQueued += (qc, _, result) => jobs.Add((qc, result));
+        var preview = session.StartPreviewAsync(Ramp, token => session.ReadReceiverAsync(
+            () => null, m => receiver.Meter.Writer.TryWrite(m), token));
         async Task<RfRampQc> Take(string name)
         {
-            using var clipStop = new CancellationTokenSource(Timeout);
-            var qc = await Task.Run(() => session.Record(Path.Combine(directory.FullName, name), null,
-                clipStop.Token, m => { if (m.Frames > 0) clipStop.Cancel(); }));
-            return Assert.IsType<RfRampQc>(qc);
+            var firstReading = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+            var recording = session.RecordAsync(false, Ramp, Path.Combine(directory.FullName, name),
+                null, () => null, m => firstReading.TrySetResult());
+            await firstReading.Task.WaitAsync(Timeout);
+            session.StopRecording();
+            await recording.WaitAsync(Timeout);
+            return jobs[^1].Qc;
         }
         try
         {
             var initial = await receiver.NextReading();
             var first = await Take("A");
+            await verifying.Task.WaitAsync(Timeout);
             var afterFirst = await receiver.NextReading();
             Assert.True(afterFirst.Frames > initial.Frames);
             var second = await Take("B");
@@ -73,6 +90,11 @@ public sealed class RfCaptureSessionTests
             Assert.Equal(1, receiver.Opens);
             Assert.Equal(0, receiver.Releases);
 
+            Assert.Equal(1, Volatile.Read(ref verificationCount));
+            Assert.False(jobs[0].Result.IsCompleted);
+            Assert.False(jobs[1].Result.IsCompleted);
+            releaseQc.SetResult();
+            await Task.WhenAll(jobs.Select(job => job.Result)).WaitAsync(Timeout);
             var a = Verify(first);
             var b = Verify(second);
             Assert.Equal(a.Id, b.Id);
@@ -80,16 +102,110 @@ public sealed class RfCaptureSessionTests
         }
         finally
         {
-            stop.Cancel();
+            releaseQc.TrySetResult();
+            session.StopRecording();
+            await session.StopForCloseAsync().WaitAsync(Timeout);
             await preview.WaitAsync(Timeout);
             directory.Delete(true);
         }
         Assert.Equal(1, receiver.Releases);
     }
 
+    [Fact]
+    public async Task FileModeRejectsRecordingEvenWhenCalledOutsideTheView()
+    {
+        var session = new RfCaptureSession();
+        Task Record(bool file) => session.RecordAsync(file, Ramp, "unused", null, () => null, _ => { });
+        await Assert.ThrowsAsync<InvalidOperationException>(() => Record(true));
+        var playback = session.StartPreviewAsync(null, async stop =>
+        {
+            try { await Task.Delay(System.Threading.Timeout.InfiniteTimeSpan, stop); }
+            catch (OperationCanceledException) when (stop.IsCancellationRequested) { }
+        });
+        await Assert.ThrowsAsync<InvalidOperationException>(() => Record(false));
+        Assert.False(session.RecordingActive);
+        session.StopPreview();
+        await playback.WaitAsync(Timeout);
+        Assert.False(session.PreviewActive);
+    }
+
+    [Fact]
+    public async Task CloseDuringDirectRecordingReleasesOnceAndRejectsNewCommands()
+    {
+        var entered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        int releases = 0;
+        var session = new RfCaptureSession(_ => throw new InvalidOperationException(), (_, _, _, _, _, stop) =>
+        {
+            entered.SetResult();
+            Assert.True(stop.WaitHandle.WaitOne(Timeout));
+            Interlocked.Increment(ref releases);
+            return null;
+        });
+        Task Record() => session.RecordAsync(false, Ramp, "unused", null, () => null, _ => { });
+        var recording = Record();
+        await entered.Task.WaitAsync(Timeout);
+        await Assert.ThrowsAsync<InvalidOperationException>(Record);
+        var close = session.StopForCloseAsync();
+        await Task.WhenAll(recording, close, session.StopForCloseAsync()).WaitAsync(Timeout);
+        Assert.False(session.RecordingActive);
+        Assert.False(session.PreviewActive);
+        Assert.Equal(1, releases);
+        await Assert.ThrowsAsync<InvalidOperationException>(Record);
+    }
+
+    [Fact]
+    public async Task ReceiverBelongsToOnePreviewAndOneConfiguration()
+    {
+        var receiver = new Receiver();
+        var ready = new TaskCompletionSource<CancellationToken>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var session = new RfCaptureSession(_ => Task.CompletedTask,
+            (_, _, _, _, _, _) => throw new InvalidOperationException(), receiver.Read);
+        Task Read(CancellationToken token) => session.ReadReceiverAsync(() => null, _ => { }, token);
+        var preview = session.StartPreviewAsync(Ramp, token =>
+        {
+            ready.SetResult(token);
+            return Read(token);
+        });
+        var old = await ready.Task;
+        try
+        {
+            Assert.Throws<InvalidOperationException>(() => { _ = Read(old); });
+            await Assert.ThrowsAsync<InvalidOperationException>(() => session.RecordAsync(false,
+                Ramp with { Format = RfFileFormat.Flac }, "unused", null, () => null, _ => { }));
+        }
+        finally { session.StopPreview(); await preview.WaitAsync(Timeout); }
+        await session.StartPreviewAsync(Ramp, async token =>
+        {
+            Assert.Throws<InvalidOperationException>(() => { _ = Read(old); });
+            await Assert.ThrowsAsync<InvalidOperationException>(() => session.RecordAsync(false, Ramp,
+                "unused", null, () => null, _ => { }));
+        });
+        Assert.Equal(1, receiver.Opens);
+        Assert.Equal(1, receiver.Releases);
+    }
+
+    [Fact]
+    public async Task FailedVerificationDoesNotPoisonSubsequentFile()
+    {
+        var first = new RfRampQc("first", false, null, new(1, 0, 1021));
+        var second = first with { FinalPath = "second" };
+        var results = new List<(RfRampQc File, Task Result)>();
+        var session = new RfCaptureSession(qc => qc == first
+            ? Task.FromException(new InvalidDataException("Invalid first ramp")) : Task.CompletedTask,
+            (_, prefix, _, _, _, _) => prefix == "first" ? first : second);
+        session.VerificationQueued += (qc, _, result) => results.Add((qc, result));
+        foreach (var file in new[] { first, second })
+            await session.RecordAsync(false, Ramp, file.FinalPath, null, () => null, _ => { });
+        await session.StopForCloseAsync();
+        Assert.Equal(first, results[0].File);
+        await Assert.ThrowsAsync<InvalidDataException>(() => results[0].Result);
+        Assert.Equal(second, results[1].File);
+        await results[1].Result;
+    }
+
     private static (Guid Id, long Start) Verify(RfRampQc qc)
     {
-        qc.VerifyAndPublish();
+        Assert.True(File.Exists(qc.FinalPath + ".ramp.json"));
         Assert.True(qc.FileSamples > 0);
         Assert.Equal(qc.FileSamples * 2, new FileInfo(qc.FinalPath).Length);
         using var json = JsonDocument.Parse(File.ReadAllBytes(qc.FinalPath + ".fifo.json"));

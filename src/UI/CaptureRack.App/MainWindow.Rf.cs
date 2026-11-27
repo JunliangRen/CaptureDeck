@@ -1,7 +1,7 @@
 #if REALTIME_RF
-using CaptureRack.Audio;
 using VHSDecode.Preview;
 #endif
+using CaptureRack.Audio;
 using CaptureRack.Core;
 using CaptureRack.DeckLink;
 using CaptureRack.QualityControl;

@@ -38,16 +38,18 @@ public sealed partial class PreviewMonitorOptionsBar : UserControl
 
     public PreviewMonitorOptionsBar() => InitializeComponent();
 
-    public void ApplyCapabilities(WorkspaceCapabilities caps, bool deinterlace, bool matrix, bool ntscGuide, bool reserveRfControls)
+    public void ApplyCapabilities(WorkspaceCapabilities caps, bool deinterlace, bool matrix, bool reserveRfControls)
     {
         MonitorOptionsButton.IsEnabled = caps.SupportsPreviewDisplayOptions;
         MonitorOptionsButton.Visibility = reserveRfControls || caps.SupportsPreviewDisplayOptions ? Visibility.Visible : Visibility.Collapsed;
         DeinterlaceOptions.Visibility = deinterlace ? Visibility.Visible : Visibility.Collapsed;
         MatrixOptions.Visibility = matrix ? Visibility.Visible : Visibility.Collapsed;
-        Ntsc480GuideCheckBox.Visibility = ntscGuide ? Visibility.Visible : Visibility.Collapsed;
         AudioMonitorMuteButton.IsEnabled = AudioMonitorVolumeButton.IsEnabled = caps.SupportsLocalAudioMonitor;
         AudioMonitorControlGroup.Visibility = reserveRfControls || caps.SupportsLocalAudioMonitor ? Visibility.Visible : Visibility.Collapsed;
     }
+
+    internal void SetNtscGuideAvailable(bool available) =>
+        Ntsc480GuideCheckBox.Visibility = available ? Visibility.Visible : Visibility.Collapsed;
 
     public void SyncState(
         string deinterlaceTag,

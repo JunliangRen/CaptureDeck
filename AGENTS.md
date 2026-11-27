@@ -47,7 +47,7 @@ Domesday protocol-v1 identity reads retry short responses up to three total atte
 
 Use MISRC-GUI upstream main when comparing RF capture behavior. Bind RF decode options to the public win-x64 Realtime package capabilities. Use its post-block lock snapshot for receiver status and its signed signal planes for RF line measurements. Legacy Domesday Duplicator and protocol-v1 devices require separate endpoint and firmware checks. Gateware identity and a successful full-file verification are both required for a hardware ramp baseline.
 
-RF preview safe guides and the center cross use the displayed field pair's active-video rectangle. The NTSC 480 crop label and bands use the same source-row counts. NTSC full-raster replay at 640 x 525 verified 40 top and 5 bottom lines.
+RF preview safe guides and the center cross use the displayed field pair's active-video rectangle. The NTSC 480 crop option requires an explicitly identified NTSC picture mode. Its label and bands use the same source-row counts. NTSC full-raster replay at 640 x 525 verified 40 top and 5 bottom lines.
 
 The RF oscilloscope offers an input FFT in both file and receiver sessions, including RF-only mode. Level windows retain up to 4096 consecutive ADC or I/Q samples per measurement. WinUI file replay at 40 MSPS verified a 5 MHz half-scale tone and switching the VHS toolbar between NTSC, PAL, SECAM and MESECAM. The latter two offer the packaged VHS decoder only.
 

@@ -139,7 +139,12 @@ public sealed partial class MainWindow : Window
         rfInspector.PreviewOptions.DisplayChanged += RefreshRfInspection;
         rfInspector.PreviewOptions.DecoderChanged += () =>
         {
-            if (settingsReady && !closing && IsRfActive && !rfSession.PreviewActive) DiscardRfInspection();
+            if (settingsReady && !closing && IsRfActive)
+            {
+                if (!rfSession.PreviewActive) DiscardRfInspection();
+                UpdateNtsc480GuideLayout();
+                SyncFullscreenPreviewWindow();
+            }
             if (settingsReady && !closing && IsRfActive && !rfSession.PreviewActive && rfInspector.PreviewOptions.PreviewType == RfPreviewType.LaserDisc)
                 ConfigureRfAudioMeter(newSession: true);
         };
@@ -550,7 +555,8 @@ public sealed partial class MainWindow : Window
         if (IsRfActive)
             LayoutSegmentTrack.Visibility = LayoutFocusBtn.Visibility = LayoutSplitBtn.Visibility = LayoutScopesBtn.Visibility = LayoutSpectrumBtn.Visibility = Visibility.Visible;
         monitorOptionsBar.ApplyCapabilities(caps, LiveMediaSource?.HasDeinterlace ?? true,
-            matrix: !IsRfActive && LiveMediaSource is null, ntscGuide: LiveMediaSource is null, reserveRfControls: IsRfActive);
+            matrix: !IsRfActive && LiveMediaSource is null, reserveRfControls: IsRfActive);
+        UpdateNtsc480GuideLayout();
         SplitSpectrumBtn.Visibility = IsRfActive || caps.SupportsAudioSpectrum ? Visibility.Visible : Visibility.Collapsed;
         SplitEventsBtn.Visibility = caps.SupportsEvents ? Visibility.Visible : Visibility.Collapsed;
         ApplyWorkspaceLayout();
@@ -2254,6 +2260,8 @@ public sealed partial class MainWindow : Window
         {
             observedPreviewMode = mode;
             observedPreviewModeIsFallback = isFallback;
+            UpdateNtsc480GuideLayout();
+            SyncFullscreenPreviewWindow();
             UpdateRecordingEncodingControls();
             UpdateConfigurationStatus();
         }

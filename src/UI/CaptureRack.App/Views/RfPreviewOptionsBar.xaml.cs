@@ -50,7 +50,9 @@ public sealed partial class RfPreviewOptionsBar : UserControl
     internal int BetaProfileIndex => Math.Max(0, BetaProfile.SelectedIndex);
     internal bool HasAudio => PreviewType is RfPreviewType.VhsHifi or RfPreviewType.BetamaxHifi ||
         PreviewType == RfPreviewType.LaserDisc && LdAudioIndex != 4;
-    internal bool PalPreview => (PreviewTypeBox.SelectedIndex == 4 ? VhsStandard : VideoStandard).SelectedIndex == 1;
+    private int StandardIndex => (PreviewTypeBox.SelectedIndex == 4 ? VhsStandard : VideoStandard).SelectedIndex;
+    internal bool PalPreview => StandardIndex == 1;
+    internal bool HasNtscPicture => FullscreenRenderPolicy.IsNtscRfPicture(PreviewType, StandardIndex);
     internal int FieldMode { get => FieldView.SelectedIndex; set => FieldView.SelectedIndex = Math.Clamp(value, 0, 3); }
     internal bool FullRaster => Region.SelectedIndex == 1;
     internal bool RestoreCvbs => CvbsRestore.IsChecked == true;

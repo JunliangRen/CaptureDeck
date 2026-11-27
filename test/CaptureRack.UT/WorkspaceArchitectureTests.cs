@@ -11,6 +11,22 @@ namespace CaptureRack.UT;
 
 public sealed class WorkspaceArchitectureTests
 {
+    [Fact]
+    public void CropOptionRequiresAnExplicitNtscPicture()
+    {
+        foreach (var type in Enum.GetValues<RfPreviewType>())
+        {
+            foreach (var standard in new[] { -1, 1, 2, 3 })
+                Assert.False(FullscreenRenderPolicy.IsNtscRfPicture(type, standard));
+            bool video = type is not (RfPreviewType.RfOnly or RfPreviewType.VhsHifi or RfPreviewType.SecamVhs or RfPreviewType.MesecamVhs);
+            Assert.Equal(video, FullscreenRenderPolicy.IsNtscRfPicture(type, 0));
+        }
+        Assert.True(FullscreenRenderPolicy.IsNtscDisplayMode(0x6E747363));
+        Assert.False(FullscreenRenderPolicy.IsNtscDisplayMode(null));
+        Assert.False(FullscreenRenderPolicy.IsNtscDisplayMode(0x70616C20)); // PAL
+        Assert.False(FullscreenRenderPolicy.IsNtscDisplayMode(0x48693539)); // 1080i59.94
+    }
+
     [Theory]
     [InlineData(null, "")]
     [InlineData("   ", "")]

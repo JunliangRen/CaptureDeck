@@ -65,7 +65,7 @@
                         <Border Height="1" Background="{ThemeResource StudioHairlineBrush}" Margin="0,2" />
 
                         <CheckBox x:Name="SafeAreaCheckBox" Click="SafeAreaCheckBox_Click" />
-                        <CheckBox x:Name="Ntsc480GuideCheckBox" Click="Ntsc480GuideCheckBox_Click" />
+                        <CheckBox x:Name="Ntsc480GuideCheckBox" Visibility="Collapsed" Click="Ntsc480GuideCheckBox_Click" />
                     </StackPanel>
                 </Flyout>
             </Button.Flyout>

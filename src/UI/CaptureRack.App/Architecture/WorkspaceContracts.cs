@@ -800,6 +800,12 @@ internal sealed record RfGuideGeometry(int Width, int Height, int Left, int Top,
 
 public static class FullscreenRenderPolicy
 {
+    internal static bool IsNtscRfPicture(RfPreviewType type, int standardIndex) => standardIndex == 0 && type is
+        RfPreviewType.VideoOnly or RfPreviewType.Betamax or RfPreviewType.BetamaxHifi or RfPreviewType.LaserDisc or RfPreviewType.Vhs or RfPreviewType.SVhs;
+
+    // DeckLink display mode FourCCs: ntsc, nt23 and ntsp.
+    internal static bool IsNtscDisplayMode(uint? id) => id is 0x6E747363 or 0x6E743233 or 0x6E747370;
+
     public static bool ShouldPauseMainWindowRendering(bool fullscreenActive, bool sameDisplayAsMainWindow) =>
         fullscreenActive && sameDisplayAsMainWindow;
 

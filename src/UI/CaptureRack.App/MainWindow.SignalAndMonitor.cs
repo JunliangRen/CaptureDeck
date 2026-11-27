@@ -178,7 +178,12 @@ public sealed partial class MainWindow
             ? DefaultPreviewAspectRatio : (double)width / height
     };
 
-    private bool NtscGuideEnabled => LiveMediaSource is null && showNtsc480Guide &&
+    private bool NtscGuideAvailable => IsRfActive
+        ? !IsRfHifiFile && rfInspector.PreviewOptions.HasNtscPicture
+        : FullscreenRenderPolicy.IsNtscDisplayMode(IsTestSignalActive ? TestSignal.Mode.Id :
+            IsDeckLinkActive ? deckLinkInspector.SelectedMode?.Id ?? (observedPreviewModeIsFallback ? null : observedPreviewMode?.Id) : null);
+
+    private bool NtscGuideEnabled => NtscGuideAvailable && showNtsc480Guide &&
         (!IsRfActive || rfGuide?.Crop is not null);
 
     private void UpdateNtsc480GuideLayout()
@@ -189,6 +194,7 @@ public sealed partial class MainWindow
             ? new Thickness(width * geometry.Left / geometry.Width, height * geometry.Top / geometry.Height,
                 width * geometry.Right / geometry.Width, height * geometry.Bottom / geometry.Height)
             : default;
+        monitorOptionsBar.SetNtscGuideAvailable(NtscGuideAvailable);
         monitorOptionsBar.SetCropLines(IsRfActive ? geometry?.Crop : (4, 2));
 
         var show = NtscGuideEnabled && (!IsRfActive || previewBitmap is not null) && PreviewPlaceholder.Visibility == Visibility.Collapsed;

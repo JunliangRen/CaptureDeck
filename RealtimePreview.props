@@ -1,0 +1,5 @@
+<Project>
+  <ItemGroup>
+    <PackageReference Include="VHSDecode.Preview.Realtime" Version="[2.33.0-preview.ci.21]" GeneratePathProperty="true" />
+  </ItemGroup>
+</Project>

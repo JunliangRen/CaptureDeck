@@ -2,7 +2,7 @@ using CaptureRack.Audio;
 
 namespace CaptureRack.App;
 
-internal enum RfPreviewType { RfOnly, VideoOnly, BetamaxHifi, LaserDisc, Vhs, Betamax, VhsHifi }
+internal enum RfPreviewType { RfOnly, VideoOnly, BetamaxHifi, LaserDisc, Vhs, Betamax, VhsHifi, SVhs, SecamVhs, MesecamVhs }
 
 internal sealed record RfAudioReading(long Generation, string? Track, bool Locked, StereoLevels? Levels);
 

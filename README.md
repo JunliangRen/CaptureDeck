@@ -142,9 +142,9 @@ Probing reads USB descriptors, the stream endpoint, and protocol-v1 firmware ide
 
 ## Windows RTL-SDR probe
 
-Windows x64 RF preview uses the upstream `VHSDecode.Preview.Realtime` package, version `2.29.0-preview.ci.5`. Configure the decoder repository owner's GitHub Packages NuGet source with package read access. ARM64 builds omit the realtime decoder.
+Windows x64 RF preview uses the upstream `VHSDecode.Preview.Realtime` package, version `2.33.0-preview.ci.21`. Configure the decoder repository owner's GitHub Packages NuGet source with package read access. ARM64 builds omit the realtime decoder.
 
-Preview offers NTSC/PAL VHS and CVBS, NTSC Betamax and Betamax Hi-Fi, and NTSC LaserDisc. LD tracks include analog, PCM, DTS and AC-3 RF. Audio-only VHS Hi-Fi accepts 8, 8.192, 10 and 20 MSPS mono RF. Paused file playback supports frame and field inspection using the decoder's public field output. The ADC and tape head-switch views use CaptureRack's input samples.
+Preview supports NTSC/PAL VHS, S-VHS, CVBS and standard Betamax at 20 or 40 MSPS. SECAM VHS and MESECAM use 625/50 timing. NTSC Betamax also offers Hi-Fi, SuperBeta, SuperBeta Hi-Fi and ED Beta profiles. LaserDisc offers video alone, analog stereo or 44.1 kHz digital PCM in PAL and NTSC, plus DTS and AC-3 RF in NTSC. Separate VHS Hi-Fi audio accepts 8, 8.192, 10, 20 and 40 MSPS mono RF. Decoder options include the thread budget (1–64) and AC-3 RF presentation delay (128 ms by default). Decoder telemetry shows horizontal, vertical, color and selected audio lock. The RF oscilloscope can show Y (±120 IRE), U or V (±1 normalized unit) from the central scanline of the selected field and crop, before RGB clipping. Paused file playback retains frame/field inspection. ADC and tape head-switch traces use CaptureRack's input samples.
 
 RTL-SDR uses a matching-architecture `rtlsdr.dll` or `librtlsdr.dll` beside the App or Probe executable, or an absolute path set in `CAPTURERACK_RTLSDR_LIBRARY`. Place its native dependencies next to the library and bind the receiver to WinUSB. This optional library is supplied separately.
 

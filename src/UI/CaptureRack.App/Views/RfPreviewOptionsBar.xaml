@@ -16,13 +16,18 @@
                   VerticalAlignment="Center" Visibility="Collapsed">
             <ComboBoxItem x:Name="BetaStandardItem" Content="Betamax" />
             <ComboBoxItem x:Name="BetaHifiItem" Content="Betamax Hi-Fi" />
+            <ComboBoxItem Content="SuperBeta" />
+            <ComboBoxItem Content="SuperBeta Hi-Fi" />
+            <ComboBoxItem Content="ED Beta" />
         </ComboBox>
+        <CheckBox x:Name="BetaMonitorAudio" Content="Hi-Fi" IsChecked="True" Visibility="Collapsed"/>
         <ComboBox x:Name="LdTrack" Height="30" CornerRadius="3" SelectedIndex="0"
                   VerticalAlignment="Center" Visibility="Collapsed">
             <ComboBoxItem x:Name="LdAnalogItem" Content="LD · Analog" />
             <ComboBoxItem x:Name="LdPcmItem" Content="LD · Digital PCM" />
             <ComboBoxItem x:Name="LdDtsItem" Content="LD · DTS" />
             <ComboBoxItem x:Name="LdAc3Item" Content="LD · AC-3 RF" />
+            <ComboBoxItem x:Name="LdSilentItem" Content="Video" />
         </ComboBox>
 
         <!-- Secondary RF Decoder Options Popover (Prevents toolbar overflow) -->
@@ -67,6 +72,10 @@
                             </ComboBox>
                         </StackPanel>
 
+                        <NumberBox x:Name="ThreadBudget" Minimum="1" Maximum="64" SmallChange="1"
+                                   SpinButtonPlacementMode="Compact" />
+                        <NumberBox x:Name="Ac3Delay" Value="128" SmallChange="1" SpinButtonPlacementMode="Compact"
+                                   Visibility="Collapsed" />
                         <CheckBox x:Name="CvbsRestore" Content="CVBS 50 Ω" MinWidth="0" Visibility="Collapsed" />
                     </StackPanel>
                 </Flyout>

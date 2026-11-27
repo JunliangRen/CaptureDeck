@@ -37,6 +37,8 @@ internal sealed class RfPreviewDecoder
     public CropGuide? NtscGuide => Volatile.Read(ref guide);
     private string? error;
     private int ended;
+    private RealtimePreviewSession? session;
+    public PreviewLockStatus? Locks => Volatile.Read(ref session)?.LockStatus;
     public CaptureRack.DeckLink.PreviewFeed ScopeFeed { get; } = new() { RenderScopes = false };
     public string? Error => Volatile.Read(ref error);
     private void SubmitField(PreviewField field)
@@ -122,7 +124,7 @@ internal sealed class RfPreviewDecoder
         worker = Task.Run(async () =>
         {
             long? trackToken = null;
-            long lastLockedEnd = 0;
+
             short[] pcm = [];
             void Audio(PreviewAudioBlock block)
             {
@@ -133,7 +135,7 @@ internal sealed class RfPreviewDecoder
                     trackToken = null;
                     return;
                 }
-                lastLockedEnd = block.EndSourceSample;
+
                 trackToken ??= audio.SelectTrack(trackLabel ?? options.AudioTrack.ToString(), block.Channels, (uint)block.SampleRateHz);
                 var samples = block.InterleavedSamples.Span;
                 if (pcm.Length < samples.Length) pcm = new short[samples.Length];
@@ -146,6 +148,7 @@ internal sealed class RfPreviewDecoder
             {
                 using var decoder = new RealtimePreviewSession(options, options.AudioTrack == PreviewAudioTrack.VhsHiFi ? null : SubmitField,
                     options.AudioTrack == PreviewAudioTrack.None ? null : Audio);
+                Volatile.Write(ref session, decoder);
                 long? next = null;
                 await foreach (var block in input.Reader.ReadAllAsync(stop.Token))
                 {
@@ -153,22 +156,17 @@ internal sealed class RfPreviewDecoder
                     {
                         stop.Token.ThrowIfCancellationRequested();
                         var samples = MemoryMarshal.Cast<byte, short>(block.Bytes.AsSpan(0, block.Length));
-                        // A flat transfer has no video or audio carrier. Let the next real
-                        // transfer's absolute position reset sync instead of feeding a false RF history.
-                        bool flat = samples.Length >= options.InputSampleRateHz / 1000 &&
-                            !samples.ContainsAnyExcept(samples[0]);
-                        if ((next != block.FirstSample || flat) && trackToken.HasValue)
+                        if (next != block.FirstSample)
                         {
-                            audio!.LoseLock(trackToken.Value);
+                            if (trackToken.HasValue) audio!.LoseLock(trackToken.Value);
                             trackToken = null;
+                            previous = null;
+                            waiting.Clear();
                         }
-                        if (flat || next != block.FirstSample) { previous = null; waiting.Clear(); }
-                        if (flat) continue;
                         if (MeasureSwitch && useTrigger) trigger.Add(samples, block.FirstSample);
                         decoder.Process(samples, block.FirstSample, stop.Token);
                         next = block.FirstSample + block.Length / 2;
-                        // Digital decoders may emit no callbacks at all while their carrier is absent.
-                        if (trackToken.HasValue && next.Value - lastLockedEnd > options.InputSampleRateHz / 4)
+                        if (trackToken.HasValue && decoder.LockStatus.AudioLocked == false)
                         {
                             audio!.LoseLock(trackToken.Value);
                             trackToken = null;
@@ -182,6 +180,7 @@ internal sealed class RfPreviewDecoder
             catch (Exception ex) { Volatile.Write(ref error, ex.Message); }
             finally
             {
+                Volatile.Write(ref session, null);
                 Interlocked.Exchange(ref ended, 1);
                 input.Writer.TryComplete();
                 while (input.Reader.TryRead(out var block)) ArrayPool<byte>.Shared.Return(block.Bytes);

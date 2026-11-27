@@ -1914,4 +1914,8 @@
   <data name="AudioOutputUnavailable" xml:space="preserve"><value>{0}（未连接）</value></data>
   <data name="DsRecordRejected" xml:space="preserve"><value>写入拒收包</value></data>
   <data name="RfFifoLost" xml:space="preserve"><value>FIFO 丢样</value></data>
+  <data name="RfVideoOnlyTrack" xml:space="preserve"><value>仅视频</value></data>
+  <data name="RfDecoderLock" xml:space="preserve"><value>解码锁定</value></data>
+  <data name="RfPreviewThreads" xml:space="preserve"><value>解码线程数</value></data>
+  <data name="RfAc3Delay" xml:space="preserve"><value>AC-3 延迟（毫秒）</value></data>
 </root>

@@ -52,6 +52,11 @@ jobs:
           $PSNativeCommandUseErrorActionPreference = $true
           dotnet publish src/UI/CaptureRack.App/CaptureRack.App.csproj -c Release -r $env:RID --self-contained -o bin/publish/App
           dotnet publish src/CaptureRack.Probe/CaptureRack.Probe.csproj -c Release -r $env:RID --self-contained -o bin/publish/Probe
+      - name: Verify packaged RF preview modes
+        if: matrix.arch == 'x64'
+        env:
+          NuGetPackageSourceCredentials_RealtimePreview: Username=${{ github.actor }};Password=${{ secrets.GITHUB_TOKEN }}
+        run: dotnet test test/CaptureRack.UT -c Release -r win-x64 -p:TestRealtimeRf=true --filter FullyQualifiedName~RfPackagedPreviewTests
       - name: Verify published executable architecture
         run: |
           $machine = if ($env:RID -eq 'win-arm64') { 0xAA64 } else { 0x8664 }

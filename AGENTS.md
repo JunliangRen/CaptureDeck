@@ -39,7 +39,7 @@ This is the repository handoff for coding agents. Start with the current Git sta
 
 Keep WinUI preview, speaker playback and recording queues independent. Preserve capture buffers before returning from borrowed sample callbacks. Treat preview skips, recording loss and unavailable telemetry as distinct observations. Report software recording failures and preserve interrupted media for QC.
 
-Use MISRC-GUI upstream main when comparing RF capture behavior. Legacy Domesday Duplicator and protocol-v1 devices require separate endpoint and firmware checks. Gateware identity and a successful full-file verification are both required for a hardware ramp baseline.
+Use MISRC-GUI upstream main when comparing RF capture behavior. Bind RF decode options to the public win-x64 Realtime package capabilities. Use its post-block lock snapshot for receiver status and its signed signal planes for RF line measurements. Legacy Domesday Duplicator and protocol-v1 devices require separate endpoint and firmware checks. Gateware identity and a successful full-file verification are both required for a hardware ramp baseline.
 
 Run both Windows and portable QC test projects for changes affecting capture. Enable FFmpeg integration with CAPTURERACK_TEST_SIGNAL_QC=1. Keep operator-triggered hardware runs out of CI. Keep the App, Probe and Uno display versions in sync and exclude PDBs from all release packages. Run the candidate workflow at the intended commit before publishing the three verified archives.
 

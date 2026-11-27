@@ -478,7 +478,7 @@ public sealed partial class RfInspectorView : UserControl
         bool hifi = false;
         bool canDecode = false;
 #endif
-        PreviewOptions.Update(canDecode, !refreshing, hifi, playback ? PlaybackFile?.Rate == 20_000_000 : DddRate.SelectedItem is RateChoice { Hardware: 20 });
+        PreviewOptions.Update(canDecode, !refreshing, hifi, playback ? PlaybackFile?.Rate ?? 0 : Selection?.HardwareRate ?? 0);
 
         RefreshIcon.Visibility = refreshing ? Visibility.Collapsed : Visibility.Visible;
         RefreshRing.Visibility = refreshing ? Visibility.Visible : Visibility.Collapsed;

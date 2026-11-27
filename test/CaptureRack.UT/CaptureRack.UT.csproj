@@ -28,4 +28,12 @@
     <Compile Include="../../src/UI/CaptureRack.App/Architecture/CaptureQcLog.cs" Link="CaptureQcLog.cs" />
     <Compile Include="../../src/UI/CaptureRack.App/Architecture/WorkspaceContracts.cs" Link="WorkspaceContracts.cs" />
   </ItemGroup>
+  <Import Project="../../RealtimePreview.props" Condition="'$(TestRealtimeRf)' == 'true'" />
+  <PropertyGroup Condition="'$(TestRealtimeRf)' == 'true'">
+    <DefineConstants>$(DefineConstants);REALTIME_RF</DefineConstants>
+  </PropertyGroup>
+  <ItemGroup Condition="'$(TestRealtimeRf)' == 'true'">
+    <Compile Include="../../src/UI/CaptureRack.App/Architecture/RfDecoderOptions.cs" Link="RfDecoderOptions.cs" />
+    <Compile Include="../../src/UI/CaptureRack.App/Architecture/RfPreviewDecoder.cs" Link="RfPreviewDecoder.cs" />
+  </ItemGroup>
 </Project>

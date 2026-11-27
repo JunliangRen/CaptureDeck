@@ -528,6 +528,9 @@
                                                   SelectionChanged="RfScope_Changed" AutomationProperties.Name="Signal">
                                             <ComboBoxItem x:Name="RfScopeAdcItem" Content="ADC" />
                                             <ComboBoxItem x:Name="RfScopeHeadSwitchItem" Content="Head switch" />
+                                            <ComboBoxItem Content="Y · IRE" />
+                                            <ComboBoxItem Content="U" />
+                                            <ComboBoxItem Content="V" />
                                         </ComboBox>
                                     </StackPanel>
                                 </Grid>
@@ -540,11 +543,11 @@
                                             <ColumnDefinition Width="*" />
                                         </Grid.ColumnDefinitions>
                                         <Grid AutomationProperties.AccessibilityView="Raw">
-                                            <TextBlock Text="+FS" Style="{StaticResource StudioMonoTextStyle}" FontSize="9"
+                                            <TextBlock x:Name="RfScaleHigh" Text="+FS" Style="{StaticResource StudioMonoTextStyle}" FontSize="9"
                                                        Foreground="#9BA5B8" HorizontalAlignment="Right" VerticalAlignment="Top" />
                                             <TextBlock Text="0" Style="{StaticResource StudioMonoTextStyle}" FontSize="9"
                                                        Foreground="#9BA5B8" HorizontalAlignment="Right" VerticalAlignment="Center" />
-                                            <TextBlock Text="−FS" Style="{StaticResource StudioMonoTextStyle}" FontSize="9"
+                                            <TextBlock x:Name="RfScaleLow" Text="−FS" Style="{StaticResource StudioMonoTextStyle}" FontSize="9"
                                                        Foreground="#9BA5B8" HorizontalAlignment="Right" VerticalAlignment="Bottom" />
                                         </Grid>
                                         <Viewbox Grid.Column="1" Stretch="Fill">

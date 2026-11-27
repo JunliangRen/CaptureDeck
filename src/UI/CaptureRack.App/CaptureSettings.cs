@@ -71,6 +71,9 @@ internal sealed record RfSettings
     public bool PalPreview { get; init; }
     public int VhsProfileIndex { get; init; }
     public int BetaProfileIndex { get; init; }
+    public int PreviewDecodeThreads { get; init; } = Math.Min(4, Environment.ProcessorCount);
+    public int Ac3DelayMs { get; init; } = 128;
+    public bool BetaMonitorAudio { get; init; } = true;
     public int LdTrackIndex { get; init; }
     public int FieldViewIndex { get; init; }
     public bool FullRaster { get; init; }

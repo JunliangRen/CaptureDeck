@@ -18,7 +18,7 @@ public sealed partial class MainWindow
     private readonly Views.RfInspectorView rfInspector = new();
     private bool rfFileSound = true;
     private bool IsRfHifiFile => IsRfActive && rfInspector.PreviewOptions.PreviewType == RfPreviewType.VhsHifi;
-    private bool RfHasAudio => IsRfActive && rfInspector.PreviewOptions.PreviewType is RfPreviewType.VhsHifi or RfPreviewType.BetamaxHifi or RfPreviewType.LaserDisc;
+    private bool RfHasAudio => IsRfActive && rfInspector.PreviewOptions.HasAudio;
     private bool RfHasVideoOutput => IsRfActive && !IsRfHifiFile && rfInspector.PreviewOptions.PreviewType != RfPreviewType.RfOnly;
     private bool IsRfActive => activeModule.Descriptor.Category == CaptureBackendCategory.SignalCapture;
     private readonly RfCaptureSession rfSession = new();
@@ -32,6 +32,9 @@ public sealed partial class MainWindow
     private bool rfPreviewReady;
 
     private RfPreviewAudio? rfAudio;
+#if REALTIME_RF
+    private PreviewLockStatus? rfLocks;
+#endif
     private RfPreviewType? meterPreviewType;
     private long displayedAudioGeneration = -1;
     private readonly Microsoft.UI.Dispatching.DispatcherQueueTimer rfAudioTimer;
@@ -105,10 +108,10 @@ public sealed partial class MainWindow
     private void ConfigureRfAudioMeter(bool newSession = false)
     {
         RfPreviewType? type = IsRfActive ? rfInspector.PreviewOptions.PreviewType : null;
-        if (newSession || type != meterPreviewType)
+        if (newSession || type != meterPreviewType || RfHasAudio != (rfAudio is not null))
         {
             meterPreviewType = type;
-            bool supported = type is RfPreviewType.VhsHifi or RfPreviewType.BetamaxHifi or RfPreviewType.LaserDisc;
+            bool supported = RfHasAudio;
             rfAudio = supported ? new RfPreviewAudio(rfInspector.PreviewOptions.AudioTrackLabel) : null;
             displayedAudioGeneration = -1;
             StereoMeter.Reset();
@@ -122,6 +125,9 @@ public sealed partial class MainWindow
         }
         if (rfAudio is null) StereoMeter.SetPreviewTrackStatus(null);
         else RenderRfAudio();
+        for (int i = 2; i < RfScopeSource.Items.Count; i++)
+            ((ComboBoxItem)RfScopeSource.Items[i]).IsEnabled = RfHasVideoOutput;
+        if (!RfHasVideoOutput && RfScopeSource.SelectedIndex >= 2) RfScopeSource.SelectedIndex = 0;
         UpdateAudioMeterVisibility(lastWindowWidth);
         UpdateRfSpectrumSource();
     }
@@ -285,11 +291,14 @@ public sealed partial class MainWindow
 
     private void RefreshSignalScope()
     {
-        if (RfScopeValue is null || RfTraceA is null || RfTraceB is null) return;
+        if (RfScopeValue is null || RfTraceA is null || RfTraceB is null || RfScaleLow is null) return;
         int mode = RfScopeSource.SelectedIndex;
         RfTraceA.Points.Clear();
         RfTraceB.Points.Clear();
         RfScopeValue.Text = "";
+        RfLegendPanel.Visibility = mode == 0 ? Visibility.Visible : Visibility.Collapsed;
+        RfScaleHigh.Text = mode switch { 2 => "+120", 3 or 4 => "+1", _ => "+FS" };
+        RfScaleLow.Text = mode switch { 2 => "−120", 3 or 4 => "−1", _ => "−FS" };
 #if REALTIME_RF
         if (heldPair is { } pair) PaintSignalScope(pair, force: true);
 #endif
@@ -309,6 +318,31 @@ public sealed partial class MainWindow
         if (mode <= 0 || !force && (RfStage.Visibility != Visibility.Visible || Environment.TickCount64 - lastSignalPaint < 70)) return;
         lastSignalPaint = Environment.TickCount64;
         var points = new PointCollection();
+        if (mode is >= 2 and <= 4)
+        {
+            int component = mode - 2;
+            var field = rfInspector.PreviewOptions.FieldMode switch { 2 => pair.Top, 3 => pair.Bottom, _ => pair.Second };
+            var rect = rfInspector.PreviewOptions.FullRaster ? field.RasterRect : field.ActiveVideoRect;
+            var signal = field.SignalYuv.Span;
+            if (!signal.IsEmpty && rect.Width > 0 && rect.Height > 0)
+            {
+                int row = (rect.Y + rect.Height / 2) * field.Width + rect.X;
+                double scale = component == 0 ? 64.0 : 4096.0;
+                double low = double.PositiveInfinity, high = double.NegativeInfinity;
+                for (int x = 0; x < rect.Width; x++)
+                {
+                    double value = signal[(row + x) * 3 + component] / scale;
+                    low = Math.Min(low, value);
+                    high = Math.Max(high, value);
+                    points.Add(new Point(x * 255d / Math.Max(1, rect.Width - 1),
+                        Math.Clamp(50 - 50 * value / (component == 0 ? 120 : 1), 0, 100)));
+                }
+                RfScopeValue.Text = $"{low:0.##} … {high:0.##}" + (component == 0 ? " IRE" : "");
+                RfScopeValue.Foreground = ThemeBrush("StudioTextSecondaryBrush");
+            }
+            RfTraceA.Points = points;
+            return;
+        }
         if (pair.SwitchTrace is not { } trace)
         {
             RfTraceA.Points.Clear();
@@ -584,6 +618,7 @@ public sealed partial class MainWindow
 #if REALTIME_RF
             if (decoder is not null)
             {
+                rfLocks = decoder.Locks;
                 var feed = decoder.ScopeFeed;
                 decoder.FullRaster = rfInspector.PreviewOptions.FullRaster;
                 decoder.FieldMode = rfInspector.PreviewOptions.FieldMode;
@@ -649,6 +684,7 @@ public sealed partial class MainWindow
             {
                 void SelectDecoder()
                 {
+                    rfLocks = null;
                     var type = rfInspector.PreviewOptions.PreviewType;
                     timer.Interval = TimeSpan.FromMilliseconds(type is RfPreviewType.RfOnly or RfPreviewType.VhsHifi ? 100 : 8);
                     presented = 0;
@@ -663,32 +699,18 @@ public sealed partial class MainWindow
                     if (old is not null)
                         retiring = retiring.IsCompletedSuccessfully ? old.StopAsync() : Task.WhenAll(retiring, old.StopAsync());
                     if (type == RfPreviewType.RfOnly) return;
-                    var format = type switch
+                    var bar = rfInspector.PreviewOptions;
+                    var options = RfDecoderOptions.Create(type, file?.Rate ?? request!.HardwareRate,
+                        bar.PalPreview, bar.RestoreCvbs, bar.BetaProfileIndex, bar.LdAudioIndex) with
                     {
-                        RfPreviewType.VideoOnly => PreviewSourceFormat.Cvbs,
-                        RfPreviewType.Betamax or RfPreviewType.BetamaxHifi => PreviewSourceFormat.Betamax,
-                        RfPreviewType.LaserDisc => PreviewSourceFormat.LaserDisc,
-                        _ => PreviewSourceFormat.Vhs
+                        DecodeThreads = bar.Threads,
+                        LaserDiscAc3PresentationDelay = TimeSpan.FromMilliseconds(bar.Ac3DelayMs)
                     };
-                    bool pal = format is not (PreviewSourceFormat.Betamax or PreviewSourceFormat.LaserDisc) && rfInspector.PreviewOptions.PalPreview;
-                    var options = new RealtimePreviewOptions(format, pal ? PreviewVideoStandard.Pal : PreviewVideoStandard.Ntsc, file?.Rate ?? request!.HardwareRate)
+                    if (!RealtimePreviewCapabilities.IsSupported(options))
                     {
-                        Region = PreviewRegion.FullRaster,
-                        DecodeThreads = Math.Min(4, Environment.ProcessorCount),
-                        Cvbs50Ohms = format == PreviewSourceFormat.Cvbs && rfInspector.PreviewOptions.RestoreCvbs,
-                        BetamaxProfile = type == RfPreviewType.BetamaxHifi ? BetamaxVideoProfile.HiFi : BetamaxVideoProfile.Standard,
-                        AudioTrack = format switch
-                        {
-                            PreviewSourceFormat.Vhs when type == RfPreviewType.VhsHifi => PreviewAudioTrack.VhsHiFi,
-                            PreviewSourceFormat.Betamax when type == RfPreviewType.BetamaxHifi => PreviewAudioTrack.BetamaxHiFi,
-                            PreviewSourceFormat.LaserDisc => rfInspector.PreviewOptions.LdAudioIndex switch
-                            {
-                                1 => PreviewAudioTrack.LaserDiscDigitalPcm, 2 => PreviewAudioTrack.LaserDiscDts,
-                                3 => PreviewAudioTrack.LaserDiscAc3Rf, _ => PreviewAudioTrack.LaserDiscAnalog
-                            },
-                            _ => PreviewAudioTrack.None
-                        }
-                    };
+                        SetStatus("PreviewFailed", () => $"{options.SourceFormat} / {options.Standard} / {options.InputSampleRateHz} Hz", InfoBarSeverity.Warning);
+                        return;
+                    }
                     if (options.AudioTrack != PreviewAudioTrack.None)
                         activeAudioMonitor = new LocalAudioMonitor(options.AudioTrack is PreviewAudioTrack.LaserDiscDigitalPcm or PreviewAudioTrack.LaserDiscDts ? 44100u : 48000u) { Enabled = rfFileSound, Volume = audioMonitorVolume };
                     Volatile.Write(ref decoder, new RfPreviewDecoder(options, rfAudio, rfInspector.PreviewOptions.AudioTrackLabel, activeAudioMonitor));
@@ -752,6 +774,7 @@ public sealed partial class MainWindow
             var pendingSeek = rfSeekDebounce.IsRunning;
             rfSeekDebounce.Stop();
 #if REALTIME_RF
+            rfLocks = null;
             rfInspector.PreviewOptions.DecoderChanged -= resetDecoder;
             activeAudioMonitor = null;
             await Task.WhenAll(retiring, decoder?.StopAsync(drain: reachedEnd) ?? Task.CompletedTask);
@@ -805,6 +828,21 @@ public sealed partial class MainWindow
         if (selection?.Ddd is { VendorId: 0x1209, ProductId: 0x2347 } && !rfInspector.IsPlayback)
             metrics.Add(RfFifoMetrics.DroppedSamples(m?.Fifo?.ObservedDroppedSamples,
                 m?.FifoDisabled == true || m?.Fifo?.CoverageLimited == true, L("RfFifoLost"), settingsCulture));
+#if REALTIME_RF
+        if (rfLocks is { } locks)
+        {
+            var values = new List<string>(4);
+            void Add(string channel, bool? locked)
+            {
+                if (locked.HasValue) values.Add(channel + (locked.Value ? " ✓" : " ×"));
+            }
+            Add("H", locks.HorizontalLocked);
+            Add("V", locks.VerticalLocked);
+            Add("C", locks.ColorLocked);
+            Add("A", locks.AudioLocked);
+            metrics.Add(new("rf-locks", L("RfDecoderLock"), string.Join("  ", values)));
+        }
+#endif
         return metrics.ToArray();
     }
 

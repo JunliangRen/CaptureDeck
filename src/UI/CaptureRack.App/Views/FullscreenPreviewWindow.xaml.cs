@@ -20,6 +20,7 @@ namespace CaptureRack.App.Views;
 internal sealed partial class FullscreenPreviewWindow : Window
 {
     private static readonly SolidColorBrush WhiteSpinnerBrush = new(Colors.White);
+    private static readonly SolidColorBrush TransparentBrush = new(Colors.Transparent);
 
     private readonly DispatcherQueueTimer idleTimer;
     private readonly ScalarTransition miniBarFade = new() { Duration = TimeSpan.FromMilliseconds(160) };
@@ -41,12 +42,13 @@ internal sealed partial class FullscreenPreviewWindow : Window
     private Point? lastPointerPosition;
 
     public Image PreviewImageControl => PreviewImage;
-    public Microsoft.UI.DisplayId TargetDisplayId { get; }
+    public Microsoft.UI.DisplayId TargetDisplayId { get; private set; }
 
     public event EventHandler? ExitRequested;
     public event EventHandler? TogglePreviewRequested;
     public event EventHandler? ToggleRecordRequested;
     public event EventHandler? ToggleAudioMonitorRequested;
+    public event EventHandler? SwitchDisplayRequested;
 
     public FullscreenPreviewWindow(DisplayArea targetDisplay)
     {
@@ -74,6 +76,16 @@ internal sealed partial class FullscreenPreviewWindow : Window
         if (pendingRevealAnimation)
             PreviewSurface.Opacity = 0;
         Activate();
+        UpdateSurfaceLayout();
+        WakeMiniBar();
+    }
+
+    public void MoveToDisplay(DisplayArea targetDisplay)
+    {
+        TargetDisplayId = targetDisplay.DisplayId;
+        AppWindow.SetPresenter(AppWindowPresenterKind.Overlapped);
+        AppWindow.MoveAndResize(targetDisplay.OuterBounds);
+        AppWindow.SetPresenter(AppWindowPresenterKind.FullScreen);
         UpdateSurfaceLayout();
         WakeMiniBar();
     }
@@ -159,7 +171,17 @@ internal sealed partial class FullscreenPreviewWindow : Window
         bool recordEnabled,
         string recordLabel,
         Style recordStyle,
-        string exitLabel)
+        string exitLabel,
+        bool showAudioMute = false,
+        bool audioMonitorActive = false,
+        string audioMuteTooltip = "",
+        string? audioRouteBadge = null,
+        bool showPlaybackButton = false,
+        bool playbackPlaying = false,
+        bool playbackEnabled = false,
+        string playbackLabel = "",
+        bool showSwitchDisplay = false,
+        string switchDisplayTooltip = "")
     {
         AutomationProperties.SetName(PreviewImage, previewAccessibleName);
         if (StatusText.Text != statusText)
@@ -172,6 +194,31 @@ internal sealed partial class FullscreenPreviewWindow : Window
         if (ClockText.Text != clockText)
             ClockText.Text = clockText;
         ClockText.Visibility = showClock ? Visibility.Visible : Visibility.Collapsed;
+
+        PlaybackButton.Visibility = showPlaybackButton ? Visibility.Visible : Visibility.Collapsed;
+        PlaybackButton.IsEnabled = playbackEnabled;
+        PlaybackIcon.Glyph = playbackPlaying ? "\uE769" : "\uE768";
+        if (PlaybackLabel.Text != playbackLabel)
+            PlaybackLabel.Text = playbackLabel;
+        AutomationProperties.SetName(PlaybackButton, playbackLabel);
+
+        AudioMuteButton.Visibility = showAudioMute ? Visibility.Visible : Visibility.Collapsed;
+        AudioMuteIcon.Glyph = audioMonitorActive ? "\uE767" : "\uE74F";
+        AudioMuteIcon.Foreground = StudioBrushes.Resolve(RootCanvas,
+            audioMonitorActive ? "StudioAccentBrush" : "StudioTextSecondaryBrush");
+        AudioMuteButton.Background = audioMonitorActive
+            ? StudioBrushes.Resolve(RootCanvas, "StudioAccentSoftBrush")
+            : TransparentBrush;
+        if (!string.IsNullOrEmpty(audioMuteTooltip))
+        {
+            ToolTipService.SetToolTip(AudioMuteButton, audioMuteTooltip);
+            AutomationProperties.SetName(AudioMuteButton, audioMuteTooltip);
+        }
+        var hasRoute = !string.IsNullOrEmpty(audioRouteBadge);
+        AudioRouteText.Visibility = hasRoute ? Visibility.Visible : Visibility.Collapsed;
+        if (hasRoute && AudioRouteText.Text != audioRouteBadge)
+            AudioRouteText.Text = audioRouteBadge;
+
         RecordButton.Visibility = showRecordButton ? Visibility.Visible : Visibility.Collapsed;
         RecordButton.IsEnabled = recordEnabled;
         if (!ReferenceEquals(RecordButton.Style, recordStyle))
@@ -189,10 +236,18 @@ internal sealed partial class FullscreenPreviewWindow : Window
                 ? WhiteSpinnerBrush
                 : StudioBrushes.Resolve(RootCanvas, "StudioRecBrush");
         }
+
+        SwitchDisplayButton.Visibility = showSwitchDisplay ? Visibility.Visible : Visibility.Collapsed;
+        if (showSwitchDisplay && !string.IsNullOrEmpty(switchDisplayTooltip))
+        {
+            ToolTipService.SetToolTip(SwitchDisplayButton, switchDisplayTooltip);
+            AutomationProperties.SetName(SwitchDisplayButton, switchDisplayTooltip);
+        }
+
         if (ExitLabel.Text != exitLabel)
             ExitLabel.Text = exitLabel;
         AutomationProperties.SetName(ExitButton, exitLabel);
-        SetRecordingTally(showClock);
+        SetRecordingTally(recordingActive);
     }
 
     private void ConfigureBorderlessFullscreen(RectInt32 bounds)
@@ -445,7 +500,24 @@ internal sealed partial class FullscreenPreviewWindow : Window
 
     private void RecordButton_Click(object sender, RoutedEventArgs e) => ToggleRecordRequested?.Invoke(this, EventArgs.Empty);
 
+    private void PlaybackButton_Click(object sender, RoutedEventArgs e) => TogglePreviewRequested?.Invoke(this, EventArgs.Empty);
+
+    private void AudioMuteButton_Click(object sender, RoutedEventArgs e) => ToggleAudioMonitorRequested?.Invoke(this, EventArgs.Empty);
+
+    private void SwitchDisplayButton_Click(object sender, RoutedEventArgs e) => SwitchDisplayRequested?.Invoke(this, EventArgs.Empty);
+
     private void ExitButton_Click(object sender, RoutedEventArgs e) => ExitRequested?.Invoke(this, EventArgs.Empty);
+
+    private void SpacePlayPause_Invoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
+    {
+        if (RootCanvas.XamlRoot is { } xamlRoot && FocusManager.GetFocusedElement(xamlRoot) is Button)
+            return;
+        if (PlaybackButton.Visibility == Visibility.Visible && PlaybackButton.IsEnabled)
+        {
+            TogglePreviewRequested?.Invoke(this, EventArgs.Empty);
+            args.Handled = true;
+        }
+    }
 
     private void ExitFullscreen_Invoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
     {

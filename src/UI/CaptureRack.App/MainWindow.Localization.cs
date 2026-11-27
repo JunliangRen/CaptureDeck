@@ -67,6 +67,8 @@ public sealed partial class MainWindow
 
         if (qcStop is not null)
             FooterQcStageText.Text = activeQcStage is { } stage ? L($"Qc{stage}") : L("QcStarting");
+        else if (rfQcPendingCount > 0)
+            FooterQcStageText.Text = LocalFormat("RfQcQueueRunning", rfQcPendingCount);
 
         RenderApiVersion();
         RenderStatus();
@@ -91,6 +93,9 @@ public sealed partial class MainWindow
                 var warnings = BuildMovWarnings(entry.CaptureLog, entry.MovResult);
                 return entry with { Summary = summary, Warnings = warnings };
             }
+
+            if (entry.Kind == QcEntryKind.RfRamp && entry.RfSampleCount is { } samples)
+                return entry with { Summary = LocalFormat("RfQcSamples", samples) };
 
             if (entry.SummaryKey is { } summaryKey)
                 return entry with { Summary = L(summaryKey) };
@@ -177,7 +182,15 @@ public sealed partial class MainWindow
         AutomationProperties.SetName(StatusDetailsButton, StatusTitleText.Text);
         ToolTipService.SetToolTip(StatusDetailsButton, recordingWithoutInput ? L("RecordingNoInput") : SignalStatus.Message);
 
-        if (IsCaptureInputActive)
+        if (IsRfActive)
+        {
+            var (rfDotKey, rfLabelKey, rfSoftKey) = ResolveRfStageBadge();
+            signalDotBrushKey = rfDotKey;
+            StageSignalDot.Fill = ThemeBrush(signalDotBrushKey);
+            StageSignalText.Text = L(rfLabelKey);
+            StageSignalBadge.Background = ThemeBrush(rfSoftKey);
+        }
+        else if (IsCaptureInputActive)
         {
             var isLocked = liveSignal == VideoSignal.Present;
             signalDotBrushKey = isLocked
@@ -296,7 +309,8 @@ public sealed partial class MainWindow
         var (toneSoft, toneSolid) = entry.Severity switch
         {
             TelemetrySeverity.Normal => ("StudioSignalLockSoftBrush", "StudioSignalLockBrush"),
-            TelemetrySeverity.Caution or TelemetrySeverity.Info => ("StudioCautionSoftBrush", "StudioCautionBrush"),
+            TelemetrySeverity.Info => ("StudioInfoSoftBrush", "StudioInfoBrush"),
+            TelemetrySeverity.Caution => ("StudioCautionSoftBrush", "StudioCautionBrush"),
             _ => ("StudioDangerSoftBrush", "StudioDangerBrush")
         };
 

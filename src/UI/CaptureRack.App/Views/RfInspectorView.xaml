@@ -2,32 +2,169 @@
     x:Class="CaptureRack.App.Views.RfInspectorView"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
-    <Border Style="{StaticResource StudioInspectorCardStyle}">
-        <StackPanel Spacing="8">
-            <ComboBox x:Name="DeviceBox" DisplayMemberPath="Label" HorizontalAlignment="Stretch"/>
-            <Button x:Name="RefreshButton" Click="RefreshClick"/>
-            <TextBlock x:Name="Diagnostics" FontSize="12" TextWrapping="Wrap"/>
-            <NumberBox x:Name="FileRate" Minimum="0.001" Maximum="100" SmallChange="1" Visibility="Collapsed"/>
-            <ComboBox x:Name="Format" SelectedIndex="0" HorizontalAlignment="Stretch">
-                <ComboBoxItem Content="FLAC"/><ComboBoxItem Content="RAW"/>
-                <ComboBoxItem x:Name="LdfFormat" Visibility="Collapsed"/>
-            </ComboBox>
-            <ComboBox x:Name="DddRate" DisplayMemberPath="Label" HorizontalAlignment="Stretch"/>
-            <ComboBox x:Name="Sw401" DisplayMemberPath="Label" HorizontalAlignment="Stretch"/>
-            <CheckBox x:Name="TestRamp" />
-            <TextBlock x:Name="TransportReading" TextWrapping="Wrap" FontSize="12" Visibility="Collapsed"/>
-            <StackPanel x:Name="RtlOptions" Spacing="8">
-                <ComboBox x:Name="RtlMode" SelectedIndex="0" HorizontalAlignment="Stretch">
-                    <x:String>Hi-Fi RF · 8 MSPS</x:String><x:String>I/Q</x:String>
-                </ComboBox>
-                <ComboBox x:Name="FrequencyPreset" DisplayMemberPath="Label" HorizontalAlignment="Stretch"/>
-                <NumberBox x:Name="Frequency" Visibility="Collapsed" Value="1500000" Minimum="1" Maximum="4294967295" SpinButtonPlacementMode="Compact"/>
-                <ComboBox x:Name="RatePreset" DisplayMemberPath="Label" HorizontalAlignment="Stretch"/>
-                <NumberBox x:Name="CustomRate" Visibility="Collapsed" Value="1024000" Minimum="1" Maximum="3200000" SpinButtonPlacementMode="Compact"/>
-                <TextBlock x:Name="RtlSettingHint" Visibility="Collapsed" FontSize="12" TextWrapping="Wrap"/>
-                <TextBlock x:Name="GainText"/>
-                <Slider x:Name="Vga" Header="VGA" Minimum="0" Maximum="8" StepFrequency="1" Value="8"/>
+    <StackPanel Spacing="8">
+        <!-- Card 1: RF Device Source -->
+        <Border Style="{StaticResource StudioInspectorCardStyle}">
+            <StackPanel Spacing="9">
+                <Grid ColumnSpacing="6">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock x:Name="SourceSectionHeading" Text="RF SOURCE"
+                               Style="{StaticResource StudioSectionHeadingStyle}" VerticalAlignment="Center" />
+                    <Button x:Name="CopyDiagnosticsButton" Grid.Column="1" Visibility="Collapsed"
+                            Style="{StaticResource SubtleButtonStyle}" Height="24" Padding="6,0"
+                            CornerRadius="3" Click="CopyDiagnosticsClick">
+                        <FontIcon x:Name="CopyDiagnosticsIcon" Glyph="&#xE8C8;" FontSize="11" />
+                    </Button>
+                    <Button x:Name="RefreshButton" Grid.Column="2"
+                            Style="{StaticResource SubtleButtonStyle}" Height="24" Padding="7,0"
+                            CornerRadius="3" Click="RefreshClick">
+                        <StackPanel Orientation="Horizontal" Spacing="5">
+                            <FontIcon x:Name="RefreshIcon" Glyph="&#xE72C;" FontSize="11" />
+                            <ProgressRing x:Name="RefreshRing" Width="11" Height="11" IsActive="False" Visibility="Collapsed" />
+                            <TextBlock x:Name="RefreshLabel" FontSize="11" />
+                        </StackPanel>
+                    </Button>
+                </Grid>
+
+                <StackPanel>
+                    <TextBlock x:Name="DeviceLabelText" Text="Device" Style="{StaticResource StudioFieldLabelStyle}" />
+                    <ComboBox x:Name="DeviceBox" DisplayMemberPath="Label" CornerRadius="3" HorizontalAlignment="Stretch" />
+                </StackPanel>
+
+                <StackPanel x:Name="FileRatePanel" Visibility="Collapsed">
+                    <TextBlock x:Name="FileRateLabel" Style="{StaticResource StudioFieldLabelStyle}" />
+                    <NumberBox x:Name="FileRate" Minimum="0.001" Maximum="100" SmallChange="1"
+                               CornerRadius="3" SpinButtonPlacementMode="Compact" />
+                </StackPanel>
+
+                <Border x:Name="DiagnosticsBanner" Visibility="Collapsed" CornerRadius="3" Padding="9,7"
+                        BorderThickness="1"
+                        Background="{ThemeResource StudioCautionSoftBrush}"
+                        BorderBrush="{ThemeResource StudioCautionBrush}">
+                    <Grid ColumnSpacing="8">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                        <FontIcon x:Name="DiagnosticsIcon" Glyph="&#xE7BA;" FontSize="12"
+                                  VerticalAlignment="Top" Margin="0,2,0,0"
+                                  Foreground="{ThemeResource StudioCautionBrush}" />
+                        <TextBlock x:Name="Diagnostics" Grid.Column="1" FontSize="11" TextWrapping="Wrap"
+                                   IsTextSelectionEnabled="True"
+                                   Foreground="{ThemeResource StudioTextPrimaryBrush}" />
+                    </Grid>
+                </Border>
             </StackPanel>
-        </StackPanel>
-    </Border>
+        </Border>
+
+        <!-- Card 2: Capture & Tuning Parameters (Collapsed during file playback) -->
+        <Border x:Name="CaptureTuningCard" Style="{StaticResource StudioInspectorCardStyle}">
+            <StackPanel Spacing="9">
+                <TextBlock x:Name="CaptureSectionHeading" Text="CAPTURE &amp; TUNING"
+                           Style="{StaticResource StudioSectionHeadingStyle}" />
+
+                <StackPanel x:Name="FormatPanel">
+                    <TextBlock x:Name="FormatLabel" Style="{StaticResource StudioFieldLabelStyle}" />
+                    <ComboBox x:Name="Format" SelectedIndex="0" CornerRadius="3" HorizontalAlignment="Stretch">
+                        <ComboBoxItem Content="FLAC" />
+                        <ComboBoxItem Content="RAW" />
+                        <ComboBoxItem x:Name="LdfFormat" Visibility="Collapsed" />
+                    </ComboBox>
+                </StackPanel>
+
+                <StackPanel x:Name="DddOptions" Spacing="9">
+                    <StackPanel>
+                        <TextBlock x:Name="DddRateLabel" Style="{StaticResource StudioFieldLabelStyle}" />
+                        <ComboBox x:Name="DddRate" DisplayMemberPath="Label" CornerRadius="3" HorizontalAlignment="Stretch" />
+                    </StackPanel>
+                    <StackPanel>
+                        <TextBlock x:Name="Sw401Label" Style="{StaticResource StudioFieldLabelStyle}" />
+                        <ComboBox x:Name="Sw401" DisplayMemberPath="Label" CornerRadius="3" HorizontalAlignment="Stretch" />
+                    </StackPanel>
+                    <CheckBox x:Name="TestRamp" MinWidth="0" />
+                </StackPanel>
+
+                <StackPanel x:Name="RtlOptions" Spacing="9" Visibility="Collapsed">
+                    <StackPanel>
+                        <TextBlock x:Name="RtlModeLabel" Style="{StaticResource StudioFieldLabelStyle}" />
+                        <ComboBox x:Name="RtlMode" SelectedIndex="0" CornerRadius="3" HorizontalAlignment="Stretch">
+                            <x:String>Hi-Fi RF · 8 MSPS</x:String>
+                            <x:String>I/Q</x:String>
+                        </ComboBox>
+                    </StackPanel>
+
+                    <StackPanel Spacing="6">
+                        <TextBlock x:Name="FrequencyLabel" Style="{StaticResource StudioFieldLabelStyle}" Margin="0" />
+                        <ComboBox x:Name="FrequencyPreset" DisplayMemberPath="Label" CornerRadius="3" HorizontalAlignment="Stretch" />
+                        <NumberBox x:Name="Frequency" Visibility="Collapsed" Value="1500000" Minimum="1" Maximum="4294967295"
+                                   CornerRadius="3" SpinButtonPlacementMode="Compact" />
+                    </StackPanel>
+
+                    <StackPanel Spacing="6">
+                        <TextBlock x:Name="RateLabel" Style="{StaticResource StudioFieldLabelStyle}" Margin="0" />
+                        <ComboBox x:Name="RatePreset" DisplayMemberPath="Label" CornerRadius="3" HorizontalAlignment="Stretch" />
+                        <NumberBox x:Name="CustomRate" Visibility="Collapsed" Value="1024000" Minimum="1" Maximum="3200000"
+                                   CornerRadius="3" SpinButtonPlacementMode="Compact" />
+                    </StackPanel>
+
+                    <Border x:Name="RtlErrorBanner" Visibility="Collapsed" CornerRadius="3" Padding="9,7"
+                            BorderThickness="1"
+                            Background="{ThemeResource StudioDangerSoftBrush}"
+                            BorderBrush="{ThemeResource StudioDangerBrush}">
+                        <Grid ColumnSpacing="8">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <FontIcon Glyph="&#xE783;" FontSize="12" VerticalAlignment="Top" Margin="0,2,0,0"
+                                      Foreground="{ThemeResource StudioDangerBrush}" />
+                            <TextBlock x:Name="RtlSettingHint" Grid.Column="1" FontSize="11" TextWrapping="Wrap"
+                                       Foreground="{ThemeResource StudioTextPrimaryBrush}" />
+                        </Grid>
+                    </Border>
+
+                    <TextBlock x:Name="GainText" FontSize="12" Foreground="{ThemeResource StudioTextSecondaryBrush}" />
+
+                    <StackPanel Spacing="4">
+                        <Grid ColumnSpacing="6">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock x:Name="VgaLabel" Style="{StaticResource StudioFieldLabelStyle}" Margin="0" VerticalAlignment="Center" />
+                            <TextBlock x:Name="VgaValueText" Grid.Column="1" Text="8"
+                                       Style="{StaticResource StudioMonoTextStyle}" FontSize="12" FontWeight="SemiBold"
+                                       Foreground="{ThemeResource StudioAccentBrush}" VerticalAlignment="Center" />
+                            <Button x:Name="VgaResetButton" Grid.Column="2" Style="{StaticResource SubtleButtonStyle}"
+                                    Height="22" Padding="6,0" CornerRadius="3" FontSize="11" Click="VgaResetClick" />
+                        </Grid>
+                        <Slider x:Name="Vga" Minimum="0" Maximum="8" StepFrequency="1" Value="8" />
+                    </StackPanel>
+                </StackPanel>
+            </StackPanel>
+        </Border>
+
+        <!-- Card 3: Live Transport Telemetry (FPGA FIFO & Legacy Sequence) -->
+        <Border x:Name="TelemetryCard" Style="{StaticResource StudioInspectorCardStyle}" Visibility="Collapsed">
+            <StackPanel Spacing="8">
+                <Grid>
+                    <TextBlock x:Name="TelemetrySectionHeading" Text="TRANSPORT TELEMETRY"
+                               Style="{StaticResource StudioSectionHeadingStyle}" VerticalAlignment="Center" />
+                    <TextBlock x:Name="FifoPercentText" HorizontalAlignment="Right"
+                               Style="{StaticResource StudioMonoTextStyle}" FontSize="11" FontWeight="SemiBold"
+                               Foreground="{ThemeResource StudioTextSecondaryBrush}" Visibility="Collapsed" />
+                </Grid>
+                <ProgressBar x:Name="FifoProgressBar" Minimum="0" Maximum="100" Value="0"
+                             Height="5" CornerRadius="2" Visibility="Collapsed" />
+                <TextBlock x:Name="TransportReading" Style="{StaticResource StudioMonoTextStyle}"
+                           FontSize="11" TextWrapping="Wrap" IsTextSelectionEnabled="True"
+                           Foreground="{ThemeResource StudioTextSecondaryBrush}" />
+            </StackPanel>
+        </Border>
+    </StackPanel>
 </UserControl>

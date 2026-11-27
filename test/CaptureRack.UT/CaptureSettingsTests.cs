@@ -123,6 +123,7 @@ public sealed class CaptureSettingsTests
         Assert.Equal(new VancInputOptions(false, 18, 19, 20), restored.DeckLink.VancInput);
         Assert.Equal(new DirectShowSettings(), restored.DirectShow);
         Assert.Equal(new FireWireSettings(), restored.FireWire);
+        Assert.Equal(new RfSettings(), restored.Rf);
         Assert.Equal("Normal", restored.TestSignalScenario);
     }
 
@@ -161,6 +162,28 @@ public sealed class CaptureSettingsTests
             FireWire = new FireWireSettings
             {
                 DeviceId = "simulated:dvcpro50-ntsc"
+            },
+            Rf = new RfSettings
+            {
+                DeviceKey = "ddd:USB\\VID_1209&PID_2347\\001",
+                FormatIndex = 2,
+                DddRateMsps = 20,
+                Sw401 = "1010",
+                TestRamp = true,
+                RtlModeIndex = 1,
+                RtlFrequencyHz = 1_600_000,
+                RtlCustomFrequency = true,
+                RtlSampleRateHz = 2_048_000,
+                RtlCustomRate = false,
+                RtlVgaIndex = 5,
+                PreviewTypeIndex = 3,
+                PalPreview = true,
+                VhsProfileIndex = 1,
+                BetaProfileIndex = 1,
+                LdTrackIndex = 2,
+                FieldViewIndex = 1,
+                FullRaster = true,
+                CvbsRestore = true
             },
             DeckLink = new DeckLinkSettings
             {

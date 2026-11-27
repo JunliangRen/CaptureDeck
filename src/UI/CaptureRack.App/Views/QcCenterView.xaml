@@ -33,6 +33,16 @@
                                    Foreground="{ThemeResource StudioTextSecondaryBrush}" TextWrapping="Wrap" />
                     </StackPanel>
                     <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                        <Button x:Name="RecoverMkvButton" Style="{StaticResource SubtleButtonStyle}"
+                                Height="34" Padding="11,0" CornerRadius="4"
+                                Background="{ThemeResource StudioCardBrush}"
+                                BorderBrush="{ThemeResource StudioHairlineBrush}" BorderThickness="1"
+                                Click="RecoverMkvButton_Click" IsEnabled="False">
+                            <StackPanel Orientation="Horizontal" Spacing="7">
+                                <FontIcon Glyph="&#xE777;" FontSize="13" />
+                                <TextBlock x:Name="RecoverMkvLabel" FontSize="13" VerticalAlignment="Center" />
+                            </StackPanel>
+                        </Button>
                         <Button x:Name="CheckFileButton" Style="{StaticResource StudioTransportPrimaryButtonStyle}"
                                 Click="CheckFileButton_Click" IsEnabled="False">
                             <StackPanel Orientation="Horizontal" Spacing="8">
@@ -278,6 +288,23 @@
                             <TextBlock x:Name="TsDecodeNoteText" FontSize="12" TextWrapping="Wrap"
                                        Foreground="{ThemeResource StudioTextMutedBrush}" />
                             <InfoBar x:Name="TsSaveStatus" IsOpen="False" IsClosable="False" />
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
+
+                <!-- RF Ramp Verification Details -->
+                <StackPanel x:Name="RfRampResultSection" Spacing="12" Visibility="Collapsed">
+                    <Border Style="{StaticResource StudioInspectorCardStyle}" Padding="14">
+                        <StackPanel Spacing="10">
+                            <TextBlock x:Name="RfRampFormatText" Style="{StaticResource StudioMonoTextStyle}"
+                                       FontWeight="SemiBold" TextWrapping="Wrap"
+                                       Foreground="{ThemeResource StudioAccentBrush}" />
+                            <controls:StudioWrapPanel HorizontalSpacing="8" VerticalSpacing="8">
+                                <Button x:Name="RfRampFolderButton" Tag="folder" Click="ArtifactButton_Click"
+                                        Style="{StaticResource StudioTransportPrimaryButtonStyle}" />
+                                <Button x:Name="RfRampFifoReportButton" Tag="rf-fifo" Click="ArtifactButton_Click"
+                                        Style="{StaticResource StudioTransportPrimaryButtonStyle}" Visibility="Collapsed" />
+                            </controls:StudioWrapPanel>
                         </StackPanel>
                     </Border>
                 </StackPanel>

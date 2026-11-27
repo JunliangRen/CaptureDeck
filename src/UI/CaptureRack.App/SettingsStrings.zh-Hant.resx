@@ -1847,4 +1847,65 @@
   <data name="RfOpenFile" xml:space="preserve"><value>開啟 RF 檔案</value></data>
   <data name="RfPlay" xml:space="preserve"><value>播放</value></data>
   <data name="RfPause" xml:space="preserve"><value>暫停</value></data>
+  <data name="RfSourceHeading" xml:space="preserve"><value>RF 訊號源</value></data>
+  <data name="RfCaptureHeading" xml:space="preserve"><value>擷取與調諧</value></data>
+  <data name="RfTelemetryHeading" xml:space="preserve"><value>傳輸遙測</value></data>
+  <data name="RfFormatLabel" xml:space="preserve"><value>錄製格式</value></data>
+  <data name="RfDddRateLabel" xml:space="preserve"><value>取樣率</value></data>
+  <data name="RfRtlModeLabel" xml:space="preserve"><value>擷取模式</value></data>
+  <data name="RfVgaReset" xml:space="preserve"><value>重設</value></data>
+  <data name="RfScanningDevices" xml:space="preserve"><value>正在掃描 RF 裝置…</value></data>
+  <data name="RfCopyDiagnostics" xml:space="preserve"><value>複製診斷</value></data>
+  <data name="RfFifoUsageLabel" xml:space="preserve"><value>FPGA FIFO</value></data>
+  <data name="RfDecoderOptionsButton" xml:space="preserve"><value>解碼選項</value></data>
+  <data name="RfFieldViewLabel" xml:space="preserve"><value>場檢視</value></data>
+  <data name="RfFieldFrame" xml:space="preserve"><value>整格</value></data>
+  <data name="RfFieldSplit" xml:space="preserve"><value>雙場並排</value></data>
+  <data name="RfFieldTop" xml:space="preserve"><value>第 1 場 (頂場)</value></data>
+  <data name="RfFieldBottom" xml:space="preserve"><value>第 2 場 (底場)</value></data>
+  <data name="RfRegionLabel" xml:space="preserve"><value>光柵區域</value></data>
+  <data name="RfRegionActive" xml:space="preserve"><value>有效畫面</value></data>
+  <data name="RfRegionFull" xml:space="preserve"><value>完整光柵</value></data>
+  <data name="RfStandardLabel" xml:space="preserve"><value>視訊制式</value></data>
+  <data name="RfTrackLabel" xml:space="preserve"><value>音軌 / 規格</value></data>
+  <data name="RfLdAnalog" xml:space="preserve"><value>LD · 類比音軌</value></data>
+  <data name="RfLdDigitalPcm" xml:space="preserve"><value>LD · 數位 PCM</value></data>
+  <data name="RfLdDts" xml:space="preserve"><value>LD · DTS</value></data>
+  <data name="RfLdAc3" xml:space="preserve"><value>LD · AC-3 RF</value></data>
+  <data name="RfBetamaxHifiLabel" xml:space="preserve"><value>Betamax Hi-Fi</value></data>
+  <data name="RfScopeAdc" xml:space="preserve"><value>ADC</value></data>
+  <data name="RfScopeHeadSwitch" xml:space="preserve"><value>磁頭切換</value></data>
+  <data name="RfHeadSwitchLocked" xml:space="preserve"><value>已觸發磁頭切換</value></data>
+  <data name="RfHeadSwitchNone" xml:space="preserve"><value>未偵測到切換邊緣</value></data>
+  <data name="RfNoVideoModeTitle" xml:space="preserve"><value>目前為純 RF / 音訊監看模式</value></data>
+  <data name="RfNoVideoModeHint" xml:space="preserve"><value>在頂部工具列選擇視訊解碼類型（CVBS、VHS、Betamax 或 LD）即可檢視即時解碼畫面。</value></data>
+  <data name="RfClipPositiveTooltip" xml:space="preserve"><value>+CLIP（{0:N0} 次）· 點擊清除</value></data>
+  <data name="RfClipNegativeTooltip" xml:space="preserve"><value>−CLIP（{0:N0} 次）· 點擊清除</value></data>
+  <data name="RfPlaybackDropHint" xml:space="preserve"><value>拖放 RF 檔案至此處，或點擊「開啟 RF 檔案」</value></data>
+  <data name="RfStepPrevTooltip" xml:space="preserve"><value>上一場 (←)</value></data>
+  <data name="RfStepNextTooltip" xml:space="preserve"><value>下一場 (→)</value></data>
+  <data name="RfSearchingField" xml:space="preserve"><value>正在定位相鄰場…</value></data>
+  <data name="RfOpeningFile" xml:space="preserve"><value>正在解析 RF 檔案…</value></data>
+  <data name="RfStatusPreviewing" xml:space="preserve"><value>RF 監看中</value></data>
+  <data name="RfStatusPlaying" xml:space="preserve"><value>RF 回放中</value></data>
+  <data name="RfStatusPaused" xml:space="preserve"><value>RF 已暫停</value></data>
+  <data name="RfStatusRecording" xml:space="preserve"><value>RF 錄製中</value></data>
+  <data name="RfOpenFifoReport" xml:space="preserve"><value>開啟 FIFO 報告</value></data>
+  <data name="RfQcQueueRunning" xml:space="preserve"><value>RF 斜坡複驗（{0}）</value></data>
+  <data name="RfQcMetricStatus" xml:space="preserve"><value>複驗結果</value></data>
+  <data name="RfQcMetricFormat" xml:space="preserve"><value>RF 格式</value></data>
+  <data name="MkvRecoverButton" xml:space="preserve"><value>復原 .partial.mkv</value></data>
+  <data name="MkvRecoverPickTitle" xml:space="preserve"><value>選擇中斷的 .partial.mkv 錄製檔案</value></data>
+  <data name="MkvRecovering" xml:space="preserve"><value>正在校驗並復原 Matroska 錄製檔案…</value></data>
+  <data name="MkvRecoverSuccess" xml:space="preserve"><value>MKV 復原完成</value></data>
+  <data name="MkvRecoverSuccessDetail" xml:space="preserve"><value>已復原 {0:N0} 位元組完整資料簇至 {1}。</value></data>
+  <data name="MkvRecoverFailed" xml:space="preserve"><value>MKV 復原失敗</value></data>
+  <data name="EncodingEnableDeinterlace" xml:space="preserve"><value>一鍵開啟軟體去交錯</value></data>
+  <data name="EncodingInterlacedWarning" xml:space="preserve"><value>偵測到交錯訊號：H.265 與 AV1 需開啟軟體去交錯後才能錄製。</value></data>
+  <data name="EncodingVariableBitrateNote" xml:space="preserve"><value>可變位元率</value></data>
+  <data name="EncodingPresetAuto" xml:space="preserve"><value>自動</value></data>
+  <data name="ShortcutRfPlayPause" xml:space="preserve"><value>RF 播放 / 暫停</value></data>
+  <data name="ShortcutRfStepField" xml:space="preserve"><value>RF 上一場 / 下一場</value></data>
+  <data name="ShortcutRfOpenFile" xml:space="preserve"><value>開啟 RF 檔案</value></data>
+  <data name="FullscreenDisplayTooltip" xml:space="preserve"><value>切換全螢幕顯示器</value></data>
 </root>

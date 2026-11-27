@@ -1,44 +1,134 @@
+using System.Globalization;
 using CaptureRack.SignalCapture;
+using Microsoft.UI;
 using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Media;
 
 namespace CaptureRack.App.Controls;
 
 public sealed partial class RfPeakMeter : UserControl
 {
-    private long positiveCount, negativeCount, highUntil, lowUntil;
-    private double highPeak, lowPeak;
+    private static readonly SolidColorBrush WhiteBrush = new(Colors.White);
 
-    public RfPeakMeter() { InitializeComponent(); Reset(); }
+    private readonly RfPeakBallistics ballistics = new();
+    private Func<string, string> localize = key => key;
+    private CultureInfo culture = CultureInfo.InvariantCulture;
+
+    public RfPeakMeter()
+    {
+        InitializeComponent();
+        Reset();
+    }
+
+    public void ApplyLanguage(Func<string, string> localizer, CultureInfo currentCulture)
+    {
+        localize = localizer;
+        culture = currentCulture;
+        RefreshClipBadges();
+    }
+
+    public void RefreshTheme() => RefreshClipBadges();
+
     public void Reset()
     {
-        positiveCount = negativeCount = highUntil = lowUntil = 0;
-        highPeak = lowPeak = Positive.Height = Negative.Height = 0;
-        Canvas.SetTop(HoldHigh, 100);
-        Canvas.SetTop(HoldLow, 100);
-        ClearHigh(this, new());
-        ClearLow(this, new());
+        ballistics.Reset();
+        ApplyTransforms();
+        RefreshClipBadges();
     }
 
     public void Show(string channel, RfLevels levels, int scale)
     {
         Channel.Text = channel;
-        double high = 100d * Math.Max(0, levels.Max) / (scale - 1);
-        double low = 100d * Math.Max(0, -levels.Min) / scale;
-        Positive.Height = high;
-        Canvas.SetTop(Positive, 100 - high);
-        Negative.Height = low;
-        long now = Environment.TickCount64;
-        if (high >= highPeak || now >= highUntil) { highPeak = high; highUntil = now + 1000; }
-        if (low >= lowPeak || now >= lowUntil) { lowPeak = low; lowUntil = now + 1000; }
-        Canvas.SetTop(HoldHigh, 100 - highPeak);
-        Canvas.SetTop(HoldLow, Math.Min(198.5, 100 + lowPeak));
-        if (levels.PositiveClips > positiveCount) High.Background = StudioBrushes.Resolve(this, "StudioDangerBrush");
-        if (levels.NegativeClips > negativeCount) Low.Background = StudioBrushes.Resolve(this, "StudioDangerBrush");
-        positiveCount = levels.PositiveClips;
-        negativeCount = levels.NegativeClips;
+        var (newPos, newNeg) = ballistics.UpdateInput(
+            levels.Min, levels.Max, scale, levels.PositiveClips, levels.NegativeClips);
+        ApplyTransforms();
+        RefreshClipBadges();
+        if (newPos)
+            StudioFeedback.PulseElement(High);
+        if (newNeg)
+            StudioFeedback.PulseElement(Low);
     }
 
-    private void ClearHigh(object sender, RoutedEventArgs args) => High.ClearValue(BackgroundProperty);
-    private void ClearLow(object sender, RoutedEventArgs args) => Low.ClearValue(BackgroundProperty);
+    public void StepBallistics()
+    {
+        ballistics.StepFrame();
+        ApplyTransforms();
+    }
+
+    private void ApplyTransforms()
+    {
+        var high = ballistics.PositiveNormalized * 100.0;
+        var low = ballistics.NegativeNormalized * 100.0;
+        var holdHigh = ballistics.PositivePeakHold * 100.0;
+        var holdLow = ballistics.NegativePeakHold * 100.0;
+
+        Positive.Height = high;
+        Canvas.SetTop(Positive, 100.0 - high);
+        Negative.Height = low;
+
+        HoldHigh.Opacity = holdHigh > 0.5 ? 0.94 : 0;
+        Canvas.SetTop(HoldHigh, Math.Max(0, 100.0 - holdHigh));
+        HoldLow.Opacity = holdLow > 0.5 ? 0.94 : 0;
+        Canvas.SetTop(HoldLow, Math.Min(198.0, 100.0 + holdLow));
+    }
+
+    private void RefreshClipBadges()
+    {
+        var dangerBrush = StudioBrushes.Resolve(this, "StudioDangerBrush");
+        var trackBrush = StudioBrushes.Resolve(this, "StudioMeterTrackBrush");
+        var hairlineBrush = StudioBrushes.Resolve(this, "StudioHairlineBrush");
+        var secondaryBrush = StudioBrushes.Resolve(this, "StudioTextSecondaryBrush");
+
+        var posClips = ballistics.VisiblePositiveClips;
+        if (posClips > 0)
+        {
+            High.Background = dangerBrush;
+            High.BorderBrush = dangerBrush;
+            HighLabel.Foreground = WhiteBrush;
+            var tip = string.Format(culture, localize("RfClipPositiveTooltip"), posClips);
+            ToolTipService.SetToolTip(High, tip);
+            AutomationProperties.SetName(High, tip);
+        }
+        else
+        {
+            High.Background = trackBrush;
+            High.BorderBrush = hairlineBrush;
+            HighLabel.Foreground = secondaryBrush;
+            ToolTipService.SetToolTip(High, "+CLIP");
+            AutomationProperties.SetName(High, "Positive CLIP");
+        }
+
+        var negClips = ballistics.VisibleNegativeClips;
+        if (negClips > 0)
+        {
+            Low.Background = dangerBrush;
+            Low.BorderBrush = dangerBrush;
+            LowLabel.Foreground = WhiteBrush;
+            var tip = string.Format(culture, localize("RfClipNegativeTooltip"), negClips);
+            ToolTipService.SetToolTip(Low, tip);
+            AutomationProperties.SetName(Low, tip);
+        }
+        else
+        {
+            Low.Background = trackBrush;
+            Low.BorderBrush = hairlineBrush;
+            LowLabel.Foreground = secondaryBrush;
+            ToolTipService.SetToolTip(Low, "−CLIP");
+            AutomationProperties.SetName(Low, "Negative CLIP");
+        }
+    }
+
+    private void ClearHigh(object sender, RoutedEventArgs args)
+    {
+        ballistics.ResetPositiveClipLatch();
+        RefreshClipBadges();
+    }
+
+    private void ClearLow(object sender, RoutedEventArgs args)
+    {
+        ballistics.ResetNegativeClipLatch();
+        RefreshClipBadges();
+    }
 }

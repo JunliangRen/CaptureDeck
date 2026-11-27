@@ -1847,4 +1847,65 @@
   <data name="RfOpenFile" xml:space="preserve"><value>Open RF file</value></data>
   <data name="RfPlay" xml:space="preserve"><value>Play</value></data>
   <data name="RfPause" xml:space="preserve"><value>Pause</value></data>
+  <data name="RfSourceHeading" xml:space="preserve"><value>RF SOURCE</value></data>
+  <data name="RfCaptureHeading" xml:space="preserve"><value>CAPTURE &amp; TUNING</value></data>
+  <data name="RfTelemetryHeading" xml:space="preserve"><value>TRANSPORT TELEMETRY</value></data>
+  <data name="RfFormatLabel" xml:space="preserve"><value>Recording format</value></data>
+  <data name="RfDddRateLabel" xml:space="preserve"><value>Sample rate</value></data>
+  <data name="RfRtlModeLabel" xml:space="preserve"><value>Capture mode</value></data>
+  <data name="RfVgaReset" xml:space="preserve"><value>Reset</value></data>
+  <data name="RfScanningDevices" xml:space="preserve"><value>Scanning RF devices…</value></data>
+  <data name="RfCopyDiagnostics" xml:space="preserve"><value>Copy diagnostics</value></data>
+  <data name="RfFifoUsageLabel" xml:space="preserve"><value>FPGA FIFO</value></data>
+  <data name="RfDecoderOptionsButton" xml:space="preserve"><value>Decoder</value></data>
+  <data name="RfFieldViewLabel" xml:space="preserve"><value>Field view</value></data>
+  <data name="RfFieldFrame" xml:space="preserve"><value>Frame</value></data>
+  <data name="RfFieldSplit" xml:space="preserve"><value>Split fields</value></data>
+  <data name="RfFieldTop" xml:space="preserve"><value>Field 1 (Top)</value></data>
+  <data name="RfFieldBottom" xml:space="preserve"><value>Field 2 (Bottom)</value></data>
+  <data name="RfRegionLabel" xml:space="preserve"><value>Raster region</value></data>
+  <data name="RfRegionActive" xml:space="preserve"><value>Active</value></data>
+  <data name="RfRegionFull" xml:space="preserve"><value>Full raster</value></data>
+  <data name="RfStandardLabel" xml:space="preserve"><value>Video standard</value></data>
+  <data name="RfTrackLabel" xml:space="preserve"><value>Audio / Profile</value></data>
+  <data name="RfLdAnalog" xml:space="preserve"><value>LD · Analog</value></data>
+  <data name="RfLdDigitalPcm" xml:space="preserve"><value>LD · Digital PCM</value></data>
+  <data name="RfLdDts" xml:space="preserve"><value>LD · DTS</value></data>
+  <data name="RfLdAc3" xml:space="preserve"><value>LD · AC-3 RF</value></data>
+  <data name="RfBetamaxHifiLabel" xml:space="preserve"><value>Betamax Hi-Fi</value></data>
+  <data name="RfScopeAdc" xml:space="preserve"><value>ADC</value></data>
+  <data name="RfScopeHeadSwitch" xml:space="preserve"><value>Head switch</value></data>
+  <data name="RfHeadSwitchLocked" xml:space="preserve"><value>Head switch triggered</value></data>
+  <data name="RfHeadSwitchNone" xml:space="preserve"><value>No head switch edge</value></data>
+  <data name="RfNoVideoModeTitle" xml:space="preserve"><value>RF / Audio monitoring active</value></data>
+  <data name="RfNoVideoModeHint" xml:space="preserve"><value>Select a video decoder (CVBS, VHS, Betamax, or LD) in the toolbar to view decoded video.</value></data>
+  <data name="RfClipPositiveTooltip" xml:space="preserve"><value>+CLIP ({0:N0}) · Click to reset</value></data>
+  <data name="RfClipNegativeTooltip" xml:space="preserve"><value>−CLIP ({0:N0}) · Click to reset</value></data>
+  <data name="RfPlaybackDropHint" xml:space="preserve"><value>Drop an RF file here or click Open RF file</value></data>
+  <data name="RfStepPrevTooltip" xml:space="preserve"><value>Previous field (←)</value></data>
+  <data name="RfStepNextTooltip" xml:space="preserve"><value>Next field (→)</value></data>
+  <data name="RfSearchingField" xml:space="preserve"><value>Seeking adjacent field…</value></data>
+  <data name="RfOpeningFile" xml:space="preserve"><value>Opening RF file…</value></data>
+  <data name="RfStatusPreviewing" xml:space="preserve"><value>RF Live</value></data>
+  <data name="RfStatusPlaying" xml:space="preserve"><value>RF Playback</value></data>
+  <data name="RfStatusPaused" xml:space="preserve"><value>RF Paused</value></data>
+  <data name="RfStatusRecording" xml:space="preserve"><value>RF Recording</value></data>
+  <data name="RfOpenFifoReport" xml:space="preserve"><value>Open FIFO report</value></data>
+  <data name="RfQcQueueRunning" xml:space="preserve"><value>RF ramp QC ({0})</value></data>
+  <data name="RfQcMetricStatus" xml:space="preserve"><value>Verification</value></data>
+  <data name="RfQcMetricFormat" xml:space="preserve"><value>RF format</value></data>
+  <data name="MkvRecoverButton" xml:space="preserve"><value>Recover .partial.mkv</value></data>
+  <data name="MkvRecoverPickTitle" xml:space="preserve"><value>Select interrupted .partial.mkv recording</value></data>
+  <data name="MkvRecovering" xml:space="preserve"><value>Recovering Matroska recording…</value></data>
+  <data name="MkvRecoverSuccess" xml:space="preserve"><value>MKV recovered</value></data>
+  <data name="MkvRecoverSuccessDetail" xml:space="preserve"><value>Recovered {0:N0} bytes of complete clusters to {1}.</value></data>
+  <data name="MkvRecoverFailed" xml:space="preserve"><value>MKV recovery failed</value></data>
+  <data name="EncodingEnableDeinterlace" xml:space="preserve"><value>Enable software deinterlacing</value></data>
+  <data name="EncodingInterlacedWarning" xml:space="preserve"><value>Interlaced input detected: H.265 and AV1 require software deinterlacing.</value></data>
+  <data name="EncodingVariableBitrateNote" xml:space="preserve"><value>Variable bitrate</value></data>
+  <data name="EncodingPresetAuto" xml:space="preserve"><value>Auto</value></data>
+  <data name="ShortcutRfPlayPause" xml:space="preserve"><value>RF play / pause</value></data>
+  <data name="ShortcutRfStepField" xml:space="preserve"><value>RF previous / next field</value></data>
+  <data name="ShortcutRfOpenFile" xml:space="preserve"><value>Open RF file</value></data>
+  <data name="FullscreenDisplayTooltip" xml:space="preserve"><value>Switch fullscreen display</value></data>
 </root>

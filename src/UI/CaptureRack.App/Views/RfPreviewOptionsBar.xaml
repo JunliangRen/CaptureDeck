@@ -1,27 +1,76 @@
-<UserControl x:Class="CaptureRack.App.Views.RfPreviewOptionsBar"
+<UserControl
+    x:Class="CaptureRack.App.Views.RfPreviewOptionsBar"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
-    <StackPanel Orientation="Horizontal" Spacing="6">
-        <TextBlock x:Name="TypeLabel" VerticalAlignment="Center"/>
-        <ComboBox x:Name="PreviewTypeBox" VerticalAlignment="Center"/>
-        <ComboBox x:Name="VideoStandard" SelectedIndex="0" VerticalAlignment="Center" Visibility="Collapsed">
-            <x:String>NTSC</x:String><x:String>PAL</x:String>
+    <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+        <!-- Primary Decoder Type Picker -->
+        <ComboBox x:Name="PreviewTypeBox" Height="30" CornerRadius="3" VerticalAlignment="Center" />
+
+        <!-- Contextual Quick Selector (Standard / LD Track / Betamax Profile) -->
+        <ComboBox x:Name="VideoStandard" Height="30" CornerRadius="3" SelectedIndex="0"
+                  VerticalAlignment="Center" Visibility="Collapsed">
+            <x:String>NTSC</x:String>
+            <x:String>PAL</x:String>
         </ComboBox>
-        <ComboBox x:Name="VhsProfile" SelectedIndex="0" AutomationProperties.Name="VHS" Visibility="Collapsed">
-            <x:String>VHS</x:String><x:String>VHS Hi-Fi</x:String>
+        <ComboBox x:Name="BetaProfile" Height="30" CornerRadius="3" SelectedIndex="0"
+                  VerticalAlignment="Center" Visibility="Collapsed">
+            <ComboBoxItem x:Name="BetaStandardItem" Content="Betamax" />
+            <ComboBoxItem x:Name="BetaHifiItem" Content="Betamax Hi-Fi" />
         </ComboBox>
-        <ComboBox x:Name="FieldView" SelectedIndex="0" AutomationProperties.Name="Field view" Visibility="Collapsed">
-            <x:String>Frame</x:String><x:String>Split</x:String><x:String>Field 1</x:String><x:String>Field 2</x:String>
+        <ComboBox x:Name="LdTrack" Height="30" CornerRadius="3" SelectedIndex="0"
+                  VerticalAlignment="Center" Visibility="Collapsed">
+            <ComboBoxItem x:Name="LdAnalogItem" Content="LD · Analog" />
+            <ComboBoxItem x:Name="LdPcmItem" Content="LD · Digital PCM" />
+            <ComboBoxItem x:Name="LdDtsItem" Content="LD · DTS" />
+            <ComboBoxItem x:Name="LdAc3Item" Content="LD · AC-3 RF" />
         </ComboBox>
-        <ComboBox x:Name="Region" SelectedIndex="0" VerticalAlignment="Center" AutomationProperties.Name="Active / Full">
-            <x:String>Active</x:String><x:String>Full</x:String>
-        </ComboBox>
-        <CheckBox x:Name="CvbsRestore" Content="CVBS 50 Ω" Visibility="Collapsed"/>
-        <ComboBox x:Name="BetaProfile" SelectedIndex="0" VerticalAlignment="Center" Visibility="Collapsed" AutomationProperties.Name="Betamax">
-            <x:String>Betamax</x:String><x:String>Betamax Hi-Fi</x:String>
-        </ComboBox>
-        <ComboBox x:Name="LdTrack" SelectedIndex="0" VerticalAlignment="Center" Visibility="Collapsed">
-            <x:String>LD · Analog</x:String><x:String>LD · Digital PCM</x:String><x:String>LD · DTS</x:String><x:String>LD · AC-3 RF</x:String>
-        </ComboBox>
+
+        <!-- Secondary RF Decoder Options Popover (Prevents toolbar overflow) -->
+        <Button x:Name="DecoderOptionsButton" Style="{StaticResource SubtleButtonStyle}"
+                Height="30" Padding="9,0" CornerRadius="3" Visibility="Collapsed"
+                Background="{ThemeResource StudioCardBrush}"
+                BorderBrush="{ThemeResource StudioHairlineBrush}" BorderThickness="1">
+            <StackPanel Orientation="Horizontal" Spacing="6">
+                <FontIcon Glyph="&#xE9E9;" FontSize="12" />
+                <TextBlock x:Name="DecoderOptionsLabel" Text="Decoder" FontSize="12" VerticalAlignment="Center" />
+                <Rectangle x:Name="DecoderOverrideDot" Width="5" Height="5" RadiusX="1" RadiusY="1"
+                           Fill="{ThemeResource StudioAccentBrush}" Visibility="Collapsed"
+                           VerticalAlignment="Center" />
+                <FontIcon Glyph="&#xE70D;" FontSize="9" Foreground="{ThemeResource StudioTextSecondaryBrush}" />
+            </StackPanel>
+            <Button.Flyout>
+                <Flyout Placement="BottomEdgeAlignedRight">
+                    <StackPanel Width="250" Spacing="10">
+                        <StackPanel x:Name="VhsProfilePanel" Visibility="Collapsed">
+                            <TextBlock x:Name="VhsProfileLabel" Style="{StaticResource StudioFieldLabelStyle}" />
+                            <ComboBox x:Name="VhsProfile" SelectedIndex="0" CornerRadius="3" HorizontalAlignment="Stretch">
+                                <ComboBoxItem x:Name="VhsVideoItem" Content="VHS" />
+                                <ComboBoxItem x:Name="VhsHifiItem" Content="VHS Hi-Fi" />
+                            </ComboBox>
+                        </StackPanel>
+
+                        <StackPanel x:Name="FieldViewPanel" Visibility="Collapsed">
+                            <TextBlock x:Name="FieldViewLabel" Style="{StaticResource StudioFieldLabelStyle}" />
+                            <ComboBox x:Name="FieldView" SelectedIndex="0" CornerRadius="3" HorizontalAlignment="Stretch">
+                                <ComboBoxItem x:Name="FieldFrameItem" Content="Frame" />
+                                <ComboBoxItem x:Name="FieldSplitItem" Content="Split fields" />
+                                <ComboBoxItem x:Name="FieldTopItem" Content="Field 1 (Top)" />
+                                <ComboBoxItem x:Name="FieldBottomItem" Content="Field 2 (Bottom)" />
+                            </ComboBox>
+                        </StackPanel>
+
+                        <StackPanel x:Name="RegionPanel" Visibility="Collapsed">
+                            <TextBlock x:Name="RegionLabel" Style="{StaticResource StudioFieldLabelStyle}" />
+                            <ComboBox x:Name="Region" SelectedIndex="0" CornerRadius="3" HorizontalAlignment="Stretch">
+                                <ComboBoxItem x:Name="RegionActiveItem" Content="Active" />
+                                <ComboBoxItem x:Name="RegionFullItem" Content="Full raster" />
+                            </ComboBox>
+                        </StackPanel>
+
+                        <CheckBox x:Name="CvbsRestore" Content="CVBS 50 Ω" MinWidth="0" Visibility="Collapsed" />
+                    </StackPanel>
+                </Flyout>
+            </Button.Flyout>
+        </Button>
     </StackPanel>
 </UserControl>

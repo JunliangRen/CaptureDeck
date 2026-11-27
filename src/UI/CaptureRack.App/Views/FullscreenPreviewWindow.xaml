@@ -17,6 +17,7 @@
             <KeyboardAccelerator Key="F5" Invoked="TogglePreview_Invoked" />
             <KeyboardAccelerator Key="F9" Invoked="ToggleRecord_Invoked" />
             <KeyboardAccelerator Key="M" Invoked="ToggleAudioMonitor_Invoked" />
+            <KeyboardAccelerator Key="Space" Invoked="SpacePlayPause_Invoked" />
         </Grid.KeyboardAccelerators>
 
         <Border x:Name="PreviewSurface" HorizontalAlignment="Center" VerticalAlignment="Center"
@@ -86,7 +87,7 @@
                 DoubleTapped="MiniBar_DoubleTapped"
                 GotFocus="MiniBar_GotFocus"
                 LostFocus="MiniBar_LostFocus">
-            <StackPanel Orientation="Horizontal" Spacing="12" VerticalAlignment="Center">
+            <StackPanel Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
                 <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
                     <Rectangle x:Name="SignalDot" Width="7" Height="7" RadiusX="1" RadiusY="1"
                                Fill="{ThemeResource StudioTextMutedBrush}" />
@@ -94,6 +95,23 @@
                 </StackPanel>
                 <TextBlock x:Name="ClockText" Style="{StaticResource StudioTimecodeTextStyle}"
                            FontSize="13" Foreground="#FFFFFF" Visibility="Collapsed" VerticalAlignment="Center" />
+                <Button x:Name="PlaybackButton" CornerRadius="3" Padding="8,4" MinHeight="28"
+                        Visibility="Collapsed" AllowFocusOnInteraction="False"
+                        Style="{StaticResource SubtleButtonStyle}" Click="PlaybackButton_Click">
+                    <StackPanel Orientation="Horizontal" Spacing="5">
+                        <FontIcon x:Name="PlaybackIcon" Glyph="&#xE768;" FontSize="12" />
+                        <TextBlock x:Name="PlaybackLabel" FontSize="12" VerticalAlignment="Center" />
+                    </StackPanel>
+                </Button>
+                <Button x:Name="AudioMuteButton" CornerRadius="3" Padding="7,4" MinHeight="28"
+                        Visibility="Collapsed" AllowFocusOnInteraction="False"
+                        Style="{StaticResource SubtleButtonStyle}" Click="AudioMuteButton_Click">
+                    <StackPanel Orientation="Horizontal" Spacing="5">
+                        <FontIcon x:Name="AudioMuteIcon" Glyph="&#xE74F;" FontSize="12" />
+                        <TextBlock x:Name="AudioRouteText" Style="{StaticResource StudioMonoTextStyle}"
+                                   FontSize="10" Visibility="Collapsed" VerticalAlignment="Center" />
+                    </StackPanel>
+                </Button>
                 <Button x:Name="RecordButton" CornerRadius="3" Padding="10,4" MinHeight="28"
                         AllowFocusOnInteraction="False"
                         Style="{StaticResource StudioRecordIdleButtonStyle}"
@@ -104,6 +122,11 @@
                                       IsActive="False" Visibility="Collapsed" VerticalAlignment="Center" />
                         <TextBlock x:Name="RecordLabel" FontSize="12" VerticalAlignment="Center" />
                     </StackPanel>
+                </Button>
+                <Button x:Name="SwitchDisplayButton" CornerRadius="3" Padding="7,4" MinHeight="28"
+                        Visibility="Collapsed" AllowFocusOnInteraction="False"
+                        Style="{StaticResource SubtleButtonStyle}" Click="SwitchDisplayButton_Click">
+                    <FontIcon Glyph="&#xE7F4;" FontSize="12" />
                 </Button>
                 <Button x:Name="ExitButton" CornerRadius="3" Padding="9,4" MinHeight="28"
                         AllowFocusOnInteraction="False"

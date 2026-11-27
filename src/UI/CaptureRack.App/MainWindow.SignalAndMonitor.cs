@@ -142,6 +142,7 @@ public sealed partial class MainWindow
         LiveMediaSource?.SetAudioMonitorRoute(AudioMonitorRoute.Default);
         StereoMeter.SetMonitorRoute(AudioMonitorRoute.Default);
         monitorOptionsBar.UpdateAudioMonitorRoute(2, AudioChannelLayout.Stereo, AudioMonitorRoute.Default, 1);
+        SyncFullscreenPreviewWindow();
     }
 
     private void SetAudioMonitorRoute(AudioMonitorRoute route)
@@ -159,6 +160,7 @@ public sealed partial class MainWindow
         monitorOptionsBar.UpdateAudioMonitorRoute(channels, layout, clamped, StereoMeter.ActivePairMask);
         if (GetDisplayedSecondaryInstrument() == SplitSecondaryInstrument.Spectrum)
             UpdateSecondaryInstrumentHeader(SplitSecondaryInstrument.Spectrum);
+        SyncFullscreenPreviewWindow();
     }
 
     private void RecomputePreviewAspectRatio() =>

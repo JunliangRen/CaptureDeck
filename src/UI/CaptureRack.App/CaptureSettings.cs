@@ -12,6 +12,7 @@ internal sealed record CaptureSettings
     public DeckLinkSettings DeckLink { get; init; } = new();
     public DirectShowSettings DirectShow { get; init; } = new();
     public FireWireSettings FireWire { get; init; } = new();
+    public RfSettings Rf { get; init; } = new();
     public string TestSignalScenario { get; init; } = "Normal";
     public ControlDeviceAddress? ControlDevice { get; init; }
     public string OutputFolder { get; init; } = "";
@@ -49,6 +50,29 @@ internal sealed record DirectShowSettings
 internal sealed record FireWireSettings
 {
     public string? DeviceId { get; init; }
+}
+
+internal sealed record RfSettings
+{
+    public string? DeviceKey { get; init; }
+    public int FormatIndex { get; init; }
+    public int DddRateMsps { get; init; } = 40;
+    public string? Sw401 { get; init; }
+    public bool TestRamp { get; init; }
+    public int RtlModeIndex { get; init; }
+    public uint RtlFrequencyHz { get; init; } = 1_500_000;
+    public bool RtlCustomFrequency { get; init; }
+    public int RtlSampleRateHz { get; init; } = 1_024_000;
+    public bool RtlCustomRate { get; init; }
+    public int RtlVgaIndex { get; init; } = 8;
+    public int PreviewTypeIndex { get; init; }
+    public bool PalPreview { get; init; }
+    public int VhsProfileIndex { get; init; }
+    public int BetaProfileIndex { get; init; }
+    public int LdTrackIndex { get; init; }
+    public int FieldViewIndex { get; init; }
+    public bool FullRaster { get; init; }
+    public bool CvbsRestore { get; init; }
 }
 
 internal sealed record DeckLinkSettings

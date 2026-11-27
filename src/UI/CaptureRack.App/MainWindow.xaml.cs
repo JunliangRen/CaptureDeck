@@ -117,6 +117,21 @@ public sealed partial class MainWindow : Window
         rfAudioTimer = DispatcherQueue.CreateTimer();
         rfAudioTimer.Interval = TimeSpan.FromMilliseconds(33);
         rfAudioTimer.Tick += (_, _) => RenderRfAudio();
+
+        rfMeterTimer = DispatcherQueue.CreateTimer();
+        rfMeterTimer.Interval = TimeSpan.FromMilliseconds(16);
+        rfMeterTimer.Tick += (_, _) =>
+        {
+            RfMeterA.StepBallistics();
+            if (RfMeterB.Visibility == Visibility.Visible)
+                RfMeterB.StepBallistics();
+        };
+
+        rfSeekDebounce = DispatcherQueue.CreateTimer();
+        rfSeekDebounce.Interval = TimeSpan.FromMilliseconds(180);
+        rfSeekDebounce.IsRepeating = false;
+        rfSeekDebounce.Tick += (_, _) => CommitDebouncedRfSeek();
+
         InitializeComponent();
         Activated += MainWindow_Activated;
         Closed += OnWindowClosed;
@@ -141,11 +156,13 @@ public sealed partial class MainWindow : Window
                 DiscardRfInspection();
 #endif
             ConfigureRfAudioMeter();
+            ApplyWorkspaceLayout();
             UpdateConfigurationStatus();
             RenderCounts(null);
             UpdateRecordingFilenamePreview();
             UpdateControls();
         };
+        rfInspector.SettingsPersistenceRequested += SettingsChanged;
         WireModularViews();
         ConfigureWindowChrome();
         InitializeSettings();
@@ -197,6 +214,7 @@ public sealed partial class MainWindow : Window
             }
         };
         QcCenterPage.CheckFileRequested += async (_, _) => await PickAndCheckMediaFileAsync();
+        QcCenterPage.RecoverMkvRequested += async (_, _) => await RecoverPartialMkvAsync();
         QcCenterPage.CancelQcRequested += (_, _) => CancelActiveQc();
         QcCenterPage.FileDropped += async (_, path) =>
         {
@@ -361,6 +379,9 @@ public sealed partial class MainWindow : Window
         deckLinkInspector.RefreshTheme();
         directShowCapabilitiesView.RefreshTheme();
         fireWireView.RefreshTheme();
+        rfInspector.RefreshTheme();
+        RfMeterA.RefreshTheme();
+        RfMeterB.RefreshTheme();
         monitorOptionsBar.RefreshTheme();
         RefreshMonitoringTheme();
         UpdateScopeModeButtons();
@@ -411,8 +432,7 @@ public sealed partial class MainWindow : Window
         }
         else if (IsRfActive)
         {
-            rfInspector.Bind(L);
-            RfHeading.Text = L("RfWaveform");
+            ApplyRfLanguage();
         }
         else if (!HasLiveCapture)
         {
@@ -503,9 +523,9 @@ public sealed partial class MainWindow : Window
         var caps = ActiveWorkspaceCapabilities;
         ArrangeStageOptions();
         var liveStage = HasLiveCapture;
-        LayoutSegmentTrack.Visibility = liveStage && (caps.SupportsVideoPreview || caps.SupportsAudioSpectrum || caps.SupportsEvents)
+        LayoutSegmentTrack.Visibility = (liveStage && (caps.SupportsVideoPreview || caps.SupportsAudioSpectrum || caps.SupportsEvents)) || IsRfActive
             ? Visibility.Visible : Visibility.Collapsed;
-        StageSignalBadge.Visibility = liveStage ? Visibility.Visible : Visibility.Collapsed;
+        StageSignalBadge.Visibility = liveStage || IsRfActive ? Visibility.Visible : Visibility.Collapsed;
         LayoutFocusBtn.Visibility = liveStage && caps.SupportsVideoPreview ? Visibility.Visible : Visibility.Collapsed;
         LayoutSplitBtn.Visibility = liveStage && caps.SupportsVideoPreview && caps.SupportsVideoScopes ? Visibility.Visible : Visibility.Collapsed;
         LayoutScopesBtn.Visibility = liveStage && caps.SupportsVideoScopes ? Visibility.Visible : Visibility.Collapsed;
@@ -816,7 +836,7 @@ public sealed partial class MainWindow : Window
 
     private void NavigateToPage(ActiveAppPage target)
     {
-        if (activePage == target || LiveMediaSource?.IsRecording == true)
+        if (activePage == target || IsCaptureRecording)
             return;
 
         if (target != ActiveAppPage.Capture && previewFullscreen)
@@ -855,7 +875,7 @@ public sealed partial class MainWindow : Window
 
     private void UpdateNavigationStyles()
     {
-        var locked = LiveMediaSource?.IsRecording == true;
+        var locked = IsCaptureRecording;
         QcModeButton.IsEnabled = OpenSettingsButton.IsEnabled = !locked;
         ToolTipService.SetToolTip(QcModeButton, locked ? L("NavigationLockedRecording") : null);
         ToolTipService.SetToolTip(OpenSettingsButton, locked ? L("NavigationLockedRecording") : L("Settings"));
@@ -898,24 +918,28 @@ public sealed partial class MainWindow : Window
         ApplySegmentState(LayoutSpectrumBtn, layout == WorkspaceLayoutMode.Spectrum);
         ApplySegmentState(LayoutEventsBtn, layout == WorkspaceLayoutMode.Events);
 
+        var rfNoVideo = IsRfActive && !RfHasVideoOutput;
         RfMeterRack.Visibility = IsRfActive ? Visibility.Visible : Visibility.Collapsed;
-        RfAdcRow.Height = IsRfActive && layout is WorkspaceLayoutMode.Split or WorkspaceLayoutMode.Spectrum or WorkspaceLayoutMode.Scopes ? new GridLength(1, GridUnitType.Star) : new GridLength(0);
-        RfStage.Visibility = RfAdcRow.Height.Value > 0 ? Visibility.Visible : Visibility.Collapsed;
-        var showPreview = layout is WorkspaceLayoutMode.Focus or WorkspaceLayoutMode.Split;
+        var showRfOscilloscope = IsRfActive && layout is WorkspaceLayoutMode.Split or WorkspaceLayoutMode.Spectrum or WorkspaceLayoutMode.Scopes;
+        RfAdcRow.Height = showRfOscilloscope ? new GridLength(1, GridUnitType.Star) : new GridLength(0);
+        RfStage.Visibility = showRfOscilloscope ? Visibility.Visible : Visibility.Collapsed;
+        var showPreview = (layout is WorkspaceLayoutMode.Focus or WorkspaceLayoutMode.Split) && !(rfNoVideo && layout == WorkspaceLayoutMode.Split);
         var showInstruments = layout != WorkspaceLayoutMode.Focus;
-        var showSplitDivider = layout == WorkspaceLayoutMode.Split;
+        var showSplitDivider = layout == WorkspaceLayoutMode.Split && showPreview;
 
         PreviewMonitorHousing.Visibility = showPreview ? Visibility.Visible : Visibility.Collapsed;
         SplitResizeHandle.Visibility = showSplitDivider ? Visibility.Visible : Visibility.Collapsed;
         InstrumentsHost.Visibility = showInstruments ? Visibility.Visible : Visibility.Collapsed;
+        VideoInstrumentsRow.Height = showInstruments ? new GridLength(rfNoVideo ? 1.2 : 2, GridUnitType.Star) : new GridLength(0);
+        InstrumentsDeckContainer.RowSpacing = showRfOscilloscope && showInstruments ? 8 : 0;
 
-        if (layout == WorkspaceLayoutMode.Focus)
+        if (!showInstruments)
         {
             PreviewStageRow.Height = new GridLength(1, GridUnitType.Star);
             SplitDividerRow.Height = new GridLength(0);
             InstrumentsStageRow.Height = new GridLength(0);
         }
-        else if (layout == WorkspaceLayoutMode.Split)
+        else if (showPreview)
         {
             var ratio = Math.Clamp(splitPreviewRatio, 0.35, 0.82);
             PreviewStageRow.Height = new GridLength(ratio, GridUnitType.Star);
@@ -931,22 +955,24 @@ public sealed partial class MainWindow : Window
 
         if (showInstruments)
         {
-            var twoColumns = layout is WorkspaceLayoutMode.Split or WorkspaceLayoutMode.Scopes;
+            var twoColumns = !rfNoVideo && layout is WorkspaceLayoutMode.Split or WorkspaceLayoutMode.Scopes;
             LumaCard.Visibility = twoColumns ? Visibility.Visible : Visibility.Collapsed;
             InstrumentCol0.Width = twoColumns ? new GridLength(56, GridUnitType.Star) : new GridLength(0);
             InstrumentCol1.Width = twoColumns ? new GridLength(44, GridUnitType.Star) : new GridLength(1, GridUnitType.Star);
             InstrumentsHost.ColumnSpacing = twoColumns ? 8 : 0;
 
-            SplitRightSwitcher.Visibility = layout == WorkspaceLayoutMode.Split
+            SplitRightSwitcher.Visibility = !rfNoVideo && layout == WorkspaceLayoutMode.Split
                 ? Visibility.Visible : Visibility.Collapsed;
 
-            var secondary = layout switch
-            {
-                WorkspaceLayoutMode.Scopes => SplitSecondaryInstrument.Vector,
-                WorkspaceLayoutMode.Spectrum => SplitSecondaryInstrument.Spectrum,
-                WorkspaceLayoutMode.Events => SplitSecondaryInstrument.Events,
-                _ => EffectiveSplitInstrument
-            };
+            var secondary = rfNoVideo
+                ? SplitSecondaryInstrument.Spectrum
+                : layout switch
+                {
+                    WorkspaceLayoutMode.Scopes => SplitSecondaryInstrument.Vector,
+                    WorkspaceLayoutMode.Spectrum => SplitSecondaryInstrument.Spectrum,
+                    WorkspaceLayoutMode.Events => SplitSecondaryInstrument.Events,
+                    _ => EffectiveSplitInstrument
+                };
             ApplySecondaryInstrument(secondary);
         }
 
@@ -1751,6 +1777,8 @@ public sealed partial class MainWindow : Window
     private void OnWindowClosed(object sender, WindowEventArgs args)
     {
         rfAudioTimer.Stop();
+        rfMeterTimer.Stop();
+        rfSeekDebounce.Stop();
         closing = true;
         CloseFullscreenPreviewWindow(suppressRestore: true);
     }
@@ -1882,6 +1910,87 @@ public sealed partial class MainWindow : Window
             await RunMediaQcFileAsync(file.Path);
             CloseAfterRecordingIfRequested();
         }
+    }
+
+    private async Task RecoverPartialMkvAsync()
+    {
+        if (!QcCenterPage.CanCheckFile || closing)
+            return;
+
+        pickingOutput = true;
+        UpdateControls();
+        PickFileResult? sourceFile = null;
+        PickFileResult? saveFile = null;
+        try
+        {
+            var openPicker = new FileOpenPicker(AppWindow.Id) { Title = L("MkvRecoverPickTitle") };
+            openPicker.FileTypeFilter.Add(".mkv");
+            sourceFile = await openPicker.PickSingleFileAsync();
+            if (sourceFile is null || closing)
+                return;
+
+            var srcName = Path.GetFileName(sourceFile.Path);
+            var suggested = srcName.EndsWith(".partial.mkv", StringComparison.OrdinalIgnoreCase)
+                ? srcName[..^".partial.mkv".Length] + "_recovered.mkv"
+                : Path.GetFileNameWithoutExtension(srcName) + "_recovered.mkv";
+            var savePicker = new FileSavePicker(AppWindow.Id) { SuggestedFileName = suggested };
+            savePicker.FileTypeChoices.Add("Matroska Video", [".mkv"]);
+            saveFile = await savePicker.PickSaveFileAsync();
+            if (saveFile is null || closing)
+                return;
+        }
+        catch (Exception ex) when (IsSessionError(ex))
+        {
+            if (!closing)
+                SetStatus("MkvRecoverFailed", () => ex.Message, InfoBarSeverity.Error);
+            return;
+        }
+        finally
+        {
+            pickingOutput = false;
+            if (!closing)
+                UpdateControls();
+        }
+
+        using var cancellation = new CancellationTokenSource();
+        qcStop = cancellation;
+        activeQcStage = null;
+        statusFilePath = saveFile.Path;
+        QcCenterPage.BeginRunning(sourceFile.Path, QcEntryKind.TransportStream, L("MkvRecovering"));
+        FooterQcStageText.Text = L("MkvRecovering");
+        SetStatus("MkvRecovering", () => Path.GetFileName(sourceFile.Path));
+        UpdateControls();
+
+        string? recoveredPath = null;
+        try
+        {
+            var recoveredBytes = await Task.Run(() =>
+                LiveMatroskaRecovery.RecoverAsync(sourceFile.Path, saveFile.Path, cancellation.Token), cancellation.Token);
+            recoveredPath = saveFile.Path;
+            SetStatus("MkvRecoverSuccess", () => LocalFormat("MkvRecoverSuccessDetail", recoveredBytes, Path.GetFileName(saveFile.Path)), InfoBarSeverity.Success);
+        }
+        catch (OperationCanceledException) when (cancellation.IsCancellationRequested)
+        {
+            SetStatus("QcCancelled", "QcCancelledDetail", InfoBarSeverity.Warning);
+        }
+        catch (Exception ex) when (IsSessionError(ex) || ex is InvalidDataException)
+        {
+            SetStatus("MkvRecoverFailed", () => ex.Message, InfoBarSeverity.Error);
+            QcCenterPage.ShowArtifactOpenError(ex.Message);
+        }
+        finally
+        {
+            qcStop = null;
+            QcCenterPage.FinishRunning();
+            if (!closing)
+                UpdateControls();
+        }
+
+        if (recoveredPath is not null && !closing && !closeAfterQc && File.Exists(recoveredPath))
+        {
+            await RunMovQcAsync(recoveredPath, null);
+        }
+        CloseAfterRecordingIfRequested();
     }
 
     private async Task RunMediaQcFileAsync(string path)
@@ -2045,6 +2154,7 @@ public sealed partial class MainWindow : Window
                 "video" => output,
                 "log" => entry.MovResult?.CaptureLog,
                 "recording-report" => NativeCaptureReport.PathFor(output),
+                "rf-fifo" => Views.QcCenterView.RfFifoReportPathFor(output),
                 "hash" => entry.MovResult?.FrameMd5,
                 "report" => entry.MovResult?.QcToolsReport,
                 _ => null
@@ -2130,6 +2240,7 @@ public sealed partial class MainWindow : Window
         {
             observedPreviewMode = mode;
             observedPreviewModeIsFallback = isFallback;
+            UpdateRecordingEncodingControls();
             UpdateConfigurationStatus();
         }
 
@@ -2467,7 +2578,7 @@ public sealed partial class MainWindow : Window
             !changingRecording && !restartPreviewRequested;
         bool fileMode = IsRfActive && rfInspector.IsPlayback;
         canChooseOutput &= !fileMode;
-        UpdateRfPlaybackBar(fileMode);
+        OutputStorageCard.Visibility = fileMode ? Visibility.Collapsed : Visibility.Visible;
         OutputPath.IsEnabled = canChooseOutput;
         RecordingLabelBox.IsEnabled = canChooseOutput;
         BrowseButton.IsEnabled = canChooseOutput;
@@ -2477,32 +2588,43 @@ public sealed partial class MainWindow : Window
         StartButton.IsEnabled = IsRfActive
             ? !closing && !changingRecording && (rfPreviewStop is { IsCancellationRequested: false } || idle && !inspectingField && !openingPlayback && rfInspector.Ready)
             : active ? previewCanStop : canStart;
+        UpdateRfPlaybackBar(fileMode);
         PlaceholderStartButton.IsEnabled = canStart;
         PlaceholderStartButton.Visibility = HasLiveCapture && !active && canStart ? Visibility.Visible : Visibility.Collapsed;
         if (IsRfActive && previewBitmap is null)
-            PreviewPlaceholder.Visibility = rfInspector.PreviewOptions.PreviewType is RfPreviewType.RfOnly or RfPreviewType.VhsHifi ? Visibility.Collapsed : Visibility.Visible;
-        var waitingForFirstFrame = active && PreviewPlaceholder.Visibility == Visibility.Visible && (media?.HasPreview ?? true);
+        {
+            var rfNoVideo = !RfHasVideoOutput;
+            PreviewPlaceholder.Visibility = Visibility.Visible;
+            PreviewPlaceholderText.Text = L(rfNoVideo ? "RfNoVideoModeTitle" : "WaitingPreview");
+            PreviewPlaceholderHint.Text = L(rfNoVideo ? "RfNoVideoModeHint" : "RfReadyHint");
+        }
+        var waitingForFirstFrame = active && PreviewPlaceholder.Visibility == Visibility.Visible && (!IsRfActive || RfHasVideoOutput) && (media?.HasPreview ?? true);
         PreviewPlaceholderSpinner.IsActive = waitingForFirstFrame;
         PreviewPlaceholderSpinner.Visibility = waitingForFirstFrame ? Visibility.Visible : Visibility.Collapsed;
         PreviewPlaceholderIcon.Visibility = waitingForFirstFrame ? Visibility.Collapsed : Visibility.Visible;
         var recordEnabled = media is not null
             ? qcStop is null && !closing && !finishingMediaForClose && (media.IsRecording
-                ? !media.IsFinalizing : !pickingOutput && media.CanRecord && !string.IsNullOrWhiteSpace(OutputPath.Text))
+                ? !media.IsFinalizing : !pickingOutput && !HasInvalidSoftwareBitrate && media.CanRecord && !string.IsNullOrWhiteSpace(OutputPath.Text))
             : HasLiveCapture && qcStop is null && !closing && active && !recordingTransition && (recordingSession ||
-            (previewReady && displayedStats?.CanStartRecording == true && CanRecordSelectedAudio &&
+            (previewReady && !HasInvalidSoftwareBitrate && displayedStats?.CanStartRecording == true && CanRecordSelectedAudio &&
                 previewRecorder is not null && !pickingOutput &&
                 captureStop is { IsCancellationRequested: false } && !string.IsNullOrWhiteSpace(OutputPath.Text)));
-        RecordButton.Visibility = media?.SupportsRecording == false ? Visibility.Collapsed : Visibility.Visible;
+        RecordButton.Visibility = media?.SupportsRecording == false || fileMode ? Visibility.Collapsed : Visibility.Visible;
         RecordButton.IsEnabled = IsRfActive
             ? !fileMode && (rfStop is { IsCancellationRequested: false } || ((idle || rfPreviewReady && rfPreviewStop is { IsCancellationRequested: false }) && rfStop is null && !closing && qcStop is null && rfInspector.Ready && Directory.Exists(OutputPath.Text.Trim())))
             : recordEnabled;
         CancelQcButton.IsEnabled = qcStop is { IsCancellationRequested: false };
+        CancelQcButton.Visibility = qcStop is not null ? Visibility.Visible : Visibility.Collapsed;
         QcCenterPage.IsCancelEnabled = CancelQcButton.IsEnabled;
-        FooterQcActivePill.Visibility = qcStop is null ? Visibility.Collapsed : Visibility.Visible;
+        var anyQcActive = qcStop is not null || rfQcPendingCount > 0;
+        FooterQcActivePill.Visibility = anyQcActive ? Visibility.Visible : Visibility.Collapsed;
+        if (qcStop is null && rfQcPendingCount > 0)
+            FooterQcStageText.Text = LocalFormat("RfQcQueueRunning", rfQcPendingCount);
         QcCenterPage.IsCancelVisible = qcStop is not null;
         RecordingClock.Visibility = recordingClock.IsRunning ? Visibility.Visible : Visibility.Collapsed;
-        QcResultsButton.Visibility = !changingRecording && qcStop is null && latestQcEntry is not null
+        QcResultsButton.Visibility = !changingRecording && !anyQcActive && latestQcEntry is not null
             ? Visibility.Visible : Visibility.Collapsed;
+        UpdateNavigationStyles();
         UpdateQcNavBadge();
         UpdateCaptureFooter();
         UpdateLivePreviewStatus();
@@ -2513,7 +2635,7 @@ public sealed partial class MainWindow : Window
 
     private void UpdateQcNavBadge()
     {
-        if (qcStop is not null)
+        if (qcStop is not null || rfQcPendingCount > 0)
         {
             QcNavBadgeDot.Visibility = Visibility.Visible;
             QcNavBadgeDot.Fill = ThemeBrush("StudioInfoBrush");

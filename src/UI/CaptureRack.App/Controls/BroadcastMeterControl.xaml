@@ -97,7 +97,17 @@
             </Grid.RowDefinitions>
 
             <TextBlock x:Name="PreviewTrackStatus" Grid.Row="6" FontSize="11" TextWrapping="Wrap" Visibility="Collapsed"
-                       HorizontalAlignment="Center" TextAlignment="Center"/>
+                       Foreground="{ThemeResource StudioTextSecondaryBrush}"
+                       HorizontalAlignment="Center" TextAlignment="Center" />
+            <!-- Centered Waiting Placeholder when RF audio track is unlocking -->
+            <StackPanel x:Name="WaitingStatusOverlay" Grid.Row="2" VerticalAlignment="Center" HorizontalAlignment="Center"
+                        Spacing="6" Padding="2,0" Visibility="Collapsed">
+                <FontIcon Glyph="&#xE767;" FontSize="15" Foreground="{ThemeResource StudioTextMutedBrush}"
+                          HorizontalAlignment="Center" />
+                <TextBlock x:Name="WaitingStatusText" FontSize="11" TextWrapping="Wrap"
+                           Foreground="{ThemeResource StudioTextSecondaryBrush}"
+                           HorizontalAlignment="Center" TextAlignment="Center" />
+            </StackPanel>
             <!-- Header: AUDIO + dBFS or Multi-Channel Mode Selector -->
             <Grid ColumnSpacing="4">
                 <Grid.ColumnDefinitions>

@@ -108,6 +108,10 @@ public sealed partial class MainWindow
         monitorOptionsBar.HasOpenDropdown ||
         SettingsPage.HasOpenDropdown ||
         testSignalInspector.HasOpenDropdown ||
+        rfInspector.HasOpenDropdown ||
+        RecordingOutputPicker?.IsDropDownOpen == true ||
+        RfScopeSource?.IsDropDownOpen == true ||
+        RfSpectrumSource?.IsDropDownOpen == true ||
         LiveMediaSource?.HasOpenDropdown == true;
 
     private ScrollView? ResolveScrollTargetAt(WindowPoint point)

@@ -457,7 +457,8 @@ public sealed record QcSessionHistoryEntry(
     QcResult? MovResult = null,
     QcCaptureLog? CaptureLog = null,
     TsFileReport? TsReport = null,
-    DvFileReport? DvReport = null);
+    DvFileReport? DvReport = null,
+    long? RfSampleCount = null);
 
 public static class QcWarningFormatter
 {
@@ -1167,4 +1168,194 @@ public sealed class MultiChannelMeterBallistics
     }
 
     private static double Normalize(double db) => Math.Clamp((60.0 + db) / 60.0, 0.0, 1.0);
+}
+
+public sealed class RfPeakBallistics
+{
+    private const double DecayPerFrame = 0.022;
+    private const double PeakHoldDecayPerFrame = 0.012;
+    private const int PeakHoldFrames = 54; // ~0.9 s at 60 fps
+
+    private double targetHigh;
+    private double targetLow;
+    private double displayedHigh;
+    private double displayedLow;
+    private double holdHigh;
+    private double holdLow;
+    private int holdHighCounter;
+    private int holdLowCounter;
+
+    private long rawPositiveClips;
+    private long rawNegativeClips;
+    private long positiveClipBaseline;
+    private long negativeClipBaseline;
+
+    public double PositiveNormalized => displayedHigh;
+    public double NegativeNormalized => displayedLow;
+    public double PositivePeakHold => holdHigh;
+    public double NegativePeakHold => holdLow;
+    public long VisiblePositiveClips => Math.Max(0, rawPositiveClips - positiveClipBaseline);
+    public long VisibleNegativeClips => Math.Max(0, rawNegativeClips - negativeClipBaseline);
+
+    public void Reset()
+    {
+        targetHigh = targetLow = displayedHigh = displayedLow = holdHigh = holdLow = 0;
+        holdHighCounter = holdLowCounter = 0;
+        rawPositiveClips = rawNegativeClips = positiveClipBaseline = negativeClipBaseline = 0;
+    }
+
+    public (bool NewPositiveClip, bool NewNegativeClip) UpdateInput(
+        int minCode, int maxCode, int fullScale, long totalPositiveClips, long totalNegativeClips)
+    {
+        var safeScale = Math.Max(2, fullScale);
+        targetHigh = Math.Clamp((double)Math.Max(0, maxCode) / (safeScale - 1), 0.0, 1.0);
+        targetLow = Math.Clamp((double)Math.Max(0, -minCode) / safeScale, 0.0, 1.0);
+
+        if (totalPositiveClips < positiveClipBaseline)
+            positiveClipBaseline = 0;
+        if (totalNegativeClips < negativeClipBaseline)
+            negativeClipBaseline = 0;
+
+        var newPos = totalPositiveClips > rawPositiveClips;
+        var newNeg = totalNegativeClips > rawNegativeClips;
+        rawPositiveClips = totalPositiveClips;
+        rawNegativeClips = totalNegativeClips;
+
+        // Immediately attack upwards on incoming measurement so fast peaks never miss.
+        if (targetHigh >= displayedHigh)
+        {
+            displayedHigh = targetHigh;
+            if (displayedHigh >= holdHigh)
+            {
+                holdHigh = displayedHigh;
+                holdHighCounter = PeakHoldFrames;
+            }
+        }
+        if (targetLow >= displayedLow)
+        {
+            displayedLow = targetLow;
+            if (displayedLow >= holdLow)
+            {
+                holdLow = displayedLow;
+                holdLowCounter = PeakHoldFrames;
+            }
+        }
+
+        return (newPos, newNeg);
+    }
+
+    public void StepFrame()
+    {
+        StepRail(targetHigh, ref displayedHigh, ref holdHigh, ref holdHighCounter);
+        StepRail(targetLow, ref displayedLow, ref holdLow, ref holdLowCounter);
+    }
+
+    public void ResetPositiveClipLatch() => positiveClipBaseline = rawPositiveClips;
+    public void ResetNegativeClipLatch() => negativeClipBaseline = rawNegativeClips;
+
+    private static void StepRail(double target, ref double displayed, ref double peakHold, ref int holdCounter)
+    {
+        displayed = target >= displayed
+            ? target
+            : Math.Max(target, displayed - DecayPerFrame);
+
+        if (displayed >= peakHold)
+        {
+            peakHold = displayed;
+            holdCounter = PeakHoldFrames;
+        }
+        else if (holdCounter > 0)
+        {
+            holdCounter--;
+        }
+        else
+        {
+            peakHold = Math.Max(displayed, peakHold - PeakHoldDecayPerFrame);
+        }
+    }
+}
+
+public static class RfDeviceSelectionHelper
+{
+    public const string PlaybackDeviceKey = "rf:playback";
+
+    public static string BuildDddKey(string instanceId) => $"ddd:{instanceId}";
+    public static string BuildRtlKey(uint index, string name) => $"rtl:{index}:{name}";
+
+    public static int ResolveSelectionIndex(IReadOnlyList<string> candidateKeys, string? preferredKey, string? savedKey)
+    {
+        if (candidateKeys.Count == 0)
+            return -1;
+
+        if (!string.IsNullOrWhiteSpace(preferredKey))
+        {
+            var idx = FindKey(candidateKeys, preferredKey);
+            if (idx >= 0)
+                return idx;
+        }
+
+        if (!string.IsNullOrWhiteSpace(savedKey))
+        {
+            var idx = FindKey(candidateKeys, savedKey);
+            if (idx >= 0)
+                return idx;
+        }
+
+        return 0;
+    }
+
+    private static int FindKey(IReadOnlyList<string> keys, string target)
+    {
+        for (var i = 0; i < keys.Count; i++)
+        {
+            if (string.Equals(keys[i], target, StringComparison.OrdinalIgnoreCase))
+                return i;
+        }
+        return -1;
+    }
+}
+
+public static class EncodingUxHelper
+{
+    public const int MinBitrateKbps = 1;
+    public const int MaxBitrateKbps = 1_000_000;
+
+    public static (bool IsValid, int? ParsedKbps) ValidateBitrateText(string? rawText)
+    {
+        var trimmed = rawText?.Trim() ?? "";
+        if (trimmed.Length == 0)
+            return (true, null);
+
+        if (int.TryParse(trimmed, System.Globalization.NumberStyles.None,
+            System.Globalization.CultureInfo.InvariantCulture, out var kbps) &&
+            kbps is >= MinBitrateKbps and <= MaxBitrateKbps)
+            return (true, kbps);
+
+        return (false, null);
+    }
+
+    public static bool RequiresProgressiveDeinterlaceWarning(
+        CaptureRack.Recording.RecordingOutput output,
+        bool? sourceIsInterlaced,
+        bool softwareDeinterlaceEnabled) =>
+        output is CaptureRack.Recording.RecordingOutput.H265 or CaptureRack.Recording.RecordingOutput.Av1 &&
+        sourceIsInterlaced == true &&
+        !softwareDeinterlaceEnabled;
+
+    public static double? EstimateSoftwareBytesPerSecond(
+        CaptureRack.Recording.RecordingOutput output,
+        int? videoKbps,
+        uint audioChannels,
+        CaptureAudioFormat audioFormat)
+    {
+        if (output is CaptureRack.Recording.RecordingOutput.Native or CaptureRack.Recording.RecordingOutput.Ffv1)
+            return null;
+        if (videoKbps is not >= MinBitrateKbps)
+            return null;
+
+        // Target video bitrate + lossless PCM / FLAC audio ceiling (48 kHz) + ~3% container overhead.
+        var videoBytesPerSec = videoKbps.Value * 1000.0 / 8.0;
+        var audioBytesPerSec = 48_000.0 * CaptureAudio.BytesPerFrame(audioFormat, Math.Max(2u, audioChannels));
+        return (videoBytesPerSec + audioBytesPerSec) * 1.03;
+    }
 }

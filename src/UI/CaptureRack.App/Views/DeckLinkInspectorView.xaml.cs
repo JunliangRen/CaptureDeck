@@ -1,4 +1,5 @@
 using System.Globalization;
+using CaptureRack.App.Controls;
 using CaptureRack.DeckLink;
 using Microsoft.UI;
 using Microsoft.UI.Text;
@@ -634,7 +635,10 @@ public sealed partial class DeckLinkInspectorView : UserControl
         if (syncing || !VancInputCheckBox.IsEnabled)
             return;
 
-        RestoreVancSettings(VancInput with { Enabled = VancInputCheckBox.IsChecked == true });
+        var enabling = VancInputCheckBox.IsChecked == true;
+        RestoreVancSettings(VancInput with { Enabled = enabling });
+        if (enabling && VancInputLines.Visibility == Visibility.Visible)
+            StudioFeedback.RevealSubtle(VancInputLines, offsetY: 4f, durationMs: 130);
         VancSettingsChanged?.Invoke(this, EventArgs.Empty);
     }
 
@@ -686,6 +690,8 @@ public sealed partial class DeckLinkInspectorView : UserControl
 
         AnalogAudioGainOverride = AnalogGainOverrideCheckBox.IsChecked == true;
         UpdateAnalogControlsState(isIdle);
+        if (AnalogAudioGainOverride && AnalogGainSlidersPanel.Visibility == Visibility.Visible)
+            StudioFeedback.RevealSubtle(AnalogGainSlidersPanel, offsetY: 4f, durationMs: 130);
         AnalogSettingsChanged?.Invoke(this, EventArgs.Empty);
     }
 

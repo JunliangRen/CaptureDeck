@@ -18,10 +18,13 @@ public sealed partial class MainWindow
     private bool rfFileSound = true;
     private bool IsRfHifiFile => IsRfActive && rfInspector.PreviewOptions.PreviewType == RfPreviewType.VhsHifi;
     private bool RfHasAudio => IsRfActive && rfInspector.PreviewOptions.PreviewType is RfPreviewType.VhsHifi or RfPreviewType.BetamaxHifi or RfPreviewType.LaserDisc;
+    private bool RfHasVideoOutput => IsRfActive && !IsRfHifiFile && rfInspector.PreviewOptions.PreviewType != RfPreviewType.RfOnly;
     private bool IsRfActive => activeModule.Descriptor.Category == CaptureBackendCategory.SignalCapture;
     private CancellationTokenSource? rfStop;
     private Task? rfTask;
     private bool rfWriterActive;
+    private int rfQcPendingCount;
+    private bool rfPlaybackBarWasVisible;
     private RfMeasurement? latestRfMeasurement;
     private RfMeasurement? displayedRfMeasurement;
     private RfRecording? measuredSource;
@@ -35,6 +38,66 @@ public sealed partial class MainWindow
     private RfPreviewType? meterPreviewType;
     private long displayedAudioGeneration = -1;
     private readonly Microsoft.UI.Dispatching.DispatcherQueueTimer rfAudioTimer;
+    private readonly Microsoft.UI.Dispatching.DispatcherQueueTimer rfMeterTimer;
+    private readonly Microsoft.UI.Dispatching.DispatcherQueueTimer rfSeekDebounce;
+
+    private void ApplyRfLanguage()
+    {
+        rfInspector.Bind(L);
+        RfHeading.Text = L("RfWaveform");
+        RfScopeAdcItem.Content = L("RfScopeAdc");
+        RfScopeHeadSwitchItem.Content = L("RfScopeHeadSwitch");
+        var scopeIdx = RfScopeSource.SelectedIndex;
+        if (scopeIdx >= 0)
+        {
+            RfScopeSource.SelectedIndex = -1;
+            RfScopeSource.SelectedIndex = scopeIdx;
+        }
+        RfMeterA.ApplyLanguage(L, settingsCulture);
+        RfMeterB.ApplyLanguage(L, settingsCulture);
+        ToolTipService.SetToolTip(RfStepBack, L("RfStepPrevTooltip"));
+        ToolTipService.SetToolTip(RfStepForward, L("RfStepNextTooltip"));
+        ToolTipService.SetToolTip(RfFieldBusyRing, L("RfSearchingField"));
+        Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(RfStepBack, L("RfStepPrevTooltip"));
+        Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(RfStepForward, L("RfStepNextTooltip"));
+        if (IsRfActive)
+            UpdateRfPlaybackBar(rfInspector.IsPlayback);
+    }
+
+    private string ResolveRfDotBrushKey()
+    {
+        if (rfStop is not null)
+            return "StudioRecBrush";
+        if (rfPreviewStop is not null)
+        {
+            var clips = (displayedRfMeasurement?.A.Clips ?? 0) + (displayedRfMeasurement?.B?.Clips ?? 0);
+            return clips > 0 ? "StudioCautionBrush" : "StudioSignalLockBrush";
+        }
+        return rfInspector.Ready ? "StudioInfoBrush" : "StudioTextMutedBrush";
+    }
+
+    private (string DotKey, string LabelKey, string SoftKey) ResolveRfStageBadge()
+    {
+        if (rfStop is not null)
+            return ("StudioRecBrush", "RfStatusRecording", "StudioRecSoftBrush");
+        if (rfPreviewStop is not null)
+        {
+            var label = rfInspector.IsPlayback ? "RfStatusPlaying" : "RfStatusPreviewing";
+            return ("StudioSignalLockBrush", label, "StudioSignalLockSoftBrush");
+        }
+        if (rfInspector.IsPlayback && rfInspector.PlaybackFile is not null)
+            return ("StudioInfoBrush", "RfStatusPaused", "StudioInfoSoftBrush");
+        return ("StudioTextMutedBrush", "Idle", "StudioNeutralPillBrush");
+    }
+
+    private void UpdateRfMeterTimer()
+    {
+        var shouldRun = IsRfActive && (rfPreviewStop is not null || rfStop is not null) && !PauseMainWindowRendering;
+        if (shouldRun && !rfMeterTimer.IsRunning)
+            rfMeterTimer.Start();
+        else if (!shouldRun && rfMeterTimer.IsRunning)
+            rfMeterTimer.Stop();
+    }
 
     private void UpdateAudioMeterVisibility(double width)
     {
@@ -183,6 +246,8 @@ public sealed partial class MainWindow
 #endif
         RfStepBack.Visibility = RfStepForward.Visibility = held ? Visibility.Visible : Visibility.Collapsed;
         RfStepBack.IsEnabled = RfStepForward.IsEnabled = held && !inspectingField;
+        RfFieldBusyRing.Visibility = inspectingField ? Visibility.Visible : Visibility.Collapsed;
+        RfFieldBusyRing.IsActive = inspectingField;
     }
 
     private void DiscardRfInspection()
@@ -247,9 +312,16 @@ public sealed partial class MainWindow
         if (mode <= 0 || !force && (RfStage.Visibility != Visibility.Visible || Environment.TickCount64 - lastSignalPaint < 70)) return;
         lastSignalPaint = Environment.TickCount64;
         var points = new PointCollection();
-        if (pair.SwitchTrace is not { } trace) { RfTraceA.Points.Clear(); RfScopeValue.Text = "—"; return; }
+        if (pair.SwitchTrace is not { } trace)
+        {
+            RfTraceA.Points.Clear();
+            RfScopeValue.Text = L("RfHeadSwitchNone");
+            RfScopeValue.Foreground = ThemeBrush("StudioTextMutedBrush");
+            return;
+        }
         for (int i = 0; i < trace.Length; i++) points.Add(new Point(i, 50 - trace[i] * 49.0 / 32768));
-        RfScopeValue.Text = "↥";
+        RfScopeValue.Text = L("RfHeadSwitchLocked");
+        RfScopeValue.Foreground = ThemeBrush("StudioSignalLockBrush");
         RfTraceA.Points = points;
     }
 #endif
@@ -269,9 +341,12 @@ public sealed partial class MainWindow
         RfTraceB.Points.Clear();
         RfMeterA.Reset();
         RfMeterB.Reset();
-        RfMeterB.Visibility = (rfInspector.IsPlayback ? rfInspector.PlaybackFile?.IsIq == true : rfInspector.Selection?.Rtl is not null) ? Visibility.Visible : Visibility.Collapsed;
+        var isIq = rfInspector.IsPlayback ? rfInspector.PlaybackFile?.IsIq == true : rfInspector.Selection?.Rtl is not null;
+        RfMeterB.Visibility = isIq ? Visibility.Visible : Visibility.Collapsed;
+        RfLegendALabel.Text = isIq ? "I" : "ADC";
+        RfLegendBPanel.Visibility = isIq ? Visibility.Visible : Visibility.Collapsed;
         RfReading.Text = RfFile.Text = "";
-        rfInspector.SetTelemetry("");
+        rfInspector.SetTelemetry("", null);
     }
 
     private (double Top, double Bottom)? rfGuide;
@@ -293,13 +368,27 @@ public sealed partial class MainWindow
     private void UpdateRfPlaybackBar(bool visible)
     {
         RfPlaybackBar.Visibility = visible ? Visibility.Visible : Visibility.Collapsed;
+        if (visible && !rfPlaybackBarWasVisible && settingsReady)
+            Controls.StudioFeedback.RevealSubtle(RfPlaybackBar, offsetY: 4f, durationMs: 140);
+        rfPlaybackBarWasVisible = visible;
         if (!visible) return;
         var file = rfInspector.PlaybackFile;
-        RfOpenFile.Content = L("RfOpenFile");
+        RfOpenFileLabel.Text = L(openingPlayback ? "RfOpeningFile" : "RfOpenFile");
+        RfOpenFileIcon.Visibility = openingPlayback ? Visibility.Collapsed : Visibility.Visible;
+        RfOpenFileSpinner.Visibility = openingPlayback ? Visibility.Visible : Visibility.Collapsed;
+        RfOpenFileSpinner.IsActive = openingPlayback;
         RfOpenFile.IsEnabled = !inspectingField && !openingPlayback && rfPreviewStop is null;
+
+        var playing = rfPreviewStop is not null;
+        RfPlayPauseIcon.Glyph = playing ? "\uE769" : "\uE768";
+        RfPlayPauseButton.IsEnabled = StartButton.IsEnabled;
+        ToolTipService.SetToolTip(RfPlayPauseButton, L(playing ? "RfPause" : "RfPlay"));
+        Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(RfPlayPauseButton, L(playing ? "RfPause" : "RfPlay"));
+
         RfSeek.IsEnabled = file is not null && !openingPlayback && !inspectingField;
         UpdateFieldButtons();
-        RfPlaybackName.Text = file is null ? "" : Path.GetFileName(file.Path);
+        RfPlaybackName.Text = file is null ? L("RfPlaybackDropHint") : Path.GetFileName(file.Path);
+        RfPlaybackName.Foreground = ThemeBrush(file is null ? "StudioTextSecondaryBrush" : "StudioTextPrimaryBrush");
         Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(RfSeek, L("RfPlayback"));
         updatingSeek = true;
         try
@@ -308,7 +397,97 @@ public sealed partial class MainWindow
             RfSeek.Value = file is null ? 0 : (double)playbackPosition / file.Rate;
         }
         finally { updatingSeek = false; }
-        RfPlaybackTime.Text = file is null ? "" : $"{PlaybackTime(RfSeek.Value)} / {PlaybackTime(RfSeek.Maximum)}";
+        RfPlaybackTime.Text = file is null ? "—" : $"{PlaybackTime(RfSeek.Value)} / {PlaybackTime(RfSeek.Maximum)}";
+        if (previewFullscreen)
+            SyncFullscreenPreviewWindow();
+    }
+
+    private void RfPlaybackBar_DragOver(object sender, DragEventArgs e)
+    {
+        var accept = RfOpenFile.IsEnabled && e.DataView.Contains(Windows.ApplicationModel.DataTransfer.StandardDataFormats.StorageItems);
+        e.AcceptedOperation = accept ? Windows.ApplicationModel.DataTransfer.DataPackageOperation.Copy : Windows.ApplicationModel.DataTransfer.DataPackageOperation.None;
+        if (accept)
+        {
+            RfPlaybackBar.BorderBrush = ThemeBrush("StudioAccentBrush");
+            RfPlaybackBar.Background = ThemeBrush("StudioAccentSoftBrush");
+        }
+    }
+
+    private void RfPlaybackBar_DragLeave(object sender, DragEventArgs e)
+    {
+        RfPlaybackBar.ClearValue(Border.BorderBrushProperty);
+        RfPlaybackBar.ClearValue(Border.BackgroundProperty);
+    }
+
+    private async void RfPlaybackBar_Drop(object sender, DragEventArgs e)
+    {
+        RfPlaybackBar.ClearValue(Border.BorderBrushProperty);
+        RfPlaybackBar.ClearValue(Border.BackgroundProperty);
+        if (!RfOpenFile.IsEnabled || !e.DataView.Contains(Windows.ApplicationModel.DataTransfer.StandardDataFormats.StorageItems))
+            return;
+
+        try
+        {
+            var items = await e.DataView.GetStorageItemsAsync();
+            var rfFile = items.OfType<Windows.Storage.StorageFile>().FirstOrDefault(item =>
+                RfPlaybackFile.Extensions.Contains(Path.GetExtension(item.Path), StringComparer.OrdinalIgnoreCase));
+            if (rfFile is null)
+                return;
+            openingPlayback = true;
+            UpdateControls();
+            await LoadRfPlaybackAsync(rfFile.Path);
+        }
+        catch (Exception ex) { SetStatus("PreviewFailed", () => ex.Message, InfoBarSeverity.Error); }
+        finally { if (openingPlayback) { openingPlayback = false; UpdateControls(); } }
+    }
+
+    private bool CanHandleRfPlaybackShortcut()
+    {
+        if (activePage != ActiveAppPage.Capture || !IsRfActive || !rfInspector.IsPlayback || AnyDropdownOpen())
+            return false;
+        if (RootShell.XamlRoot is { } root)
+        {
+            if (VisualTreeHelper.GetOpenPopupsForXamlRoot(root).Any(popup => popup.Child is not ToolTip))
+                return false;
+            var focused = Microsoft.UI.Xaml.Input.FocusManager.GetFocusedElement(root);
+            if (focused is TextBox or NumberBox or RichEditBox or PasswordBox or AutoSuggestBox or ComboBox or ComboBoxItem or Slider)
+                return false;
+        }
+        return true;
+    }
+
+    private void RfPlayPause_Invoked(Microsoft.UI.Xaml.Input.KeyboardAccelerator sender, Microsoft.UI.Xaml.Input.KeyboardAcceleratorInvokedEventArgs args)
+    {
+        if (!CanHandleRfPlaybackShortcut() || !StartButton.IsEnabled)
+            return;
+        if (RootShell.XamlRoot is { } root && Microsoft.UI.Xaml.Input.FocusManager.GetFocusedElement(root) is Button or CheckBox)
+            return;
+        StartButton_Click(StartButton, new RoutedEventArgs());
+        args.Handled = true;
+    }
+
+    private void RfStepPrev_Invoked(Microsoft.UI.Xaml.Input.KeyboardAccelerator sender, Microsoft.UI.Xaml.Input.KeyboardAcceleratorInvokedEventArgs args)
+    {
+        if (!CanHandleRfPlaybackShortcut() || RfStepBack.Visibility != Visibility.Visible || !RfStepBack.IsEnabled)
+            return;
+        RfFieldStep_Click(RfStepBack, new RoutedEventArgs());
+        args.Handled = true;
+    }
+
+    private void RfStepNext_Invoked(Microsoft.UI.Xaml.Input.KeyboardAccelerator sender, Microsoft.UI.Xaml.Input.KeyboardAcceleratorInvokedEventArgs args)
+    {
+        if (!CanHandleRfPlaybackShortcut() || RfStepForward.Visibility != Visibility.Visible || !RfStepForward.IsEnabled)
+            return;
+        RfFieldStep_Click(RfStepForward, new RoutedEventArgs());
+        args.Handled = true;
+    }
+
+    private void RfOpenFile_Invoked(Microsoft.UI.Xaml.Input.KeyboardAccelerator sender, Microsoft.UI.Xaml.Input.KeyboardAcceleratorInvokedEventArgs args)
+    {
+        if (activePage != ActiveAppPage.Capture || !IsRfActive || !rfInspector.IsPlayback || !RfOpenFile.IsEnabled)
+            return;
+        RfOpenFile_Click(RfOpenFile, new RoutedEventArgs());
+        args.Handled = true;
     }
 
     private static string PlaybackTime(double seconds) =>
@@ -347,11 +526,26 @@ public sealed partial class MainWindow
     {
         if (updatingSeek || !rfInspector.IsPlayback || rfInspector.PlaybackFile is not { } file) return;
         playbackPosition = Math.Clamp((long)Math.Round(args.NewValue * file.Rate), 0, file.Samples);
+        RfPlaybackTime.Text = $"{PlaybackTime(args.NewValue)} / {PlaybackTime(RfSeek.Maximum)}";
+        if (rfPreviewStop is null)
+        {
+            DiscardRfInspection();
+            seekVersion++;
+            return;
+        }
+        // Debounce active playback seek so dragging the thumb updates timecode smoothly without flashing black frames.
+        rfSeekDebounce.Stop();
+        rfSeekDebounce.Start();
+    }
+
+    private void CommitDebouncedRfSeek()
+    {
+        if (!rfInspector.IsPlayback || rfInspector.PlaybackFile is null)
+            return;
         DiscardRfInspection();
         seekVersion++;
         if (RfHasAudio && activeAudioMonitor is { } speaker) speaker.Enabled = false;
         playbackSegment?.Cancel();
-        RfPlaybackTime.Text = $"{PlaybackTime(args.NewValue)} / {PlaybackTime(RfSeek.Maximum)}";
     }
 
     private async Task PreviewRfAsync(RfRecording? request, RfPlaybackFile? file = null)
@@ -420,7 +614,7 @@ public sealed partial class MainWindow
                 SetStatus("PreviewFailed", () => failure, InfoBarSeverity.Error);
             }
 #endif
-            if (file is null || activeSeek == seekVersion)
+            if (file is null || (activeSeek == seekVersion && !rfSeekDebounce.IsRunning))
             {
                 RenderRfMeasurement();
                 if (file is not null && displayedRfMeasurement is { } reading && playbackPosition != reading.Frames)
@@ -498,6 +692,7 @@ public sealed partial class MainWindow
             rfInspector.SetRecording(true);
             RenderSourceRackList();
             UpdateControls();
+            UpdateRfMeterTimer();
             timer.Start();
             void Report(RfMeasurement m) => Volatile.Write(ref latestRfMeasurement, m);
             if (file is null)
@@ -543,6 +738,8 @@ public sealed partial class MainWindow
         finally
         {
             timer.Stop();
+            var pendingSeek = rfSeekDebounce.IsRunning;
+            rfSeekDebounce.Stop();
 #if REALTIME_RF
             rfInspector.PreviewOptions.DecoderChanged -= resetDecoder;
             activeAudioMonitor = null;
@@ -560,7 +757,7 @@ public sealed partial class MainWindow
             }
             bool hold = file is not null && heldPair is not null && previewBitmap is not null && decoder is not null;
             heldDecoder = hold ? decoder : null;
-            if (hold && stop.IsCancellationRequested && activeSeek == seekVersion)
+            if (hold && stop.IsCancellationRequested && activeSeek == seekVersion && !pendingSeek)
             {
                 var selected = rfInspector.PreviewOptions.FieldMode switch { 2 => heldPair!.Top, 3 => heldPair!.Bottom, _ => heldPair!.First };
                 playbackPosition = Math.Clamp((long)Math.Round(selected.Timestamp.TotalSeconds * file!.Rate), 0, file.Samples);
@@ -575,6 +772,7 @@ public sealed partial class MainWindow
             if (hold) rfAudioTimer.Stop();
             if (!hold) ConfigureRfAudioMeter(newSession: true);
             rfPreviewStop = null;
+            UpdateRfMeterTimer();
             rfInspector.SetRecording(rfStop is not null);
             RenderSourceRackList();
             UpdateControls();
@@ -640,6 +838,7 @@ public sealed partial class MainWindow
             recordingClock.Restart();
             UpdateRecordingClock();
             UpdateControls();
+            UpdateRfMeterTimer();
             UpdateRecordingIndicator(true);
             SetStatus("RecordingActive", () => path);
             var ffmpeg = request.Flac ? QcReports.FindTools().FfmpegPath : null;
@@ -665,6 +864,7 @@ public sealed partial class MainWindow
             UpdateRecordingIndicator(false);
             rfWriterActive = false;
             rfStop = null;
+            UpdateRfMeterTimer();
             rfInspector.SetRecording(rfPreview is not null);
             RenderSourceRackList();
             UpdateControls();
@@ -675,8 +875,10 @@ public sealed partial class MainWindow
 
     private async Task RunRfQcAsync(Task previous, RfRampQc qc)
     {
+        rfQcPendingCount++;
+        UpdateControls();
         var entry = new QcSessionHistoryEntry(Guid.NewGuid(), qc.FinalPath + ".partial", Path.GetFileName(qc.FinalPath),
-            QcEntryKind.RfRamp, DateTimeOffset.Now, "RfQcQueued", "", TelemetrySeverity.Info, []);
+            QcEntryKind.RfRamp, DateTimeOffset.Now, "RfQcQueued", "", TelemetrySeverity.Info, [], RfSampleCount: qc.FileSamples);
         void Show(string titleKey, TelemetrySeverity severity, string detail, string path)
         {
             entry = entry with { TitleKey = titleKey, Severity = severity, Summary = detail, FilePath = path };
@@ -691,17 +893,23 @@ public sealed partial class MainWindow
         }
 
         string samples = LocalFormat("RfQcSamples", qc.FileSamples);
-        Show("RfQcQueued", TelemetrySeverity.Info, samples, entry.FilePath);
-        await previous;
-        Show("RfVerifyRamp", TelemetrySeverity.Info, samples, entry.FilePath);
         try
         {
+            Show("RfQcQueued", TelemetrySeverity.Info, samples, entry.FilePath);
+            await previous;
+            Show("RfVerifyRamp", TelemetrySeverity.Info, samples, entry.FilePath);
             await Task.Run(qc.VerifyAndPublish);
             Show("QcPassed", TelemetrySeverity.Normal, samples, qc.FinalPath);
         }
         catch (Exception ex)
         {
             Show("QcFailed", TelemetrySeverity.Danger, ex.Message, entry.FilePath);
+        }
+        finally
+        {
+            rfQcPendingCount = Math.Max(0, rfQcPendingCount - 1);
+            if (!closing)
+                UpdateControls();
         }
     }
 
@@ -802,14 +1010,16 @@ public sealed partial class MainWindow
         if (RfScopeSource.SelectedIndex == 0) RfTraceA.Points = RfAdcTrace(m.A, m.FullScale);
         if (m.B is not null && RfScopeSource.SelectedIndex == 0) RfTraceB.Points = RfAdcTrace(m.B, m.FullScale);
         var telemetry = new List<string>();
+        double? fifoUsedPct = null;
         if (m.Fifo is { } f)
         {
+            fifoUsedPct = f.DepthWords > 0 ? 100d * f.UsedWords / f.DepthWords : null;
             string limit = f.CoverageLimited || m.FifoDisabled ? "≥" : "";
             telemetry.Add(LocalFormat("RfFifoLevels", f.UsedWords, f.DepthWords, f.RunPeakWords,
                 100d * f.RunPeakWords / f.DepthWords, limit, f.NearFullSamples));
         }
         if (m.LegacyMarkerState is { } state) telemetry.Add(L("RfMarker" + state));
         if (m.FifoDisabled) telemetry.Add(L("RfFifoStopped"));
-        rfInspector.SetTelemetry(string.Join(Environment.NewLine, telemetry));
+        rfInspector.SetTelemetry(string.Join(Environment.NewLine, telemetry), fifoUsedPct);
     }
 }

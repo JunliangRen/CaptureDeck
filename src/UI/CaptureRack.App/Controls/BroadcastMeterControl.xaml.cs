@@ -58,11 +58,22 @@ public sealed partial class BroadcastMeterControl : UserControl
 
     public void SetPreviewTrackStatus(string? status, bool waiting = false)
     {
-        if (PreviewTrackStatus.Text != (status ?? "")) PreviewTrackStatus.Text = status ?? "";
+        var text = status ?? "";
         var meters = waiting ? Visibility.Collapsed : Visibility.Visible;
         ClipIndicatorsGrid.Visibility = MeterRailsHost.Visibility = PeakReadouts.Visibility = meters;
         PhaseReadout.Visibility = waiting || totalChannels == 1 ? Visibility.Collapsed : Visibility.Visible;
-        PreviewTrackStatus.Visibility = status is null ? Visibility.Collapsed : Visibility.Visible;
+        if (waiting)
+        {
+            if (WaitingStatusText.Text != text) WaitingStatusText.Text = text;
+            WaitingStatusOverlay.Visibility = Visibility.Visible;
+            PreviewTrackStatus.Visibility = Visibility.Collapsed;
+        }
+        else
+        {
+            WaitingStatusOverlay.Visibility = Visibility.Collapsed;
+            if (PreviewTrackStatus.Text != text) PreviewTrackStatus.Text = text;
+            PreviewTrackStatus.Visibility = status is null ? Visibility.Collapsed : Visibility.Visible;
+        }
     }
 
     public void Reset()

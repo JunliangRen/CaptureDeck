@@ -4,6 +4,7 @@ using System.Runtime.InteropServices;
 using System.Text.Json;
 using CaptureRack.DeckLink;
 using CaptureRack.QualityControl;
+using CaptureRack.Recording;
 using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Automation;
@@ -89,6 +90,7 @@ public sealed partial class MainWindow
         deckLinkInspector.RestoreVancSettings(settings.DeckLink.VancInput);
         directShowCapabilitiesView.RestoreSettings(settings.DirectShow);
         fireWireView.RestoreSettings(settings.FireWire);
+        rfInspector.RestoreSettings(settings.Rf);
         testSignalInspector.RestoreScenario(settings.TestSignalScenario);
 
         ApplySettingsLanguage(language, settings.DeckLink.VideoFormat, settings.DeckLink.AudioFormat, settings.DeckLink.AudioChannels);
@@ -198,6 +200,7 @@ public sealed partial class MainWindow
             DeckLink = deckLink,
             DirectShow = directShowCapabilitiesView.ExportSettings(),
             FireWire = fireWireView.ExportSettings(),
+            Rf = rfInspector.ExportSettings(),
             TestSignalScenario = testSignalInspector.SelectedScenarioTag,
             OutputFolder = OutputPath.Text.Trim(),
             RecordingLabel = RecordingLabelBox.Text.Trim(),
@@ -256,7 +259,7 @@ public sealed partial class MainWindow
 
     private void UpdateCaptureFooter()
     {
-        var sessionActive = IsCaptureInputActive || IsCaptureRecording || recordingTransition || qcStop is not null;
+        var sessionActive = IsCaptureInputActive || IsCaptureRecording || recordingTransition || qcStop is not null || rfQcPendingCount > 0;
         CaptureFooter.Visibility = activePage != ActiveAppPage.Settings || sessionActive
             ? Visibility.Visible : Visibility.Collapsed;
     }
@@ -316,7 +319,9 @@ public sealed partial class MainWindow
             fireWireView.Bind(L, () => OutputPath.Text.Trim(), GetRecordingLabel);
         if (IsDirectShowActive)
             directShowCapabilitiesView.Bind(L);
-        if (!HasLiveCapture)
+        if (IsRfActive)
+            ApplyRfLanguage();
+        if (!HasLiveCapture && !IsRfActive)
         {
             plannedStageView.Bind(activeModule.Descriptor, L);
             plannedInspectorView.Bind(activeModule.Descriptor, L);
@@ -369,13 +374,15 @@ public sealed partial class MainWindow
         AutomationProperties.SetName(QuickSourceButton, $"{L("Capture")} · {modeName}");
         if (!IsDeckLinkActive)
         {
-            QuickSourceDot.Fill = !HasLiveCapture
-                ? ThemeBrush("StudioInfoBrush")
-                : IsCaptureInputActive && liveSignal == VideoSignal.Present
-                    ? ThemeBrush("StudioSignalLockBrush")
-                    : IsCaptureInputActive && liveSignal == VideoSignal.NoInput
-                        ? ThemeBrush("StudioCautionBrush")
-                        : (LiveMediaSource is { CanStart: false } ? ThemeBrush("StudioTextMutedBrush") : ThemeBrush("StudioInfoBrush"));
+            QuickSourceDot.Fill = IsRfActive
+                ? ThemeBrush(ResolveRfDotBrushKey())
+                : !HasLiveCapture
+                    ? ThemeBrush("StudioInfoBrush")
+                    : IsCaptureInputActive && liveSignal == VideoSignal.Present
+                        ? ThemeBrush("StudioSignalLockBrush")
+                        : IsCaptureInputActive && liveSignal == VideoSignal.NoInput
+                            ? ThemeBrush("StudioCautionBrush")
+                            : (LiveMediaSource is { CanStart: false } ? ThemeBrush("StudioTextMutedBrush") : ThemeBrush("StudioInfoBrush"));
             InspectorNotice.Visibility = settingsError is not null ? Visibility.Visible : Visibility.Collapsed;
             if (settingsError is { } err)
             {
@@ -483,14 +490,32 @@ public sealed partial class MainWindow
         else
         {
             var free = LocalFormat("StorageCapacity", (space.AvailableBytes / (double)(1L << 30)).ToString("N1", settingsCulture));
-            var estimate = !HasLiveCapture || LiveMediaSource is not null
-                ? free
-                : selectedMode is null
-                    ? L(mode is { Id: null } ? "StorageWaitingForAutoMode" : "StorageNeedsMode")
-                    : LocalFormat("StorageDuration", FormatRecordingTime(space.AvailableBytes /
-                        DeckLinkCapture.EstimateRecordingBytesPerSecond(selectedMode, RecordingVideoFormat, RecordingAudioFormat, ActiveDeckLinkAudioChannels)));
+            var softwareOutput = SupportsSoftwareOutput && SelectedRecordingOutput != RecordingOutput.Native;
+            string estimate;
+            if (!HasLiveCapture || LiveMediaSource is not null)
+            {
+                estimate = free;
+            }
+            else if (softwareOutput)
+            {
+                var (_, parsedKbps) = EncodingUxHelper.ValidateBitrateText(RecordingBitrateBox?.Text);
+                var swBps = EncodingUxHelper.EstimateSoftwareBytesPerSecond(
+                    SelectedRecordingOutput, parsedKbps, ActiveDeckLinkAudioChannels, RecordingAudioFormat);
+                estimate = swBps is > 0
+                    ? LocalFormat("StorageDuration", FormatRecordingTime(space.AvailableBytes / swBps.Value))
+                    : L("EncodingVariableBitrateNote");
+            }
+            else if (selectedMode is null)
+            {
+                estimate = L(mode is { Id: null } ? "StorageWaitingForAutoMode" : "StorageNeedsMode");
+            }
+            else
+            {
+                estimate = LocalFormat("StorageDuration", FormatRecordingTime(space.AvailableBytes /
+                    DeckLinkCapture.EstimateRecordingBytesPerSecond(selectedMode, RecordingVideoFormat, RecordingAudioFormat, ActiveDeckLinkAudioChannels)));
+            }
             InspectorStorageStatus.Text = HasLiveCapture && LiveMediaSource is null ? $"{free} · {estimate}" : free;
-            StorageStatus.Text = HasLiveCapture && LiveMediaSource is null && selectedMode is not null ? estimate : free;
+            StorageStatus.Text = HasLiveCapture && LiveMediaSource is null && (selectedMode is not null || softwareOutput) ? estimate : free;
 
             var ddd = IsRfActive ? rfInspector.Selection : null;
             bool low = false;

@@ -40,6 +40,21 @@ internal static class StudioFeedback
         element.StartAnimation(translate);
     }
 
+    public static void PulseElement(UIElement element, int durationMs = 280)
+    {
+        if (!AnimationsEnabled)
+            return;
+
+        var compositor = CompositionTarget.GetCompositorForCurrentThread();
+        var pulse = compositor.CreateScalarKeyFrameAnimation();
+        pulse.Target = nameof(UIElement.Opacity);
+        pulse.InsertKeyFrame(0f, 1f);
+        pulse.InsertKeyFrame(0.35f, 0.58f);
+        pulse.InsertKeyFrame(1f, 1f);
+        pulse.Duration = TimeSpan.FromMilliseconds(durationMs);
+        element.StartAnimation(pulse);
+    }
+
     public static async void FlashCopied(FontIcon icon, string originalGlyph, TextBlock? label = null,
         string? copiedLabel = null, Func<string>? getOriginalLabel = null, FrameworkElement? themeRoot = null)
     {

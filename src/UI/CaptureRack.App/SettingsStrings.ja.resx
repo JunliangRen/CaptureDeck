@@ -1847,4 +1847,65 @@
   <data name="RfOpenFile" xml:space="preserve"><value>RF ファイルを開く</value></data>
   <data name="RfPlay" xml:space="preserve"><value>再生</value></data>
   <data name="RfPause" xml:space="preserve"><value>一時停止</value></data>
+  <data name="RfSourceHeading" xml:space="preserve"><value>RF ソース</value></data>
+  <data name="RfCaptureHeading" xml:space="preserve"><value>収録とチューニング</value></data>
+  <data name="RfTelemetryHeading" xml:space="preserve"><value>転送テレメトリ</value></data>
+  <data name="RfFormatLabel" xml:space="preserve"><value>収録形式</value></data>
+  <data name="RfDddRateLabel" xml:space="preserve"><value>サンプルレート</value></data>
+  <data name="RfRtlModeLabel" xml:space="preserve"><value>収録モード</value></data>
+  <data name="RfVgaReset" xml:space="preserve"><value>リセット</value></data>
+  <data name="RfScanningDevices" xml:space="preserve"><value>RF デバイスをスキャン中…</value></data>
+  <data name="RfCopyDiagnostics" xml:space="preserve"><value>診断をコピー</value></data>
+  <data name="RfFifoUsageLabel" xml:space="preserve"><value>FPGA FIFO</value></data>
+  <data name="RfDecoderOptionsButton" xml:space="preserve"><value>デコーダー</value></data>
+  <data name="RfFieldViewLabel" xml:space="preserve"><value>フィールド表示</value></data>
+  <data name="RfFieldFrame" xml:space="preserve"><value>フレーム</value></data>
+  <data name="RfFieldSplit" xml:space="preserve"><value>フィールド分割</value></data>
+  <data name="RfFieldTop" xml:space="preserve"><value>フィールド 1 (トップ)</value></data>
+  <data name="RfFieldBottom" xml:space="preserve"><value>フィールド 2 (ボトム)</value></data>
+  <data name="RfRegionLabel" xml:space="preserve"><value>ラスター領域</value></data>
+  <data name="RfRegionActive" xml:space="preserve"><value>有効領域</value></data>
+  <data name="RfRegionFull" xml:space="preserve"><value>フルラスター</value></data>
+  <data name="RfStandardLabel" xml:space="preserve"><value>映像方式</value></data>
+  <data name="RfTrackLabel" xml:space="preserve"><value>音声 / プロファイル</value></data>
+  <data name="RfLdAnalog" xml:space="preserve"><value>LD · アナログ</value></data>
+  <data name="RfLdDigitalPcm" xml:space="preserve"><value>LD · デジタル PCM</value></data>
+  <data name="RfLdDts" xml:space="preserve"><value>LD · DTS</value></data>
+  <data name="RfLdAc3" xml:space="preserve"><value>LD · AC-3 RF</value></data>
+  <data name="RfBetamaxHifiLabel" xml:space="preserve"><value>Betamax Hi-Fi</value></data>
+  <data name="RfScopeAdc" xml:space="preserve"><value>ADC</value></data>
+  <data name="RfScopeHeadSwitch" xml:space="preserve"><value>ヘッド切替</value></data>
+  <data name="RfHeadSwitchLocked" xml:space="preserve"><value>ヘッド切替トリガー検出</value></data>
+  <data name="RfHeadSwitchNone" xml:space="preserve"><value>ヘッド切替エッジ未検出</value></data>
+  <data name="RfNoVideoModeTitle" xml:space="preserve"><value>RF / 音声モニタリングモード</value></data>
+  <data name="RfNoVideoModeHint" xml:space="preserve"><value>上部ツールバーで映像デコーダー（CVBS / VHS / Betamax / LD）を選ぶと映像プレビューが表示されます。</value></data>
+  <data name="RfClipPositiveTooltip" xml:space="preserve"><value>+CLIP（{0:N0} 回）· クリックでリセット</value></data>
+  <data name="RfClipNegativeTooltip" xml:space="preserve"><value>−CLIP（{0:N0} 回）· クリックでリセット</value></data>
+  <data name="RfPlaybackDropHint" xml:space="preserve"><value>RF ファイルをドロップするか「RF ファイルを開く」をクリック</value></data>
+  <data name="RfStepPrevTooltip" xml:space="preserve"><value>前のフィールド (←)</value></data>
+  <data name="RfStepNextTooltip" xml:space="preserve"><value>次のフィールド (→)</value></data>
+  <data name="RfSearchingField" xml:space="preserve"><value>隣接フィールドを検索中…</value></data>
+  <data name="RfOpeningFile" xml:space="preserve"><value>RF ファイルを開いています…</value></data>
+  <data name="RfStatusPreviewing" xml:space="preserve"><value>RF ライブ</value></data>
+  <data name="RfStatusPlaying" xml:space="preserve"><value>RF 再生中</value></data>
+  <data name="RfStatusPaused" xml:space="preserve"><value>RF 一時停止</value></data>
+  <data name="RfStatusRecording" xml:space="preserve"><value>RF 収録中</value></data>
+  <data name="RfOpenFifoReport" xml:space="preserve"><value>FIFO レポートを開く</value></data>
+  <data name="RfQcQueueRunning" xml:space="preserve"><value>RF ランプ検証（{0}）</value></data>
+  <data name="RfQcMetricStatus" xml:space="preserve"><value>検証結果</value></data>
+  <data name="RfQcMetricFormat" xml:space="preserve"><value>RF 形式</value></data>
+  <data name="MkvRecoverButton" xml:space="preserve"><value>.partial.mkv を復元</value></data>
+  <data name="MkvRecoverPickTitle" xml:space="preserve"><value>中断された .partial.mkv ファイルを選択</value></data>
+  <data name="MkvRecovering" xml:space="preserve"><value>Matroska 収録ファイルを復元中…</value></data>
+  <data name="MkvRecoverSuccess" xml:space="preserve"><value>MKV の復元が完了しました</value></data>
+  <data name="MkvRecoverSuccessDetail" xml:space="preserve"><value>完全なクラスタ {0:N0} バイトを {1} に復元しました。</value></data>
+  <data name="MkvRecoverFailed" xml:space="preserve"><value>MKV の復元に失敗しました</value></data>
+  <data name="EncodingEnableDeinterlace" xml:space="preserve"><value>ソフトウェア解除を有効にする</value></data>
+  <data name="EncodingInterlacedWarning" xml:space="preserve"><value>インターレース入力を検出：H.265 / AV1 はソフトウェア解除が必要です。</value></data>
+  <data name="EncodingVariableBitrateNote" xml:space="preserve"><value>可変ビットレート</value></data>
+  <data name="EncodingPresetAuto" xml:space="preserve"><value>自動</value></data>
+  <data name="ShortcutRfPlayPause" xml:space="preserve"><value>RF 再生 / 一時停止</value></data>
+  <data name="ShortcutRfStepField" xml:space="preserve"><value>RF 前 / 次のフィールド</value></data>
+  <data name="ShortcutRfOpenFile" xml:space="preserve"><value>RF ファイルを開く</value></data>
+  <data name="FullscreenDisplayTooltip" xml:space="preserve"><value>フルスクリーン出力先を切替</value></data>
 </root>

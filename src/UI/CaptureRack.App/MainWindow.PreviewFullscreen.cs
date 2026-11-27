@@ -1,5 +1,6 @@
 using CaptureRack.App.Controls;
 using CaptureRack.App.Views;
+using CaptureRack.DeckLink;
 using Microsoft.UI.Dispatching;
 using Microsoft.UI.Input;
 using Microsoft.UI.Windowing;
@@ -143,6 +144,7 @@ public sealed partial class MainWindow
                 window.TogglePreviewRequested += FullscreenWindow_TogglePreviewRequested;
                 window.ToggleRecordRequested += FullscreenWindow_ToggleRecordRequested;
                 window.ToggleAudioMonitorRequested += FullscreenWindow_ToggleAudioMonitorRequested;
+                window.SwitchDisplayRequested += FullscreenWindow_SwitchDisplayRequested;
 
                 fullscreenWindow = window;
                 previewFullscreen = true;
@@ -156,6 +158,7 @@ public sealed partial class MainWindow
                         feed.RenderScopes = false;
                     UpdateRecordingIndicator(recordingClock.IsRunning);
                 }
+                UpdateRfMeterTimer();
 
                 SyncFullscreenPreviewWindow();
                 previewTouchControlsVisible = false;
@@ -181,6 +184,7 @@ public sealed partial class MainWindow
                 window.TogglePreviewRequested -= FullscreenWindow_TogglePreviewRequested;
                 window.ToggleRecordRequested -= FullscreenWindow_ToggleRecordRequested;
                 window.ToggleAudioMonitorRequested -= FullscreenWindow_ToggleAudioMonitorRequested;
+                window.SwitchDisplayRequested -= FullscreenWindow_SwitchDisplayRequested;
             }
 
             // Re-attach the live preview bitmap and resume scopes BEFORE closing the overlay window
@@ -198,6 +202,7 @@ public sealed partial class MainWindow
                 nextMonitorFrame = 0;
                 RenderPreviewCaption();
                 UpdateRecordingIndicator(recordingClock.IsRunning);
+                UpdateRfMeterTimer();
                 ApplySafeAreaOverlay();
                 UpdateMonitorLayout();
             }
@@ -231,19 +236,96 @@ public sealed partial class MainWindow
 
         var recordingActive = IsCaptureRecording && qcStop is null;
         var finalizing = (recordingTransition && qcStop is null) || LiveMediaSource?.IsFinalizing == true;
+        var isRfPlayback = IsRfActive && rfInspector.IsPlayback;
+        var showAudio = ActiveWorkspaceCapabilities.SupportsLocalAudioMonitor;
+        var audioOn = (RfHasAudio ? rfFileSound : audioMonitorEnabled) && audioMonitorVolume > 0.005;
+        string? routeTag = null;
+        if (visibleAudio is { ChannelCount: > 2 } audio && audioMonitorRoute != AudioMonitorRoute.Default)
+        {
+            routeTag = audioMonitorRoute.Mode == AudioMonitorMode.Downmix
+                ? L("AudioMonitorDownmixShort")
+                : AudioChannelLayoutHelper.PairCompactLabel(audioMonitorRoute.PairIndex, audio.ChannelCount);
+        }
+        var clockText = isRfPlayback && !recordingClock.IsRunning
+            ? RfPlaybackTime.Text
+            : RecordingElapsed.Text;
+        var showClock = recordingClock.IsRunning || (isRfPlayback && rfInspector.PlaybackFile is not null);
+        var displayCount = DisplayArea.FindAll().Count;
+
         window.UpdateChrome(
             L("PreviewImage"),
             StageSignalText.Text,
             signalDotBrushKey,
             recordingActive,
             finalizing,
-            RecordingElapsed.Text,
-            recordingClock.IsRunning,
+            clockText,
+            showClock,
             RecordButton.Visibility == Visibility.Visible,
             RecordButton.IsEnabled,
             RecordActionLabel.Text,
             RecordButton.Style,
-            L("ExitPreviewFullScreen"));
+            L("ExitPreviewFullScreen"),
+            showAudioMute: showAudio,
+            audioMonitorActive: audioOn,
+            audioMuteTooltip: L(audioOn ? "AudioMonitorOnTooltip" : "AudioMonitorOffTooltip"),
+            audioRouteBadge: routeTag,
+            showPlaybackButton: isRfPlayback,
+            playbackPlaying: rfPreviewStop is not null,
+            playbackEnabled: StartButton.IsEnabled,
+            playbackLabel: L(rfPreviewStop is not null ? "RfPause" : "RfPlay"),
+            showSwitchDisplay: displayCount > 1,
+            switchDisplayTooltip: L("FullscreenDisplayTooltip"));
+    }
+
+    private void FullscreenWindow_SwitchDisplayRequested(object? sender, EventArgs e)
+    {
+        if (fullscreenWindow is not { } window)
+            return;
+
+        var displays = DisplayArea.FindAll();
+        if (displays.Count <= 1)
+            return;
+
+        var currentIdx = -1;
+        for (var i = 0; i < displays.Count; i++)
+        {
+            if (displays[i].DisplayId == window.TargetDisplayId)
+            {
+                currentIdx = i;
+                break;
+            }
+        }
+        var next = displays[(currentIdx + 1) % displays.Count];
+        var mainDisplay = DisplayArea.GetFromWindowId(AppWindow.Id, DisplayAreaFallback.Primary);
+        fullscreenCoversMainDisplay = next.DisplayId == mainDisplay.DisplayId;
+        enteringFullscreen = true;
+        try
+        {
+            window.MoveToDisplay(next);
+        }
+        finally
+        {
+            enteringFullscreen = false;
+        }
+        if (!PauseMainWindowRendering)
+        {
+            PreviewImage.Source = previewBitmap;
+            if (preview is { } feed)
+            {
+                feed.RenderScopes = FullscreenRenderPolicy.ShouldRenderVideoScopes(
+                    pauseMainWindowRendering: false,
+                    EffectiveWorkspaceLayout is WorkspaceLayoutMode.Split or WorkspaceLayoutMode.Scopes);
+            }
+            nextMonitorFrame = 0;
+        }
+        else
+        {
+            PreviewImage.Source = null;
+            if (preview is { } feed)
+                feed.RenderScopes = false;
+        }
+        UpdateRecordingIndicator(recordingClock.IsRunning);
+        UpdateRfMeterTimer();
     }
 
     private void FullscreenWindow_ExitRequested(object? sender, EventArgs e) =>
@@ -263,7 +345,7 @@ public sealed partial class MainWindow
 
     private void FullscreenWindow_ToggleAudioMonitorRequested(object? sender, EventArgs e)
     {
-        if (activePage == ActiveAppPage.Capture && HasLiveCapture && ActiveWorkspaceCapabilities.SupportsLocalAudioMonitor)
+        if (activePage == ActiveAppPage.Capture && (HasLiveCapture || RfHasAudio) && ActiveWorkspaceCapabilities.SupportsLocalAudioMonitor)
             ToggleAudioMonitor();
     }
 }

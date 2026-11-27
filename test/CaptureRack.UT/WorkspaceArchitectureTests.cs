@@ -1070,4 +1070,92 @@ public sealed class WorkspaceArchitectureTests
         Assert.True(levels.PeakForChannel(0) > 0.05);
         Assert.Equal(0, levels.PeakForChannel(6));
     }
+
+    [Fact]
+    public void RfPeakBallisticsAttacksDecaysHoldsPeakAndLatchesClipsIndependently()
+    {
+        var ballistics = new RfPeakBallistics();
+        Assert.Equal(0, ballistics.PositiveNormalized);
+        Assert.Equal(0, ballistics.NegativeNormalized);
+
+        var (newPos, newNeg) = ballistics.UpdateInput(minCode: -256, maxCode: 511, fullScale: 512, totalPositiveClips: 3, totalNegativeClips: 0);
+        Assert.True(newPos);
+        Assert.False(newNeg);
+        Assert.Equal(1.0, ballistics.PositiveNormalized, precision: 3);
+        Assert.Equal(0.5, ballistics.NegativeNormalized, precision: 3);
+        Assert.Equal(1.0, ballistics.PositivePeakHold, precision: 3);
+        Assert.Equal(3, ballistics.VisiblePositiveClips);
+        Assert.Equal(0, ballistics.VisibleNegativeClips);
+
+        // Input drops to zero -> displayed level decays smoothly while peak hold stays up initially.
+        var (pos2, neg2) = ballistics.UpdateInput(minCode: 0, maxCode: 0, fullScale: 512, totalPositiveClips: 3, totalNegativeClips: 2);
+        Assert.False(pos2);
+        Assert.True(neg2);
+        ballistics.StepFrame();
+        Assert.InRange(ballistics.PositiveNormalized, 0.9, 0.99);
+        Assert.Equal(1.0, ballistics.PositivePeakHold, precision: 3);
+
+        // After enough frames past hold duration, peak hold also glides down cleanly.
+        for (var i = 0; i < 120; i++)
+            ballistics.StepFrame();
+        Assert.Equal(0, ballistics.PositiveNormalized, precision: 4);
+        Assert.True(ballistics.PositivePeakHold < 0.5);
+
+        // Resetting clip latches zeroes visible count without affecting the other rail.
+        ballistics.ResetPositiveClipLatch();
+        Assert.Equal(0, ballistics.VisiblePositiveClips);
+        Assert.Equal(2, ballistics.VisibleNegativeClips);
+        ballistics.ResetNegativeClipLatch();
+        Assert.Equal(0, ballistics.VisibleNegativeClips);
+    }
+
+    [Fact]
+    public void RfDeviceSelectionHelperMatchesStableKeysAcrossRefreshes()
+    {
+        var dddKey = RfDeviceSelectionHelper.BuildDddKey(@"USB\VID_1209&PID_2347\123");
+        var rtlKey = RfDeviceSelectionHelper.BuildRtlKey(0, "RTL-SDR Blog V4");
+        string[] candidates = [dddKey, rtlKey, RfDeviceSelectionHelper.PlaybackDeviceKey];
+
+        Assert.Equal(1, RfDeviceSelectionHelper.ResolveSelectionIndex(candidates, rtlKey, dddKey));
+        Assert.Equal(0, RfDeviceSelectionHelper.ResolveSelectionIndex(candidates, "ddd:missing", dddKey));
+        Assert.Equal(2, RfDeviceSelectionHelper.ResolveSelectionIndex(candidates, RfDeviceSelectionHelper.PlaybackDeviceKey, dddKey));
+        Assert.Equal(0, RfDeviceSelectionHelper.ResolveSelectionIndex(candidates, null, "rtl:9:gone"));
+        Assert.Equal(-1, RfDeviceSelectionHelper.ResolveSelectionIndex([], dddKey, dddKey));
+    }
+
+    [Fact]
+    public void EncodingUxHelperValidatesBitrateDetectsInterlacedWarningAndEstimatesStorage()
+    {
+        Assert.Equal((true, (int?)null), EncodingUxHelper.ValidateBitrateText(""));
+        Assert.Equal((true, (int?)null), EncodingUxHelper.ValidateBitrateText("   "));
+        Assert.Equal((true, (int?)25000), EncodingUxHelper.ValidateBitrateText("25000"));
+        Assert.Equal((false, (int?)null), EncodingUxHelper.ValidateBitrateText("0"));
+        Assert.Equal((false, (int?)null), EncodingUxHelper.ValidateBitrateText("-500"));
+        Assert.Equal((false, (int?)null), EncodingUxHelper.ValidateBitrateText("1500000"));
+        Assert.Equal((false, (int?)null), EncodingUxHelper.ValidateBitrateText("25M"));
+
+        Assert.True(EncodingUxHelper.RequiresProgressiveDeinterlaceWarning(
+            CaptureRack.Recording.RecordingOutput.H265, sourceIsInterlaced: true, softwareDeinterlaceEnabled: false));
+        Assert.True(EncodingUxHelper.RequiresProgressiveDeinterlaceWarning(
+            CaptureRack.Recording.RecordingOutput.Av1, sourceIsInterlaced: true, softwareDeinterlaceEnabled: false));
+        Assert.False(EncodingUxHelper.RequiresProgressiveDeinterlaceWarning(
+            CaptureRack.Recording.RecordingOutput.H265, sourceIsInterlaced: true, softwareDeinterlaceEnabled: true));
+        Assert.False(EncodingUxHelper.RequiresProgressiveDeinterlaceWarning(
+            CaptureRack.Recording.RecordingOutput.H265, sourceIsInterlaced: false, softwareDeinterlaceEnabled: false));
+        Assert.False(EncodingUxHelper.RequiresProgressiveDeinterlaceWarning(
+            CaptureRack.Recording.RecordingOutput.H264, sourceIsInterlaced: true, softwareDeinterlaceEnabled: false));
+
+        Assert.Null(EncodingUxHelper.EstimateSoftwareBytesPerSecond(
+            CaptureRack.Recording.RecordingOutput.Native, 25000, 2, CaptureAudioFormat.Pcm16));
+        Assert.Null(EncodingUxHelper.EstimateSoftwareBytesPerSecond(
+            CaptureRack.Recording.RecordingOutput.Ffv1, 25000, 2, CaptureAudioFormat.Pcm16));
+        Assert.Null(EncodingUxHelper.EstimateSoftwareBytesPerSecond(
+            CaptureRack.Recording.RecordingOutput.H264, null, 2, CaptureAudioFormat.Pcm16));
+
+        var bps = EncodingUxHelper.EstimateSoftwareBytesPerSecond(
+            CaptureRack.Recording.RecordingOutput.H264, 20_000, 2, CaptureAudioFormat.Pcm16);
+        Assert.NotNull(bps);
+        // 20 Mbps = 2,500,000 B/s + 48kHz*4 B/s (192,000) * 1.03 = ~2,772,760 B/s
+        Assert.InRange(bps!.Value, 2_700_000, 2_850_000);
+    }
 }

@@ -24,6 +24,10 @@
             <KeyboardAccelerator Key="Number5" Modifiers="Control" Invoked="LayoutEvents_Invoked" />
             <KeyboardAccelerator Key="I" Modifiers="Control" Invoked="ToggleInspector_Invoked" />
             <KeyboardAccelerator Key="M" Invoked="ToggleAudioMonitor_Invoked" />
+            <KeyboardAccelerator Key="Space" Invoked="RfPlayPause_Invoked" />
+            <KeyboardAccelerator Key="Left" Invoked="RfStepPrev_Invoked" />
+            <KeyboardAccelerator Key="Right" Invoked="RfStepNext_Invoked" />
+            <KeyboardAccelerator Key="O" Modifiers="Control" Invoked="RfOpenFile_Invoked" />
         </Grid.KeyboardAccelerators>
 
         <!-- Custom Studio Title Bar -->
@@ -210,19 +214,54 @@
                         <RowDefinition Height="Auto"/>
                     </Grid.RowDefinitions>
 
-                    <Grid x:Name="RfPlaybackBar" Grid.Row="2" Visibility="Collapsed" ColumnSpacing="8">
-                        <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
-                        <StackPanel Orientation="Horizontal" Spacing="4">
-                            <Button x:Name="RfOpenFile" Click="RfOpenFile_Click" VerticalAlignment="Center"/>
-                            <Button x:Name="RfStepBack" Content="◀ F" Tag="-1" Click="RfFieldStep_Click" Visibility="Collapsed" AutomationProperties.Name="Previous field"/>
-                            <Button x:Name="RfStepForward" Content="F ▶" Tag="1" Click="RfFieldStep_Click" Visibility="Collapsed" AutomationProperties.Name="Next field"/>
-                        </StackPanel>
-                        <StackPanel Grid.Column="1">
-                            <TextBlock x:Name="RfPlaybackName" TextTrimming="CharacterEllipsis"/>
-                            <Slider x:Name="RfSeek" Minimum="0" Maximum="1" StepFrequency="0.01" ValueChanged="RfSeek_Changed"/>
-                        </StackPanel>
-                        <TextBlock x:Name="RfPlaybackTime" Grid.Column="2" VerticalAlignment="Center"/>
-                    </Grid>
+                    <Border x:Name="RfPlaybackBar" Grid.Row="2" Visibility="Collapsed"
+                            Style="{StaticResource StudioInstrumentCardStyle}" Padding="10,7"
+                            AllowDrop="True" DragOver="RfPlaybackBar_DragOver" DragLeave="RfPlaybackBar_DragLeave" Drop="RfPlaybackBar_Drop">
+                        <Grid ColumnSpacing="10">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                                <Button x:Name="RfOpenFile" Style="{StaticResource StudioTransportPrimaryButtonStyle}"
+                                        MinHeight="30" Padding="10,0" Click="RfOpenFile_Click" VerticalAlignment="Center">
+                                    <StackPanel Orientation="Horizontal" Spacing="6">
+                                        <FontIcon x:Name="RfOpenFileIcon" Glyph="&#xE8E5;" FontSize="12" />
+                                        <ProgressRing x:Name="RfOpenFileSpinner" Width="12" Height="12" IsActive="False" Visibility="Collapsed" />
+                                        <TextBlock x:Name="RfOpenFileLabel" FontSize="12" VerticalAlignment="Center" />
+                                    </StackPanel>
+                                </Button>
+                                <Button x:Name="RfPlayPauseButton" Style="{StaticResource StudioIconButtonStyle}"
+                                        Click="StartButton_Click" VerticalAlignment="Center">
+                                    <FontIcon x:Name="RfPlayPauseIcon" Glyph="&#xE768;" FontSize="13" />
+                                </Button>
+                                <Button x:Name="RfStepBack" Style="{StaticResource StudioIconButtonStyle}"
+                                        Tag="-1" Click="RfFieldStep_Click" Visibility="Collapsed" VerticalAlignment="Center"
+                                        AutomationProperties.Name="Previous field">
+                                    <FontIcon Glyph="&#xE892;" FontSize="12" />
+                                </Button>
+                                <Button x:Name="RfStepForward" Style="{StaticResource StudioIconButtonStyle}"
+                                        Tag="1" Click="RfFieldStep_Click" Visibility="Collapsed" VerticalAlignment="Center"
+                                        AutomationProperties.Name="Next field">
+                                    <FontIcon Glyph="&#xE893;" FontSize="12" />
+                                </Button>
+                                <ProgressRing x:Name="RfFieldBusyRing" Width="14" Height="14" IsActive="False"
+                                              Visibility="Collapsed" VerticalAlignment="Center" />
+                            </StackPanel>
+                            <StackPanel Grid.Column="1" Spacing="1" VerticalAlignment="Center">
+                                <TextBlock x:Name="RfPlaybackName" FontSize="12" FontWeight="SemiBold"
+                                           Foreground="{ThemeResource StudioTextPrimaryBrush}"
+                                           TextTrimming="CharacterEllipsis" />
+                                <Slider x:Name="RfSeek" Minimum="0" Maximum="1" StepFrequency="0.01"
+                                        ValueChanged="RfSeek_Changed" />
+                            </StackPanel>
+                            <TextBlock x:Name="RfPlaybackTime" Grid.Column="2"
+                                       Style="{StaticResource StudioMonoTextStyle}" FontSize="12"
+                                       Foreground="{ThemeResource StudioTextSecondaryBrush}"
+                                       VerticalAlignment="Center" />
+                        </Grid>
+                    </Border>
                     <!-- De-cluttered Capability-Aware Stage Toolbar -->
                     <Grid x:Name="StageToolbar" ColumnSpacing="8" SizeChanged="StageToolbar_SizeChanged">
                         <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
@@ -447,32 +486,80 @@
                                     Background="{ThemeResource StudioHairlineBrush}" />
                         </controls:SplitResizeHandle>
 
-                        <Grid Grid.Column="1" Grid.Row="2">
+                        <Grid x:Name="InstrumentsDeckContainer" Grid.Column="1" Grid.Row="2" RowSpacing="8">
                             <Grid.RowDefinitions>
-                                <RowDefinition x:Name="RfAdcRow" Height="0"/>
-                                <RowDefinition Height="2*"/>
+                                <RowDefinition x:Name="RfAdcRow" Height="0" />
+                                <RowDefinition x:Name="VideoInstrumentsRow" Height="2*" />
                             </Grid.RowDefinitions>
-                        <Grid x:Name="RfStage" Grid.Row="0" Margin="4" RowSpacing="8" Visibility="Collapsed">
-                            <Grid.RowDefinitions>
-                                <RowDefinition Height="Auto"/><RowDefinition Height="*"/>
-                            </Grid.RowDefinitions>
-                            <StackPanel Orientation="Horizontal" Spacing="6">
-                                <TextBlock x:Name="RfHeading" VerticalAlignment="Center" Style="{StaticResource StudioSectionHeadingStyle}"/>
-                                <ComboBox x:Name="RfScopeSource" SelectedIndex="0" SelectionChanged="RfScope_Changed" AutomationProperties.Name="Signal">
-                                    <x:String>ADC</x:String><x:String>Head SW</x:String>
-                                </ComboBox>
-                                <TextBlock x:Name="RfScopeValue" VerticalAlignment="Center"/>
-                            </StackPanel>
-                            <Border Grid.Row="1" Background="{ThemeResource StudioCardBrush}" CornerRadius="4">
-                                <Viewbox Stretch="Fill" Margin="8">
-                                    <Canvas Width="256" Height="100">
-                                        <Line x:Name="RfReference" X2="256" Y1="50" Y2="50" Stroke="{ThemeResource StudioHairlineBrush}"/>
-                                        <Polyline x:Name="RfTraceA" Stroke="{ThemeResource StudioSignalLockBrush}" StrokeThickness="0.65"/>
-                                        <Polyline x:Name="RfTraceB" Stroke="{ThemeResource StudioInfoBrush}" StrokeThickness="0.65"/>
-                                    </Canvas>
-                                </Viewbox>
-                            </Border>
-                        </Grid>
+                        <Border x:Name="RfStage" Grid.Row="0" Style="{StaticResource StudioInstrumentCardStyle}"
+                                Padding="10,8" Visibility="Collapsed">
+                            <Grid RowSpacing="6">
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="Auto" />
+                                    <RowDefinition Height="*" />
+                                </Grid.RowDefinitions>
+                                <Grid ColumnSpacing="8">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <StackPanel Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                                        <TextBlock x:Name="RfHeading" FontSize="13" FontWeight="SemiBold"
+                                                   Foreground="{ThemeResource StudioTextPrimaryBrush}" VerticalAlignment="Center" />
+                                        <TextBlock x:Name="RfScopeValue" FontSize="11"
+                                                   Foreground="{ThemeResource StudioTextSecondaryBrush}"
+                                                   VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                                    </StackPanel>
+                                    <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                                        <StackPanel x:Name="RfLegendPanel" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                                            <StackPanel Orientation="Horizontal" Spacing="4" VerticalAlignment="Center">
+                                                <Rectangle Width="8" Height="2" Fill="{ThemeResource StudioSignalLockBrush}" VerticalAlignment="Center" />
+                                                <TextBlock x:Name="RfLegendALabel" Text="ADC" Style="{StaticResource StudioMonoTextStyle}"
+                                                           FontSize="10" Foreground="{ThemeResource StudioTextSecondaryBrush}" />
+                                            </StackPanel>
+                                            <StackPanel x:Name="RfLegendBPanel" Orientation="Horizontal" Spacing="4"
+                                                        VerticalAlignment="Center" Visibility="Collapsed">
+                                                <Rectangle Width="8" Height="2" Fill="{ThemeResource StudioInfoBrush}" VerticalAlignment="Center" />
+                                                <TextBlock Text="Q" Style="{StaticResource StudioMonoTextStyle}"
+                                                           FontSize="10" Foreground="{ThemeResource StudioTextSecondaryBrush}" />
+                                            </StackPanel>
+                                        </StackPanel>
+                                        <ComboBox x:Name="RfScopeSource" Height="26" CornerRadius="3" SelectedIndex="0"
+                                                  SelectionChanged="RfScope_Changed" AutomationProperties.Name="Signal">
+                                            <ComboBoxItem x:Name="RfScopeAdcItem" Content="ADC" />
+                                            <ComboBoxItem x:Name="RfScopeHeadSwitchItem" Content="Head switch" />
+                                        </ComboBox>
+                                    </StackPanel>
+                                </Grid>
+                                <Border Grid.Row="1" Background="{ThemeResource StudioStageCanvasBrush}"
+                                        BorderBrush="{ThemeResource StudioMonitorBezelBrush}" BorderThickness="1"
+                                        CornerRadius="2" Padding="6,5">
+                                    <Grid ColumnSpacing="6">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="26" />
+                                            <ColumnDefinition Width="*" />
+                                        </Grid.ColumnDefinitions>
+                                        <Grid AutomationProperties.AccessibilityView="Raw">
+                                            <TextBlock Text="+FS" Style="{StaticResource StudioMonoTextStyle}" FontSize="9"
+                                                       Foreground="#9BA5B8" HorizontalAlignment="Right" VerticalAlignment="Top" />
+                                            <TextBlock Text="0" Style="{StaticResource StudioMonoTextStyle}" FontSize="9"
+                                                       Foreground="#9BA5B8" HorizontalAlignment="Right" VerticalAlignment="Center" />
+                                            <TextBlock Text="−FS" Style="{StaticResource StudioMonoTextStyle}" FontSize="9"
+                                                       Foreground="#9BA5B8" HorizontalAlignment="Right" VerticalAlignment="Bottom" />
+                                        </Grid>
+                                        <Viewbox Grid.Column="1" Stretch="Fill">
+                                            <Canvas Width="256" Height="100">
+                                                <Line X1="0" X2="256" Y1="25" Y2="25" Stroke="#26FFFFFF" StrokeThickness="0.4" />
+                                                <Line x:Name="RfReference" X1="0" X2="256" Y1="50" Y2="50" Stroke="#4DFFFFFF" StrokeThickness="0.6" />
+                                                <Line X1="0" X2="256" Y1="75" Y2="75" Stroke="#26FFFFFF" StrokeThickness="0.4" />
+                                                <Polyline x:Name="RfTraceA" Stroke="{ThemeResource StudioSignalLockBrush}" StrokeThickness="0.85" StrokeLineJoin="Round" />
+                                                <Polyline x:Name="RfTraceB" Stroke="{ThemeResource StudioInfoBrush}" StrokeThickness="0.85" StrokeLineJoin="Round" />
+                                            </Canvas>
+                                        </Viewbox>
+                                    </Grid>
+                                </Border>
+                            </Grid>
+                        </Border>
                         <!-- Unified Modular Instruments Host (Luma/Parade + Vector/Spectrum/Events) -->
                         <Grid x:Name="InstrumentsHost" Grid.Row="1" ColumnSpacing="8">
                             <Grid.ColumnDefinitions>
@@ -795,7 +882,7 @@
                                 <ContentPresenter x:Name="InspectorSlot" />
 
                                 <!-- Shared Output, Tape Label & Storage Capacity Card -->
-                                <Border Style="{StaticResource StudioInspectorCardStyle}">
+                                <Border x:Name="OutputStorageCard" Style="{StaticResource StudioInspectorCardStyle}">
                                     <StackPanel Spacing="9">
                                         <Grid>
                                             <TextBlock x:Name="OutputHeading" Text="OUTPUT &amp; STORAGE"
@@ -813,15 +900,76 @@
                                         <TextBox x:Name="OutputPath" IsSpellCheckEnabled="False" IsTextPredictionEnabled="False"
                                                  CornerRadius="3" FontSize="13" TextChanged="OutputPath_TextChanged" />
 
-                                        <StackPanel x:Name="RecordingEncodingPanel" Spacing="6" Visibility="Collapsed">
-                                            <ComboBox x:Name="RecordingOutputPicker" HorizontalAlignment="Stretch"
-                                                      DisplayMemberPath="Label" SelectionChanged="RecordingOutputChanged" />
-                                            <StackPanel x:Name="RecordingEncoderParameters" Spacing="6" Visibility="Collapsed">
-                                                <TextBox x:Name="RecordingBitrateBox" MaxLength="7" TextChanged="RecordingOutputChanged" />
-                                                <TextBox x:Name="RecordingLevelBox" MaxLength="8" TextChanged="RecordingOutputChanged" />
-                                                <CheckBox x:Name="RecordingDeinterlaceBox" Checked="RecordingOutputChanged" Unchecked="RecordingOutputChanged" />
+                                        <StackPanel x:Name="RecordingEncodingPanel" Spacing="8" Visibility="Collapsed">
+                                            <StackPanel>
+                                                <TextBlock x:Name="RecordingOutputLabel" Style="{StaticResource StudioFieldLabelStyle}" />
+                                                <ComboBox x:Name="RecordingOutputPicker" CornerRadius="3" HorizontalAlignment="Stretch"
+                                                          DisplayMemberPath="Label" SelectionChanged="RecordingOutputChanged" />
                                             </StackPanel>
-                                            <TextBlock x:Name="RecordingEncodingHint" TextWrapping="Wrap" FontSize="12"
+                                            <StackPanel x:Name="RecordingEncoderParameters" Spacing="8" Visibility="Collapsed">
+                                                <StackPanel Spacing="5">
+                                                    <TextBlock x:Name="RecordingBitrateLabel" Style="{StaticResource StudioFieldLabelStyle}" Margin="0" />
+                                                    <TextBox x:Name="RecordingBitrateBox" MaxLength="7" CornerRadius="3"
+                                                             FontSize="13" InputScope="Number" TextChanged="RecordingOutputChanged" />
+                                                    <StackPanel x:Name="BitratePresetPanel" Orientation="Horizontal" Spacing="4">
+                                                        <Button x:Name="BitratePresetAutoBtn" Style="{StaticResource SubtleButtonStyle}"
+                                                                Height="22" Padding="7,0" CornerRadius="2" FontSize="11"
+                                                                Tag="" Click="BitratePreset_Click" />
+                                                        <Button x:Name="BitratePreset15Btn" Style="{StaticResource SubtleButtonStyle}"
+                                                                Height="22" Padding="7,0" CornerRadius="2" FontSize="11"
+                                                                Content="15M" Tag="15000" Click="BitratePreset_Click" />
+                                                        <Button x:Name="BitratePreset25Btn" Style="{StaticResource SubtleButtonStyle}"
+                                                                Height="22" Padding="7,0" CornerRadius="2" FontSize="11"
+                                                                Content="25M" Tag="25000" Click="BitratePreset_Click" />
+                                                        <Button x:Name="BitratePreset50Btn" Style="{StaticResource SubtleButtonStyle}"
+                                                                Height="22" Padding="7,0" CornerRadius="2" FontSize="11"
+                                                                Content="50M" Tag="50000" Click="BitratePreset_Click" />
+                                                    </StackPanel>
+                                                    <Border x:Name="RecordingBitrateErrorBanner" Visibility="Collapsed" CornerRadius="3" Padding="8,5"
+                                                            BorderThickness="1"
+                                                            Background="{ThemeResource StudioDangerSoftBrush}"
+                                                            BorderBrush="{ThemeResource StudioDangerBrush}">
+                                                        <Grid ColumnSpacing="6">
+                                                            <Grid.ColumnDefinitions>
+                                                                <ColumnDefinition Width="Auto" />
+                                                                <ColumnDefinition Width="*" />
+                                                            </Grid.ColumnDefinitions>
+                                                            <FontIcon Glyph="&#xE783;" FontSize="11" Foreground="{ThemeResource StudioDangerBrush}"
+                                                                      VerticalAlignment="Top" Margin="0,2,0,0" />
+                                                            <TextBlock x:Name="RecordingBitrateErrorText" Grid.Column="1" FontSize="11" TextWrapping="Wrap"
+                                                                       Foreground="{ThemeResource StudioTextPrimaryBrush}" />
+                                                        </Grid>
+                                                    </Border>
+                                                </StackPanel>
+                                                <StackPanel>
+                                                    <TextBlock x:Name="RecordingLevelLabel" Style="{StaticResource StudioFieldLabelStyle}" />
+                                                    <TextBox x:Name="RecordingLevelBox" MaxLength="8" CornerRadius="3"
+                                                             FontSize="13" TextChanged="RecordingOutputChanged" />
+                                                </StackPanel>
+                                                <CheckBox x:Name="RecordingDeinterlaceBox" MinWidth="0"
+                                                          Checked="RecordingOutputChanged" Unchecked="RecordingOutputChanged" />
+                                                <Border x:Name="RecordingInterlacedBanner" Visibility="Collapsed" CornerRadius="3" Padding="8,6"
+                                                        BorderThickness="1"
+                                                        Background="{ThemeResource StudioCautionSoftBrush}"
+                                                        BorderBrush="{ThemeResource StudioCautionBrush}">
+                                                    <StackPanel Spacing="6">
+                                                        <Grid ColumnSpacing="6">
+                                                            <Grid.ColumnDefinitions>
+                                                                <ColumnDefinition Width="Auto" />
+                                                                <ColumnDefinition Width="*" />
+                                                            </Grid.ColumnDefinitions>
+                                                            <FontIcon Glyph="&#xE7BA;" FontSize="11" Foreground="{ThemeResource StudioCautionBrush}"
+                                                                      VerticalAlignment="Top" Margin="0,2,0,0" />
+                                                            <TextBlock x:Name="RecordingInterlacedWarningText" Grid.Column="1" FontSize="11" TextWrapping="Wrap"
+                                                                       Foreground="{ThemeResource StudioTextPrimaryBrush}" />
+                                                        </Grid>
+                                                        <Button x:Name="EnableDeinterlaceQuickButton" Style="{StaticResource SubtleButtonStyle}"
+                                                                Height="24" Padding="8,0" CornerRadius="3" FontSize="11"
+                                                                HorizontalAlignment="Left" Click="EnableDeinterlaceQuick_Click" />
+                                                    </StackPanel>
+                                                </Border>
+                                            </StackPanel>
+                                            <TextBlock x:Name="RecordingEncodingHint" TextWrapping="Wrap" FontSize="11"
                                                        Foreground="{ThemeResource StudioTextSecondaryBrush}" />
                                         </StackPanel>
 

@@ -22,12 +22,21 @@ public sealed partial class QcCenterView : UserControl
     private bool dropHighlightActive;
 
     public ScrollView Scroller => QcCenterScroller;
-    public bool CanCheckFile { get => CheckFileButton.IsEnabled; set => CheckFileButton.IsEnabled = value; }
+    public bool CanCheckFile
+    {
+        get => CheckFileButton.IsEnabled;
+        set
+        {
+            CheckFileButton.IsEnabled = value;
+            RecoverMkvButton.IsEnabled = value;
+        }
+    }
     public bool IsCancelVisible { get => QcCancelButton.Visibility == Visibility.Visible; set => QcCancelButton.Visibility = value ? Visibility.Visible : Visibility.Collapsed; }
     public bool IsCancelEnabled { get => QcCancelButton.IsEnabled; set => QcCancelButton.IsEnabled = value; }
     public QcSessionHistoryEntry? DisplayedEntry => displayedEntry;
 
     public event EventHandler? CheckFileRequested;
+    public event EventHandler? RecoverMkvRequested;
     public event EventHandler? CancelQcRequested;
     public event EventHandler<string>? FileDropped;
     public event EventHandler<string>? OpenArtifactRequested;
@@ -46,6 +55,8 @@ public sealed partial class QcCenterView : UserControl
         QcCenterSubtitle.Text = localize("QcCenterSubtitleMulti");
         CheckFileLabel.Text = localize("CheckMediaFile");
         AutomationProperties.SetName(CheckFileButton, CheckFileLabel.Text);
+        RecoverMkvLabel.Text = localize("MkvRecoverButton");
+        AutomationProperties.SetName(RecoverMkvButton, RecoverMkvLabel.Text);
         QcCancelButton.Content = localize("CancelQc");
         QcStep1Label.Text = localize("QcStepInspect");
         QcStep2Label.Text = localize("QcStepDecode");
@@ -58,6 +69,8 @@ public sealed partial class QcCenterView : UserControl
         QcArtifactsHeading.Text = localize("QcArtifactsHeading");
         QcFolderButton.Content = localize("QcFolder");
         TsFolderButton.Content = localize("QcFolder");
+        RfRampFolderButton.Content = localize("QcFolder");
+        RfRampFifoReportButton.Content = localize("RfOpenFifoReport");
         QcVideoButton.Content = localize(QcPresentationHelper.OpenMediaLabelKey(displayedEntry?.FilePath));
         TsOpenMediaButton.Content = localize(QcPresentationHelper.OpenMediaLabelKey(displayedEntry?.FilePath));
         QcLogButton.Content = localize("QcLog");
@@ -84,7 +97,7 @@ public sealed partial class QcCenterView : UserControl
         RenderHistory(historyEntries, displayedEntry?.Id);
     }
 
-    public void BeginRunning(string path, QcEntryKind kind)
+    public void BeginRunning(string path, QcEntryKind kind, string? statusLabelOverride = null)
     {
         running = true;
         activeStage = null;
@@ -99,12 +112,13 @@ public sealed partial class QcCenterView : UserControl
         QcOutcomeBanner.Visibility = Visibility.Collapsed;
         MovResultSection.Visibility = Visibility.Collapsed;
         TsResultSection.Visibility = Visibility.Collapsed;
+        RfRampResultSection.Visibility = Visibility.Collapsed;
         QcStatusPill.Visibility = Visibility.Collapsed;
         QcPipelineCard.Visibility = kind == QcEntryKind.Mov ? Visibility.Visible : Visibility.Collapsed;
         var showStreamProgress = kind != QcEntryKind.Mov;
         QcStreamProgressCard.Visibility = showStreamProgress ? Visibility.Visible : Visibility.Collapsed;
         QcStreamProgressRing.IsActive = showStreamProgress;
-        QcStreamProgressLabel.Text = localize(kind == QcEntryKind.Dv ? "DvChecking" : "TsChecking");
+        QcStreamProgressLabel.Text = statusLabelOverride ?? localize(kind == QcEntryKind.Dv ? "DvChecking" : "TsChecking");
         QcProgressBar.Visibility = Visibility.Visible;
         if (kind == QcEntryKind.Mov)
             UpdatePipeline(null, isRunning: true, finalStatus: null);
@@ -141,6 +155,7 @@ public sealed partial class QcCenterView : UserControl
         QcStreamProgressRing.IsActive = false;
         MovResultSection.Visibility = Visibility.Collapsed;
         TsResultSection.Visibility = Visibility.Collapsed;
+        RfRampResultSection.Visibility = Visibility.Collapsed;
         QcOpenStatus.IsOpen = false;
         TsSaveStatus.IsOpen = false;
     }
@@ -158,7 +173,8 @@ public sealed partial class QcCenterView : UserControl
         var (toneSoft, toneSolid, glyph) = entry.Severity switch
         {
             TelemetrySeverity.Normal => ("StudioSignalLockSoftBrush", "StudioSignalLockBrush", "\uE73E"),
-            TelemetrySeverity.Caution or TelemetrySeverity.Info => ("StudioCautionSoftBrush", "StudioCautionBrush", "\uE7BA"),
+            TelemetrySeverity.Info => ("StudioInfoSoftBrush", "StudioInfoBrush", "\uE946"),
+            TelemetrySeverity.Caution => ("StudioCautionSoftBrush", "StudioCautionBrush", "\uE7BA"),
             _ => ("StudioDangerSoftBrush", "StudioDangerBrush", "\uE783")
         };
 
@@ -184,6 +200,7 @@ public sealed partial class QcCenterView : UserControl
 
         if (entry.Kind == QcEntryKind.Mov)
         {
+            RfRampResultSection.Visibility = Visibility.Collapsed;
             QcPipelineCard.Visibility = Visibility.Visible;
             UpdatePipeline(entry.LastStage, isRunning: false, finalStatus: entry.MovResult?.Status ?? QcStatus.Failed);
             MovResultSection.Visibility = Visibility.Visible;
@@ -206,6 +223,7 @@ public sealed partial class QcCenterView : UserControl
         }
         else if (entry.TsReport is { } ts)
         {
+            RfRampResultSection.Visibility = Visibility.Collapsed;
             QcPipelineCard.Visibility = Visibility.Collapsed;
             MovResultSection.Visibility = Visibility.Collapsed;
             TsResultSection.Visibility = Visibility.Visible;
@@ -243,6 +261,7 @@ public sealed partial class QcCenterView : UserControl
         }
         else if (entry.DvReport is { } dv)
         {
+            RfRampResultSection.Visibility = Visibility.Collapsed;
             QcPipelineCard.Visibility = MovResultSection.Visibility = TsFirstErrorsCard.Visibility = Visibility.Collapsed;
             TsResultSection.Visibility = Visibility.Visible;
             TsRecordingReportButton.Visibility = hasRecordingReport ? Visibility.Visible : Visibility.Collapsed;
@@ -260,10 +279,27 @@ public sealed partial class QcCenterView : UserControl
                 new(localize("DvInfoRecordingDate"), stats.FirstFrame?.RecordingDate ?? "—")
             };
         }
-        else
+        else if (entry.Kind == QcEntryKind.RfRamp)
         {
             QcPipelineCard.Visibility = MovResultSection.Visibility = TsResultSection.Visibility = Visibility.Collapsed;
+            RfRampResultSection.Visibility = Visibility.Visible;
+            var ext = Path.GetExtension(entry.FileName).TrimStart('.').ToUpperInvariant();
+            RfRampFormatText.Text = string.IsNullOrEmpty(ext) ? "RF" : $"{ext} · {entry.Summary}";
+            var fifoPath = RfFifoReportPathFor(entry.FilePath);
+            RfRampFifoReportButton.Visibility = File.Exists(fifoPath) ? Visibility.Visible : Visibility.Collapsed;
         }
+        else
+        {
+            QcPipelineCard.Visibility = MovResultSection.Visibility = TsResultSection.Visibility = RfRampResultSection.Visibility = Visibility.Collapsed;
+        }
+    }
+
+    internal static string RfFifoReportPathFor(string path)
+    {
+        var basePath = path.EndsWith(".partial", StringComparison.OrdinalIgnoreCase)
+            ? path[..^".partial".Length]
+            : path;
+        return basePath + ".fifo.json";
     }
 
     public void RenderHistory(IReadOnlyList<QcSessionHistoryEntry> entries, Guid? selectedId)
@@ -289,7 +325,8 @@ public sealed partial class QcCenterView : UserControl
                 StudioBrushes.Resolve(this, item.Severity switch
                 {
                     TelemetrySeverity.Normal => "StudioSignalLockBrush",
-                    TelemetrySeverity.Caution or TelemetrySeverity.Info => "StudioCautionBrush",
+                    TelemetrySeverity.Info => "StudioInfoBrush",
+                    TelemetrySeverity.Caution => "StudioCautionBrush",
                     _ => "StudioDangerBrush"
                 }))).ToArray();
             QcHistoryList.ItemsSource = rows;
@@ -385,6 +422,8 @@ public sealed partial class QcCenterView : UserControl
     }
 
     private void CheckFileButton_Click(object sender, RoutedEventArgs e) => CheckFileRequested?.Invoke(this, EventArgs.Empty);
+
+    private void RecoverMkvButton_Click(object sender, RoutedEventArgs e) => RecoverMkvRequested?.Invoke(this, EventArgs.Empty);
 
     private void CancelQcButton_Click(object sender, RoutedEventArgs e) => CancelQcRequested?.Invoke(this, EventArgs.Empty);
 

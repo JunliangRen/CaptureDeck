@@ -102,6 +102,9 @@ public sealed partial class SettingsView : UserControl
         ShortcutInspectorLabel.Text = localize("ShortcutInspector");
         ShortcutLayoutsLabel.Text = localize("ShortcutLayouts");
         ShortcutAudioMuteLabel.Text = localize("ShortcutAudioMute");
+        ShortcutRfPlayPauseLabel.Text = localize("ShortcutRfPlayPause");
+        ShortcutRfStepFieldLabel.Text = localize("ShortcutRfStepField");
+        ShortcutRfOpenFileLabel.Text = localize("ShortcutRfOpenFile");
         ShortcutBackLabel.Text = localize("Back");
 
         AboutHeading.Text = localize("About");
@@ -184,4 +187,14 @@ public sealed partial class SettingsView : UserControl
     private void RefreshTools_Click(object sender, RoutedEventArgs e) => RefreshToolsRequested?.Invoke(this, EventArgs.Empty);
 
     private void OpenSettingsFolder_Click(object sender, RoutedEventArgs e) => OpenSettingsFolderRequested?.Invoke(this, EventArgs.Empty);
+
+    private void ShortcutsCard_SizeChanged(object sender, SizeChangedEventArgs e)
+    {
+        var singleColumn = e.NewSize.Width > 0 && e.NewSize.Width < 560;
+        ShortcutsSecondColumn.Width = singleColumn ? new GridLength(0) : new GridLength(1, GridUnitType.Star);
+        ShortcutsGrid.ColumnSpacing = singleColumn ? 0 : 24;
+        ShortcutsGrid.RowSpacing = singleColumn ? 8 : 0;
+        Grid.SetColumn(ShortcutsRightColumn, singleColumn ? 0 : 1);
+        Grid.SetRow(ShortcutsRightColumn, singleColumn ? 1 : 0);
+    }
 }

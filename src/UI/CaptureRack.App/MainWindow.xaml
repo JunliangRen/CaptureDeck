@@ -202,12 +202,15 @@
             <Grid x:Name="WorkspacePage" Padding="10,8,10,8" ColumnSpacing="8">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*" />
-                    <ColumnDefinition x:Name="StereoMeterColumn" Width="Auto" />
                     <ColumnDefinition x:Name="InspectorDockColumn" Width="Auto" />
                 </Grid.ColumnDefinitions>
 
                 <!-- Left/Center Monitoring Stage -->
-                <Grid x:Name="StageGrid" RowSpacing="8">
+                <Grid x:Name="StageGrid" RowSpacing="8" ColumnSpacing="8">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="*" />
@@ -835,18 +838,16 @@
 
                     <!-- Pluggable Slot: Non-DeckLink / Planned Backend Stage -->
                     <ContentPresenter x:Name="StageSlot" Grid.Row="1" Visibility="Collapsed" />
+                    <controls:BroadcastMeterControl x:Name="StereoMeter" Grid.Column="1" Grid.RowSpan="3" />
                 </Grid>
 
-                <!-- Extracted Persistent Broadcast Stereo Audio Meter Control -->
-                <controls:BroadcastMeterControl x:Name="StereoMeter" Grid.Column="1" />
-
                 <!-- Overlay Scrim when Inspector is floating on narrow windows -->
-                <Border x:Name="InspectorScrim" Grid.ColumnSpan="3" Margin="-10,-8"
+                <Border x:Name="InspectorScrim" Grid.ColumnSpan="2" Margin="-10,-8"
                         Background="{ThemeResource StudioOverlayScrimBrush}" Visibility="Collapsed"
                         Tapped="InspectorScrim_Tapped" />
 
                 <!-- Right Collapsible / Pinnable Modular Inspector Drawer -->
-                <Border x:Name="InspectorPanel" Grid.Column="2" Width="314"
+                <Border x:Name="InspectorPanel" Grid.Column="1" Width="314"
                         Style="{StaticResource StudioInstrumentCardStyle}" Padding="0">
                     <Grid>
                         <Grid.RowDefinitions>

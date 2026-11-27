@@ -38,13 +38,15 @@ public sealed partial class PreviewMonitorOptionsBar : UserControl
 
     public PreviewMonitorOptionsBar() => InitializeComponent();
 
-    public void ApplyCapabilities(WorkspaceCapabilities caps, bool deinterlace, bool matrix, bool ntscGuide)
+    public void ApplyCapabilities(WorkspaceCapabilities caps, bool deinterlace, bool matrix, bool ntscGuide, bool reserveRfControls)
     {
-        MonitorOptionsButton.Visibility = caps.SupportsPreviewDisplayOptions ? Visibility.Visible : Visibility.Collapsed;
+        MonitorOptionsButton.IsEnabled = caps.SupportsPreviewDisplayOptions;
+        MonitorOptionsButton.Visibility = reserveRfControls || caps.SupportsPreviewDisplayOptions ? Visibility.Visible : Visibility.Collapsed;
         DeinterlaceOptions.Visibility = deinterlace ? Visibility.Visible : Visibility.Collapsed;
         MatrixOptions.Visibility = matrix ? Visibility.Visible : Visibility.Collapsed;
         Ntsc480GuideCheckBox.Visibility = ntscGuide ? Visibility.Visible : Visibility.Collapsed;
-        AudioMonitorControlGroup.Visibility = caps.SupportsLocalAudioMonitor ? Visibility.Visible : Visibility.Collapsed;
+        AudioMonitorMuteButton.IsEnabled = AudioMonitorVolumeButton.IsEnabled = caps.SupportsLocalAudioMonitor;
+        AudioMonitorControlGroup.Visibility = reserveRfControls || caps.SupportsLocalAudioMonitor ? Visibility.Visible : Visibility.Collapsed;
     }
 
     public void SyncState(
@@ -82,7 +84,7 @@ public sealed partial class PreviewMonitorOptionsBar : UserControl
             !string.Equals(aspectTag, "Auto", StringComparison.OrdinalIgnoreCase) ||
             !string.Equals(matrixTag, "Auto", StringComparison.OrdinalIgnoreCase) ||
             (!deinterlaceLocked && !string.Equals(deinterlaceTag, "BobWeave", StringComparison.OrdinalIgnoreCase));
-        PreviewOverrideDot.Visibility = hasCustom ? Visibility.Visible : Visibility.Collapsed;
+        PreviewOverrideDot.Opacity = hasCustom ? 1 : 0;
         UpdateAudioMonitorVisuals();
     }
 

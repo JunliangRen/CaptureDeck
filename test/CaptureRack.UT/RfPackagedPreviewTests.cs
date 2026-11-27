@@ -134,6 +134,7 @@ public sealed class RfPackagedPreviewTests(ITestOutputHelper output)
             var last = new int[4];
             int pairs = 0;
             double worstGap = 0;
+            var segmentStart = TimeSpan.FromSeconds((double)offset / rate);
             TimeSpan? previous = null;
             await Task.Run(() => file.Play(0, null, _ => { }, (data, length, first) =>
             {
@@ -142,6 +143,8 @@ public sealed class RfPackagedPreviewTests(ITestOutputHelper output)
                     generation = reading.Generation;
                 if (!decoder.ScopeFeed.TryTakeLatest(ref frame)) return;
                 var field = Assert.IsType<RfPreviewDecoder.FieldPair>(frame!.SourceTag).Second;
+                // The latest-frame slot can still contain the last field from before the injected RF gap.
+                if (field.Timestamp < segmentStart) return;
                 if (previous.HasValue)
                 {
                     double gap = (field.Timestamp - previous.Value).TotalMilliseconds;

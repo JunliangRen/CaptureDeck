@@ -418,6 +418,9 @@ public sealed partial class MainWindow : Window
     {
         InspectorSlot.Content = LiveMediaSource as UserControl ?? (IsDeckLinkActive ? deckLinkInspector :
             IsTestSignalActive ? testSignalInspector : IsRfActive ? rfInspector : plannedInspectorView);
+        Grid.SetColumnSpan(StageToolbar, IsRfActive ? 2 : 1);
+        Grid.SetRow(StereoMeter, IsRfActive ? 1 : 0);
+        Grid.SetRowSpan(StereoMeter, IsRfActive ? 2 : 3);
         RfOptionsSlot.Content = IsRfActive ? rfInspector.PreviewOptions : null;
         MonitorBarSlot.Content = IsRfActive || HasLiveCapture ? monitorOptionsBar : null;
         MonitorBarSlot.Visibility = IsRfActive || HasLiveCapture ? Visibility.Visible : Visibility.Collapsed;
@@ -547,7 +550,7 @@ public sealed partial class MainWindow : Window
         if (IsRfActive)
             LayoutSegmentTrack.Visibility = LayoutFocusBtn.Visibility = LayoutSplitBtn.Visibility = LayoutScopesBtn.Visibility = LayoutSpectrumBtn.Visibility = Visibility.Visible;
         monitorOptionsBar.ApplyCapabilities(caps, LiveMediaSource?.HasDeinterlace ?? true,
-            matrix: !IsRfActive && LiveMediaSource is null, ntscGuide: LiveMediaSource is null);
+            matrix: !IsRfActive && LiveMediaSource is null, ntscGuide: LiveMediaSource is null, reserveRfControls: IsRfActive);
         SplitSpectrumBtn.Visibility = IsRfActive || caps.SupportsAudioSpectrum ? Visibility.Visible : Visibility.Collapsed;
         SplitEventsBtn.Visibility = caps.SupportsEvents ? Visibility.Visible : Visibility.Collapsed;
         ApplyWorkspaceLayout();
@@ -644,7 +647,7 @@ public sealed partial class MainWindow : Window
         if (canDock && inspectorPinned)
         {
             InspectorDockColumn.Width = GridLength.Auto;
-            Grid.SetColumn(InspectorPanel, 2);
+            Grid.SetColumn(InspectorPanel, 1);
             Grid.SetColumnSpan(InspectorPanel, 1);
             InspectorPanel.HorizontalAlignment = HorizontalAlignment.Stretch;
             InspectorPanel.Margin = new Thickness(0);
@@ -656,7 +659,7 @@ public sealed partial class MainWindow : Window
         {
             InspectorDockColumn.Width = new GridLength(0);
             Grid.SetColumn(InspectorPanel, 0);
-            Grid.SetColumnSpan(InspectorPanel, 3);
+            Grid.SetColumnSpan(InspectorPanel, 2);
             InspectorPanel.HorizontalAlignment = HorizontalAlignment.Right;
             InspectorPanel.Margin = new Thickness(0);
             InspectorPanel.Visibility = Visibility.Visible;

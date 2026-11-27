@@ -117,7 +117,7 @@ public sealed partial class MainWindow
             StereoMeter.Reset();
             if (IsRfActive)
             {
-                monitorOptionsBar.ApplyCapabilities(ActiveWorkspaceCapabilities, !IsRfHifiFile, false, !IsRfHifiFile);
+                monitorOptionsBar.ApplyCapabilities(ActiveWorkspaceCapabilities, !IsRfHifiFile, false, !IsRfHifiFile, reserveRfControls: true);
                 ApplyPreviewOptionsToUi();
             }
             if (supported) rfAudioTimer.Start();

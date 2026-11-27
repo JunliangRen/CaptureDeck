@@ -21,7 +21,7 @@ public sealed partial class RfPreviewOptionsBar : UserControl
         4 when VhsStandard.SelectedIndex == 2 => RfPreviewType.SecamVhs,
         4 when VhsStandard.SelectedIndex == 3 => RfPreviewType.MesecamVhs,
         4 when VhsProfile.SelectedIndex == 1 => RfPreviewType.SVhs,
-        4 when VhsAudioOnly.IsChecked == true => RfPreviewType.VhsHifi,
+        4 when VhsProfile.SelectedIndex == 2 => RfPreviewType.VhsHifi,
         int index => (RfPreviewType)Math.Max(0, index)
     };
 
@@ -75,7 +75,6 @@ public sealed partial class RfPreviewOptionsBar : UserControl
                 preferredVideoPreviewTypeIndex = PreviewTypeBox.SelectedIndex;
             Select();
         };
-        VhsAudioOnly.Click += (_, _) => Select();
         BetaMonitorAudio.Click += (_, _) => Select();
         BetaProfile.SelectionChanged += (_, _) => Select();
         VhsStandard.SelectionChanged += (_, _) => Select();
@@ -133,8 +132,11 @@ public sealed partial class RfPreviewOptionsBar : UserControl
             {
                 6 => 2, 7 => 3, _ => Math.Clamp(settings.VhsStandardIndex ?? (settings.PalPreview ? 1 : 0), 0, 3)
             };
-            VhsProfile.SelectedIndex = settings.PreviewTypeIndex == 5 || settings.VhsProfileIndex == 2 ? 1 : 0;
-            VhsAudioOnly.IsChecked = settings.PreviewTypeIndex < 5 && settings.VhsProfileIndex == 1;
+            VhsProfile.SelectedIndex = settings.PreviewTypeIndex switch
+            {
+                5 => 1, 6 or 7 => 0,
+                _ => settings.VhsProfileIndex switch { 1 => 2, 2 => 1, _ => 0 }
+            };
             BetaProfile.SelectedIndex = Math.Clamp(settings.BetaProfileIndex, 0, 4);
             ThreadBudget.Value = Math.Clamp(settings.PreviewDecodeThreads, 1, 64);
             Ac3Delay.Value = settings.Ac3DelayMs;
@@ -158,7 +160,7 @@ public sealed partial class RfPreviewOptionsBar : UserControl
             : preferredVideoPreviewTypeIndex,
         PalPreview = VideoStandard.SelectedIndex == 1,
         VhsStandardIndex = VhsStandard.SelectedIndex,
-        VhsProfileIndex = VhsProfile.SelectedIndex == 1 ? 2 : VhsAudioOnly.IsChecked == true ? 1 : 0,
+        VhsProfileIndex = VhsProfile.SelectedIndex switch { 1 => 2, 2 => 1, _ => 0 },
         BetaProfileIndex = Math.Max(0, BetaProfile.SelectedIndex),
         PreviewDecodeThreads = Threads,
         Ac3DelayMs = Ac3DelayMs,
@@ -289,11 +291,8 @@ public sealed partial class RfPreviewOptionsBar : UserControl
             bool beta = PreviewTypeBox.SelectedIndex == 2;
             bool ld = PreviewType == RfPreviewType.LaserDisc;
             bool standardSelectable = !showVhsProfile && PreviewType != RfPreviewType.RfOnly;
-            SuperVhsItem.IsEnabled = VhsStandard.SelectedIndex < 2;
+            SuperVhsItem.IsEnabled = VhsHifiItem.IsEnabled = VhsStandard.SelectedIndex < 2;
             if (showVhsProfile && VhsStandard.SelectedIndex >= 2) VhsProfile.SelectedIndex = 0;
-            VhsAudioOnly.Visibility = showVhsProfile && VhsStandard.SelectedIndex < 2 && VhsProfile.SelectedIndex == 0
-                ? Visibility.Visible : Visibility.Collapsed;
-            VhsAudioOnly.IsEnabled = enabled;
 #if REALTIME_RF
             bool Supports(RfPreviewType type, int profile, int track) =>
                 VHSDecode.Preview.RealtimePreviewCapabilities.IsSupported(
@@ -345,6 +344,6 @@ public sealed partial class RfPreviewOptionsBar : UserControl
         var custom = (FieldViewPanel.Visibility == Visibility.Visible && FieldView.SelectedIndex > 0) ||
             (RegionPanel.Visibility == Visibility.Visible && Region.SelectedIndex > 0) ||
             (CvbsRestore.Visibility == Visibility.Visible && CvbsRestore.IsChecked == true);
-        DecoderOverrideDot.Visibility = custom ? Visibility.Visible : Visibility.Collapsed;
+        DecoderOverrideDot.Opacity = custom ? 1 : 0;
     }
 }

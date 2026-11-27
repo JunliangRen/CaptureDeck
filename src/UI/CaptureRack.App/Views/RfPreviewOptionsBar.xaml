@@ -21,8 +21,9 @@
         <ComboBox x:Name="VhsProfile" Width="88" SelectedIndex="0" Visibility="Collapsed">
             <ComboBoxItem Content="VHS" />
             <ComboBoxItem x:Name="SuperVhsItem" Content="S-VHS" />
+            <ComboBoxItem x:Name="VhsHifiItem" Content="Hi-Fi" />
         </ComboBox>
-        <ComboBox x:Name="BetaProfile" Height="30" CornerRadius="3" SelectedIndex="0"
+        <ComboBox x:Name="BetaProfile" Width="168" Height="30" CornerRadius="3" SelectedIndex="0"
                   VerticalAlignment="Center" Visibility="Collapsed">
             <ComboBoxItem x:Name="BetaStandardItem" Content="Betamax" />
             <ComboBoxItem x:Name="BetaHifiItem" Content="Betamax Hi-Fi" />
@@ -30,8 +31,7 @@
             <ComboBoxItem Content="SuperBeta Hi-Fi" />
             <ComboBoxItem Content="ED Beta" />
         </ComboBox>
-        <CheckBox x:Name="BetaMonitorAudio" Content="Hi-Fi" IsChecked="True" Visibility="Collapsed"/>
-        <ComboBox x:Name="LdTrack" Height="30" CornerRadius="3" SelectedIndex="0"
+        <ComboBox x:Name="LdTrack" Width="176" Height="30" CornerRadius="3" SelectedIndex="0"
                   VerticalAlignment="Center" Visibility="Collapsed">
             <ComboBoxItem x:Name="LdAnalogItem" Content="LD · Analog" />
             <ComboBoxItem x:Name="LdPcmItem" Content="LD · Digital PCM" />
@@ -49,14 +49,14 @@
                 <FontIcon Glyph="&#xE9E9;" FontSize="12" />
                 <TextBlock x:Name="DecoderOptionsLabel" Text="Decoder" FontSize="12" VerticalAlignment="Center" />
                 <Rectangle x:Name="DecoderOverrideDot" Width="5" Height="5" RadiusX="1" RadiusY="1"
-                           Fill="{ThemeResource StudioAccentBrush}" Visibility="Collapsed"
+                           Fill="{ThemeResource StudioAccentBrush}" Opacity="0"
                            VerticalAlignment="Center" />
                 <FontIcon Glyph="&#xE70D;" FontSize="9" Foreground="{ThemeResource StudioTextSecondaryBrush}" />
             </StackPanel>
             <Button.Flyout>
                 <Flyout Placement="BottomEdgeAlignedRight">
                     <StackPanel Width="250" Spacing="10">
-                        <CheckBox x:Name="VhsAudioOnly" Content="VHS Hi-Fi" Visibility="Collapsed" />
+                        <CheckBox x:Name="BetaMonitorAudio" Content="Hi-Fi" IsChecked="True" Visibility="Collapsed"/>
                         <StackPanel x:Name="FieldViewPanel" Visibility="Collapsed">
                             <TextBlock x:Name="FieldViewLabel" Style="{StaticResource StudioFieldLabelStyle}" />
                             <ComboBox x:Name="FieldView" SelectedIndex="0" CornerRadius="3" HorizontalAlignment="Stretch">

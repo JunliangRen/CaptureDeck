@@ -12,7 +12,7 @@
                 <FontIcon Glyph="&#xE7F4;" FontSize="13" />
                 <TextBlock x:Name="MonitorOptionsLabel" Text="Preview" FontSize="12" VerticalAlignment="Center" />
                 <Rectangle x:Name="PreviewOverrideDot" Width="5" Height="5" RadiusX="1" RadiusY="1"
-                           Fill="{ThemeResource StudioAccentBrush}" Visibility="Collapsed"
+                           Fill="{ThemeResource StudioAccentBrush}" Opacity="0"
                            VerticalAlignment="Center" />
                 <FontIcon Glyph="&#xE70D;" FontSize="9" Foreground="{ThemeResource StudioTextSecondaryBrush}" />
             </StackPanel>

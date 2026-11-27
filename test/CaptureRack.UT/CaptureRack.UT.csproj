@@ -13,6 +13,7 @@
     <PackageReference Include="xunit.runner.visualstudio" Version="3.1.5" PrivateAssets="all" />
   </ItemGroup>
   <ItemGroup>
+    <ProjectReference Include="../../src/Capture/CaptureRack.Audio/CaptureRack.Audio.csproj" />
     <ProjectReference Include="../../src/Capture/CaptureRack.Core/CaptureRack.Core.csproj" />
     <ProjectReference Include="../../src/Capture/CaptureCards/CaptureRack.DeckLink/CaptureRack.DeckLink.csproj" />
     <ProjectReference Include="../../src/Capture/CaptureRack.DirectShow/CaptureRack.DirectShow.csproj" />

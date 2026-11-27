@@ -1,10 +1,9 @@
-using CaptureRack.Audio;
 using System.Runtime.InteropServices;
 
-namespace CaptureRack.DeckLink;
+namespace CaptureRack.Audio;
 
 // Non-blocking local speaker monitor for stereo PCM preview.
-// Drops excess packets instead of stalling the DeckLink audio callback, and never alters recorded audio.
+// Drops excess packets instead of stalling the capture callback, and never alters recorded audio.
 public sealed class LocalAudioMonitor : IDisposable
 {
     private readonly WasapiPlayback playback;
@@ -18,9 +17,11 @@ public sealed class LocalAudioMonitor : IDisposable
         set => Volatile.Write(ref volume, Math.Clamp(value, 0.0, 1.0));
     }
 
-    public LocalAudioMonitor(uint sampleRate = CaptureAudio.SampleRate)
+    public LocalAudioMonitor(uint sampleRate = 48000) : this(new WasapiPlayback(sampleRate)) { }
+
+    internal LocalAudioMonitor(WasapiPlayback playback)
     {
-        playback = new(sampleRate);
+        this.playback = playback;
     }
 
     public void SubmitPcm16(ReadOnlySpan<short> samples, TimeSpan? mediaEnd = null)
@@ -38,7 +39,7 @@ public sealed class LocalAudioMonitor : IDisposable
         playback.Submit(bytes, mediaEnd);
     }
 
-    internal void SubmitPcm32(ReadOnlySpan<int> samples)
+    private void SubmitPcm32(ReadOnlySpan<int> samples)
     {
         if (!Enabled || samples.IsEmpty)
             return;
@@ -93,7 +94,7 @@ public sealed class LocalAudioMonitor : IDisposable
         playback.Submit(bytes, null);
     }
 
-    internal void SubmitInterleavedPcm32(ReadOnlySpan<int> samples, int channels, AudioMonitorRoute route,
+    public void SubmitInterleavedPcm32(ReadOnlySpan<int> samples, int channels, AudioMonitorRoute route,
         AudioChannelLayout layout = AudioChannelLayout.Unknown, int activePairMask = 1)
     {
         if (!Enabled || samples.IsEmpty || channels <= 0)

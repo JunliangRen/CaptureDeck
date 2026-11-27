@@ -1,3 +1,4 @@
+using CaptureRack.Audio;
 using System.Diagnostics;
 using System.Globalization;
 using System.Numerics;

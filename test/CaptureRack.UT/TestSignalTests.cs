@@ -1,3 +1,4 @@
+using CaptureRack.Audio;
 using CaptureRack.App;
 using CaptureRack.DeckLink;
 using CaptureRack.QualityControl;
@@ -158,6 +159,67 @@ public sealed class TestSignalTests
         finally
         {
             CaptureRack.Audio.PlaybackDevices.SelectedId = original;
+            directory.Delete(recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task LosingActiveSpeakerDuringRecordingPreservesAllMedia()
+    {
+        var directory = Directory.CreateTempSubdirectory();
+        var connected = new TaskCompletionSource<WasapiPlayback.Session>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var reopening = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        using var disconnect = new ManualResetEventSlim();
+        using var stop = new ManualResetEventSlim();
+        using var monitor = new LocalAudioMonitor(new WasapiPlayback(48000, (session, _) =>
+        {
+            if (connected.TrySetResult(session))
+            {
+                disconnect.Wait(TimeSpan.FromSeconds(10));
+                throw new IOException("Simulated endpoint disconnect");
+            }
+            reopening.TrySetResult();
+            stop.Wait(TimeSpan.FromSeconds(10));
+        })) { Enabled = true };
+        try
+        {
+            var endpoint = await connected.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            var recorder = new PreviewRecorder();
+            using var source = new TestSignal.Session(TestSignalScenario.Normal, new PreviewFeed(), recorder, monitor);
+            source.Emit(0);
+            var path = Path.Combine(directory.FullName, "disconnect.mov");
+            var started = recorder.Start(path);
+            source.Emit(1);
+            Assert.True(endpoint.Take(64, out var samples, out _, out _));
+            Assert.Contains(samples, b => b != 0);
+            disconnect.Set();
+            await reopening.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            // Keep rendering blocked across more packets than fit in the speaker queue.
+            for (int frame = 2; frame <= 15; frame++)
+            {
+                source.Emit(frame);
+                await Task.Delay(33);
+            }
+            var log = CaptureQcLog.Create(recorder.Finish(), started, DateTimeOffset.UtcNow,
+                "Test signal", "Built-in", "Normal", "Stereo");
+            Assert.Null(log.CaptureError);
+            Assert.Equal(15, log.Expected.VideoFrames);
+            Assert.Equal(24024, log.Expected.AudioSampleFrames);
+            Assert.True(File.Exists(path));
+            if (Environment.GetEnvironmentVariable("CAPTURERACK_TEST_SIGNAL_QC") == "1")
+            {
+                using var timeout = new CancellationTokenSource(TimeSpan.FromMinutes(2));
+                var result = await QcReports.RunAsync(path, log, cancellation: timeout.Token);
+                Assert.Equal(QcStatus.Passed, result.Status);
+                Assert.Equal(15, result.DecodedVideoFrames);
+                Assert.Equal(24024, result.DecodedAudioSampleFrames);
+            }
+        }
+        finally
+        {
+            monitor.Enabled = false;
+            disconnect.Set();
+            stop.Set();
             directory.Delete(recursive: true);
         }
     }

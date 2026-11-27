@@ -1,3 +1,4 @@
+using CaptureRack.Audio;
 using System.Runtime.ExceptionServices;
 using CaptureRack.Recording;
 

@@ -1,3 +1,4 @@
+using CaptureRack.Audio;
 using System.Globalization;
 using System.Resources;
 using System.Runtime.InteropServices;

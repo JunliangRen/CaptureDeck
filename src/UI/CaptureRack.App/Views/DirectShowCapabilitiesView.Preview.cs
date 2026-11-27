@@ -1,3 +1,4 @@
+using CaptureRack.Audio;
 using CaptureRack.Core;
 using CaptureRack.DeckLink;
 using CaptureRack.DirectShow.Windows.Capture;

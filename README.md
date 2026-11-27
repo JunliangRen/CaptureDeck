@@ -30,7 +30,7 @@ CaptureRack/
 |   |   |       |   `-- MsTape/         # D-VHS device discovery and MPEG-TS capture
 |   |   |       `-- Interop/            # Shared COM bindings, media types, and sample delivery
 |   |   |-- CaptureRack.SignalCapture    # Sampled-signal capture devices and diagnostics
-|   |   `-- CaptureRack.Audio            # Shared WASAPI monitor output
+|   |   `-- CaptureRack.Audio            # Shared WASAPI speaker output, PCM meters, gain and channel routing
 |   |-- Processing/
 |   |   |-- CaptureRack.Recording       # Shared recording, live encoding, and MKV recovery
 |   |   `-- CaptureRack.QualityControl  # Capture validation and reports

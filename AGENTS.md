@@ -41,6 +41,8 @@ Keep WinUI preview, speaker playback and recording queues independent. Preserve 
 
 Use MISRC-GUI upstream main when comparing RF capture behavior. Bind RF decode options to the public win-x64 Realtime package capabilities. Use its post-block lock snapshot for receiver status and its signed signal planes for RF line measurements. Legacy Domesday Duplicator and protocol-v1 devices require separate endpoint and firmware checks. Gateware identity and a successful full-file verification are both required for a hardware ramp baseline.
 
+Windows x64 WinUI replay has been checked with 40 MSPS PAL S-VHS, NTSC S-VHS-ET, SuperBeta, SuperBeta Hi-Fi and ED Beta captures. Picture and Y/U/V traces advanced in each mode. Both Hi-Fi modes cleared and reacquired the stereo meter across an inserted RF interruption. SuperBeta video-only used the Hi-Fi capture with audio disabled. Conventional NTSC S-VHS still lacks a real fixture. For the host regression, set `CAPTURERACK_TAPE_FIXTURES` to a directory containing `svhs-pal.s16`, `svhs-ntsc-et.s16`, `superbeta.s16` and `edbeta.s16`, and run `RfPackagedPreviewTests` with `TestRealtimeRf=true`.
+
 Run both Windows and portable QC test projects for changes affecting capture. Enable FFmpeg integration with CAPTURERACK_TEST_SIGNAL_QC=1. Keep operator-triggered hardware runs out of CI. Keep the App, Probe and Uno display versions in sync and exclude PDBs from all release packages. Run the candidate workflow at the intended commit before publishing the three verified archives.
 
 See the [validation entry points and support matrix](README.md#validation-and-hardware-support) and the [versioned engineering and hardware evidence](docs/validation/through-v0.7.0.md).

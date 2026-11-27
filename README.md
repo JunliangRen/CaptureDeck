@@ -148,7 +148,7 @@ Preview supports NTSC/PAL VHS, S-VHS, CVBS and standard Betamax at 20 or 40 MSPS
 
 In the RF preview toolbar, choose VHS, then the television system and tape format. NTSC and PAL offer VHS, S-VHS and Hi-Fi. Select Hi-Fi to monitor audio from a Hi-Fi RF input. Betamax profiles with audio retain their monitoring toggle in Decoder options. SECAM and MESECAM offer VHS. In the RF oscilloscope source menu, select RF FFT to view the input spectrum with a linear frequency axis and a 0 to −120 dBFS scale. Mono RF spans DC to half the sample rate. Complex I/Q spans negative to positive half-rate relative to the tuned frequency.
 
-RTL-SDR uses a matching-architecture `rtlsdr.dll` or `librtlsdr.dll` beside the App or Probe executable, or an absolute path set in `CAPTURERACK_RTLSDR_LIBRARY`. Place its native dependencies next to the library and bind the receiver to WinUSB. This optional library is supplied separately.
+Windows builds and publishes of App and Probe include the matching RTL-SDR and libusb DLLs, with Blog V4 VGA support. Bind the receiver to WinUSB. An absolute `CAPTURERACK_RTLSDR_LIBRARY` path can override the bundled library. The accompanying licenses and corresponding source are in `licenses/rtl-sdr/`.
 
 ```powershell
 & $probe rf sdr rtl-sdr list

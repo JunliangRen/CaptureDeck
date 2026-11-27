@@ -39,6 +39,10 @@ def verify(path, version, commit):
             lock = json.loads(LOCK.read_text())
             for app in ("App", "Probe"):
                 prefix = f"{app}/CaptureRack.{app}"
+                rtl = lock["rtl-sdr"]
+                for name, digest in (rtl["win-x64" if x64 else "win-arm64"] | rtl["common"]).items():
+                    require(hashlib.sha256(archive.read(f"{app}/{name}")).hexdigest() == digest,
+                            f"Incorrect RTL-SDR dependency: {app}/{name}")
                 exe = archive.read(prefix + ".exe")
                 pe = struct.unpack_from("<I", exe, 60)[0]
                 require(exe[:2] == b"MZ" and exe[pe:pe+4] == b"PE\0\0" and

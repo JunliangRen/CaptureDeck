@@ -5,5 +5,12 @@
     <RuntimeIdentifier Condition="'$(RuntimeIdentifier)' == ''">win-x64</RuntimeIdentifier>
     <PlatformTarget Condition="'$(RuntimeIdentifier)' == 'win-x64'">x64</PlatformTarget>
     <PlatformTarget Condition="'$(RuntimeIdentifier)' == 'win-arm64'">ARM64</PlatformTarget>
+    <RtlSdrRoot>$(MSBuildThisFileDirectory)third_party/rtl-sdr/</RtlSdrRoot>
   </PropertyGroup>
+  <ItemGroup>
+    <None Include="$(RtlSdrRoot)$(RuntimeIdentifier)/rtlsdr.dll;$(RtlSdrRoot)$(RuntimeIdentifier)/libusb-1.0.dll"
+          Link="%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <None Include="$(RtlSdrRoot)README.md;$(RtlSdrRoot)COPYING-rtl-sdr;$(RtlSdrRoot)COPYING-libusb;$(RtlSdrRoot)source.zip"
+          Link="licenses/rtl-sdr/%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+  </ItemGroup>
 </Project>

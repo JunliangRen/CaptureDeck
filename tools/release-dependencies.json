@@ -14,5 +14,21 @@
       "App": "00c1b1644ed3423f930507085752ebeb7977e0a01cdd4f3766f303396c033bf9",
       "Probe": "a05e371abf96195770ac4f84653d987d63731fed528e98c7fe0d10ce66e37d7e"
     }
+  },
+  "rtl-sdr": {
+    "win-x64": {
+      "libusb-1.0.dll": "35d948ffd20ae820ba133c5b8e62da4686bc2da7f424e2d562f3d7ea5412c9bc",
+      "rtlsdr.dll": "56f3240472dff33d9be46dbdd22fd1331eac65a3f1c203fd52d3178e8814aabc"
+    },
+    "win-arm64": {
+      "libusb-1.0.dll": "12ab9ef84beeb914aaea7b98b684c65bae61539a4b14f0cd09cfa45350f56e62",
+      "rtlsdr.dll": "c31ba9f7d6c1b1f2a409b264fbc8ceac271a6e4f127dedb47cb7586db0f030eb"
+    },
+    "common": {
+      "licenses/rtl-sdr/COPYING-libusb": "319daefe38ebeead3df178e5937898a52d67c0c795f54f1c0bb10ac3b9cffb63",
+      "licenses/rtl-sdr/COPYING-rtl-sdr": "9f2e250993c6206fac643824e05e5a0d7d3e0895d9e09a5ce4b12bc2610afc11",
+      "licenses/rtl-sdr/README.md": "e0ebbf92e6012a3ea99e5d2dfdf973dba77e0bc4e3bddad80cb0b7fa31312131",
+      "licenses/rtl-sdr/source.zip": "524bf9a88edac6f633af5ce6220387173ab704dd33fdf9c946c1017339023d45"
+    }
   }
 }

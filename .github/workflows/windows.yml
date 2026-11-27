@@ -60,13 +60,19 @@ jobs:
       - name: Verify published executable architecture
         run: |
           $machine = if ($env:RID -eq 'win-arm64') { 0xAA64 } else { 0x8664 }
-          foreach ($file in 'App/CaptureRack.App.exe', 'Probe/CaptureRack.Probe.exe') {
+          foreach ($file in 'App/CaptureRack.App.exe', 'Probe/CaptureRack.Probe.exe',
+                           'App/rtlsdr.dll', 'App/libusb-1.0.dll', 'Probe/rtlsdr.dll', 'Probe/libusb-1.0.dll') {
             $bytes = [IO.File]::ReadAllBytes((Resolve-Path "bin/publish/$file"))
             $header = [BitConverter]::ToInt32($bytes, 0x3c)
             if ([BitConverter]::ToUInt16($bytes, $header + 4) -ne $machine) {
               throw "Wrong executable architecture: $file"
             }
           }
+      - name: Load bundled RTL-SDR runtime
+        run: |
+          $env:CAPTURERACK_RTLSDR_LIBRARY = $null
+          & ./bin/publish/Probe/CaptureRack.Probe.exe rf sdr rtl-sdr list --json
+          if ($LASTEXITCODE -ne 0) { throw "Cannot enumerate with the bundled RTL-SDR runtime" }
       - name: Verify DeckLink is optional
         run: |
           $output = & ./bin/publish/Probe/CaptureRack.Probe.exe list 2>&1

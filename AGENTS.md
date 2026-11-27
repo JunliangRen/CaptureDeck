@@ -39,6 +39,8 @@ This is the repository handoff for coding agents. Start with the current Git sta
 
 Keep WinUI preview, speaker playback and recording queues independent. Preserve capture buffers before returning from borrowed sample callbacks. Treat preview skips, recording loss and unavailable telemetry as distinct observations. Report software recording failures and preserve interrupted media for QC.
 
+Windows App and Probe builds require the RID-specific RTL-SDR and libusb DLLs from `third_party/rtl-sdr`. Both build and publish include the corresponding source and notices. The x64 bundle enumerated and probed a physical RTL-SDR Blog V4 (R828D, manual VGA available) without an environment override. ARM64 device operation is unverified.
+
 Use MISRC-GUI upstream main when comparing RF capture behavior. Bind RF decode options to the public win-x64 Realtime package capabilities. Use its post-block lock snapshot for receiver status and its signed signal planes for RF line measurements. Legacy Domesday Duplicator and protocol-v1 devices require separate endpoint and firmware checks. Gateware identity and a successful full-file verification are both required for a hardware ramp baseline.
 
 The RF oscilloscope offers an input FFT in both file and receiver sessions, including RF-only mode. Level windows retain up to 4096 consecutive ADC or I/Q samples per measurement. WinUI file replay at 40 MSPS verified a 5 MHz half-scale tone and switching the VHS toolbar between NTSC, PAL, SECAM and MESECAM. The latter two offer the packaged VHS decoder only.

@@ -17,7 +17,11 @@ public sealed class RfPreviewSession(RfRecording request)
     private long frames;
 
     public void Run(Func<int?> vga, Action<RfMeasurement> report, CancellationToken stop,
-        Action<byte[], int, long>? previewSamples = null)
+        Action<byte[], int, long>? previewSamples = null) =>
+        Run((consume, token) => ReadDevice(vga, consume, token), report, stop, previewSamples);
+
+    internal void Run(Action<Action<byte[], int>, CancellationToken> read, Action<RfMeasurement> report,
+        CancellationToken stop, Action<byte[], int, long>? previewSamples = null)
     {
         var a = new RfRecording.LevelWindow();
         var b = new RfRecording.LevelWindow();
@@ -48,24 +52,7 @@ public sealed class RfPreviewSession(RfRecording request)
 
         try
         {
-            if (request.Ddd is not { } device)
-                RtlSdrProbe.Stream(request.Rtl!, new(request.Frequency, (uint)request.RtlSampleRate, 0, VgaIndex: vga()), vga, Consume, stop);
-            else DomesdayStream.WithDevice(device, (usb, probe, session) =>
-            {
-                live.Source = new(device.UsbId, device.InstanceId, probe.Firmware.ToString(), probe.FirmwareRelease,
-                    probe.Fx3Commit, probe.GatewareCommit, request.Rate, request.HalfRate ? 2 : 1,
-                    request.TestRamp, request.Sw401, request.FormatName, request.SoftwareDecimation);
-                live.IntervalReceived = block => { lock (gate) clip?.Accept(block); };
-                live.FailedRead = () =>
-                {
-                    lock (gate)
-                    {
-                        clip?.CountFailure();
-                        if (live.PollingDisabled && clip is not null) clip.SessionTelemetryUnavailable = true;
-                    }
-                };
-                DomesdayStream.Read(usb, probe, session, request.HalfRate, request.TestRamp, live, Consume, stop);
-            });
+            read(Consume, stop);
         }
         catch (Exception ex)
         {
@@ -77,6 +64,28 @@ public sealed class RfPreviewSession(RfRecording request)
             throw;
         }
         finally { lock (gate) { ended = true; Monitor.PulseAll(gate); } }
+    }
+
+    private void ReadDevice(Func<int?> vga, Action<byte[], int> consume, CancellationToken stop)
+    {
+        if (request.Ddd is not { } device)
+            RtlSdrProbe.Stream(request.Rtl!, new(request.Frequency, (uint)request.RtlSampleRate, 0, VgaIndex: vga()), vga, consume, stop);
+        else DomesdayStream.WithDevice(device, (usb, probe, session) =>
+        {
+            live.Source = new(device.UsbId, device.InstanceId, probe.Firmware.ToString(), probe.FirmwareRelease,
+                probe.Fx3Commit, probe.GatewareCommit, request.Rate, request.HalfRate ? 2 : 1,
+                request.TestRamp, request.Sw401, request.FormatName, request.SoftwareDecimation);
+            live.IntervalReceived = block => { lock (gate) clip?.Accept(block); };
+            live.FailedRead = () =>
+            {
+                lock (gate)
+                {
+                    clip?.CountFailure();
+                    if (live.PollingDisabled && clip is not null) clip.SessionTelemetryUnavailable = true;
+                }
+            };
+            DomesdayStream.Read(usb, probe, session, request.HalfRate, request.TestRamp, live, consume, stop);
+        });
     }
 
     private void CopyPosition(DomesdayDiagnostics target)

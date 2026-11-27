@@ -98,9 +98,16 @@ public sealed partial class MainWindow
         RenderLumaRange(null);
     }
 
-    private async void RfFieldStep_Click(object sender, RoutedEventArgs args)
+    private void RfFieldStep_Click(object sender, RoutedEventArgs args)
     {
 #if REALTIME_RF
+        StepRfFieldAsync(sender);
+#endif
+    }
+
+#if REALTIME_RF
+    private async void StepRfFieldAsync(object sender)
+    {
         if (inspectingField || rfPreviewStop is not null || heldDecoder is not { } renderer ||
             heldPair is not { } pair || rfInspector.PlaybackFile is not { } file || sender is not Button button) return;
         bool forward = button.Tag as string == "1";
@@ -128,10 +135,8 @@ public sealed partial class MainWindow
         rfInspector.PreviewOptions.FieldMode = selected.IsTopField ? 2 : 3;
         RefreshRfInspection();
         UpdateRfPlaybackBar(true);
-#endif
     }
 
-#if REALTIME_RF
     private static RfPreviewDecoder.FieldPair? FindAdjacentPair(RfPlaybackFile file, RealtimePreviewOptions options,
         PreviewField current, bool forward, string? ffmpeg)
     {
@@ -562,7 +567,7 @@ public sealed partial class MainWindow
             }
             if (!hold) { heldPair = null; ClearRfVideoScopes(); }
 #else
-            const bool hold = false;
+            bool hold = false;
 #endif
             if (!hold) { ResetPreview(null); rfGuide = null; }
             rfPreviewReady = false;

@@ -1825,6 +1825,9 @@
   <data name="RfMarkerUnlocked" xml:space="preserve"><value>序列未锁定 · 连续性未验证</value></data>
   <data name="RfMarkerLocked" xml:space="preserve"><value>序列已锁定</value></data>
   <data name="RfMarkerLost" xml:space="preserve"><value>序列失锁</value></data>
+  <data name="RfIdentityShortRead" xml:space="preserve"><value>读取固件标识 {0} 次仍不完整，最后一次收到 {1}/{2} 字节。</value></data>
+  <data name="RfIdentityMismatch" xml:space="preserve"><value>设备返回的固件标识不匹配（签名 0x{0:X2}，寄存器映射版本 {1}，镜像类型 {2}）。</value></data>
+  <data name="RfIdentityUsbError" xml:space="preserve"><value>无法读取设备固件标识（WinUSB 错误 {0}）。</value></data>
   <data name="RfUsbSpeedWarning" xml:space="preserve"><value>40 MSPS 录制建议使用 USB 3 端口和线缆。</value></data>
   <data name="RfSwitchHeader" xml:space="preserve"><value>SW401（拨码 1–4，1 为 ON）</value></data>
   <data name="RfSwitchUnknown" xml:space="preserve"><value>未填写</value></data>

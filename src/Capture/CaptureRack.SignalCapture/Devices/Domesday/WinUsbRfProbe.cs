@@ -69,11 +69,50 @@ public static class WinUsbRfProbe
     private static byte[] ReadRegisterIdentity(WinUsbDevice usb)
     {
         usb.SetControlTimeout(1000);
-        // Read-only firmware handshake from MISRC-GUI.
-        var identity = new byte[12];
-        if (usb.ReadVendorControl(0xb7, identity, "Read RF firmware identity") != identity.Length ||
-            !DomesdayUsb.IsSupportedIdentity(identity))
-            throw new InvalidDataException("The RF device did not return an application image with register map 2.");
-        return identity;
+        return ReadRegisterIdentity(buffer => usb.ReadVendorControl(0xb7, buffer, "Read RF firmware identity"));
     }
+
+    internal static byte[] ReadRegisterIdentity(Func<byte[], uint> read)
+    {
+        const int maxAttempts = 3;
+        for (int attempt = 1; ; attempt++)
+        {
+            var identity = new byte[12];
+            uint received;
+            try { received = read(identity); }
+            catch (IOException ex) when (ex.InnerException is System.ComponentModel.Win32Exception win32)
+            {
+                throw new DomesdayIdentityException("RfIdentityUsbError",
+                    "Cannot read the Domesday Duplicator firmware identity (WinUSB {0}).", ex, win32.NativeErrorCode);
+            }
+
+            if (received == identity.Length)
+            {
+                if (DomesdayUsb.IsSupportedIdentity(identity)) return identity;
+                throw new DomesdayIdentityException("RfIdentityMismatch",
+                    "Unsupported Domesday Duplicator firmware identity (signature 0x{0:X2}, register map {1}, image {2}).",
+                    null, identity[0], identity[1], identity[11]);
+            }
+            if (attempt == maxAttempts)
+                throw new DomesdayIdentityException("RfIdentityShortRead",
+                    "Firmware identity incomplete after {0} reads (last read {1} of {2} bytes).",
+                    null, attempt, received, identity.Length);
+            Thread.Sleep(25);
+        }
+    }
+}
+
+public sealed class DomesdayIdentityException : IOException
+{
+    private readonly object[] arguments;
+    private readonly string resourceKey;
+
+    internal DomesdayIdentityException(string resourceKey, string message, Exception? inner, params object[] arguments)
+        : base(string.Format(message, arguments), inner)
+    {
+        this.resourceKey = resourceKey;
+        this.arguments = arguments;
+    }
+
+    public string Localize(Func<string, string> lookup) => string.Format(lookup(resourceKey), arguments);
 }

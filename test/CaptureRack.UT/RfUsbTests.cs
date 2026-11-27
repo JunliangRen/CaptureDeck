@@ -43,6 +43,43 @@ public sealed class RfUsbTests
     }
 
     [Fact]
+    public void IdentityRetriesOnlyIncompleteReplies()
+    {
+        int calls = 0;
+        var result = WinUsbRfProbe.ReadRegisterIdentity(buffer =>
+        {
+            calls++;
+            if (calls == 1) return 0;
+            if (calls == 2) return 11;
+            buffer[0] = 0x44;
+            buffer[1] = 2;
+            buffer[11] = 1;
+            return 12;
+        });
+        Assert.Equal(3, calls);
+        Assert.True(DomesdayUsb.IsSupportedIdentity(result));
+    }
+
+    [Theory]
+    [InlineData(0, 3, "RfIdentityShortRead")]
+    [InlineData(11, 3, "RfIdentityShortRead")]
+    [InlineData(12, 1, "RfIdentityMismatch")]
+    public void IdentityFailureReportsTheRightReasonAndAttemptCount(uint length, int expected, string key)
+    {
+        int calls = 0;
+        var error = Assert.Throws<DomesdayIdentityException>(() => WinUsbRfProbe.ReadRegisterIdentity(buffer =>
+        {
+            calls++;
+            buffer[0] = 0x44;
+            buffer[1] = 3;
+            buffer[11] = 1;
+            return length;
+        }));
+        Assert.Equal(expected, calls);
+        Assert.Equal(key, error.Localize(resource => resource));
+    }
+
+    [Fact]
     public void ValidatesApplicationImageAndRegisterMap()
     {
         byte[] identity = [0x44, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1];

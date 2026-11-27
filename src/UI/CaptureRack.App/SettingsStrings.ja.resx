@@ -1825,6 +1825,9 @@
   <data name="RfMarkerUnlocked" xml:space="preserve"><value>シーケンス未ロック · 連続性未確認</value></data>
   <data name="RfMarkerLocked" xml:space="preserve"><value>シーケンスロック中</value></data>
   <data name="RfMarkerLost" xml:space="preserve"><value>シーケンスロック喪失</value></data>
+  <data name="RfIdentityShortRead" xml:space="preserve"><value>ファームウェア識別情報を {0} 回読み取りましたが、最後の応答も {1}/{2} バイトでした。</value></data>
+  <data name="RfIdentityMismatch" xml:space="preserve"><value>ファームウェア識別情報が一致しません（署名 0x{0:X2}、レジスタマップ {1}、イメージ種別 {2}）。</value></data>
+  <data name="RfIdentityUsbError" xml:space="preserve"><value>ファームウェア識別情報を読み取れません（WinUSB エラー {0}）。</value></data>
   <data name="RfUsbSpeedWarning" xml:space="preserve"><value>40 MSPS では USB 3 ポートとケーブルを使用してください。</value></data>
   <data name="RfSwitchHeader" xml:space="preserve"><value>SW401（スイッチ 1～4、1 は ON）</value></data>
   <data name="RfSwitchUnknown" xml:space="preserve"><value>未入力</value></data>

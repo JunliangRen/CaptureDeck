@@ -43,6 +43,8 @@ For supported raw DirectShow frame layouts with a legacy VIDEOINFOHEADER, use th
 
 Windows App and Probe builds require the RID-specific RTL-SDR and libusb DLLs from `third_party/rtl-sdr`. Both build and publish include the corresponding source and notices. The x64 bundle enumerated and probed a physical RTL-SDR Blog V4 (R828D, manual VGA available) without an environment override. ARM64 device operation is unverified.
 
+Domesday protocol-v1 identity reads retry short responses up to three total attempts. A complete mismatched identity fails immediately. Keep this handshake independent of FIFO telemetry polling. Ten consecutive WinUI refreshes on the local 3.2.0 device returned its version with no diagnostic banner.
+
 Use MISRC-GUI upstream main when comparing RF capture behavior. Bind RF decode options to the public win-x64 Realtime package capabilities. Use its post-block lock snapshot for receiver status and its signed signal planes for RF line measurements. Legacy Domesday Duplicator and protocol-v1 devices require separate endpoint and firmware checks. Gateware identity and a successful full-file verification are both required for a hardware ramp baseline.
 
 The RF oscilloscope offers an input FFT in both file and receiver sessions, including RF-only mode. Level windows retain up to 4096 consecutive ADC or I/Q samples per measurement. WinUI file replay at 40 MSPS verified a 5 MHz half-scale tone and switching the VHS toolbar between NTSC, PAL, SECAM and MESECAM. The latter two offer the packaged VHS decoder only.

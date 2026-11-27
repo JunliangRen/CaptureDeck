@@ -33,6 +33,7 @@ public sealed partial class RfInspectorView : UserControl
     private RfSettings savedSettings = new();
     private string? activeDeviceKey;
     private bool isFallbackDevice;
+    private List<Func<string>> discoveryMessages = [];
     private Func<string, string> localize = key => key;
 
     internal RfPreviewOptionsBar PreviewOptions { get; } = new();
@@ -205,6 +206,7 @@ public sealed partial class RfInspectorView : UserControl
     public void Bind(Func<string, string> labels)
     {
         localize = labels;
+        RenderDiscoveryMessages();
         restoring = true;
         try
         {
@@ -550,14 +552,14 @@ public sealed partial class RfInspectorView : UserControl
         var (choices, messages) = await Task.Run(() =>
         {
             List<Choice> devices = [];
-            List<string> errors = [];
+            List<Func<string>> errors = [];
             try
             {
                 foreach (var d in WinUsbRfProbe.ListDevices())
                 {
                     if (!d.WinUsbBound)
                     {
-                        errors.Add($"{d.UsbId} · WinUSB required ({d.DriverService})");
+                        errors.Add(() => $"{d.UsbId} · WinUSB required ({d.DriverService})");
                         continue;
                     }
                     string? version = d.VendorId == 0x1d50 ? "Legacy" : null;
@@ -565,15 +567,16 @@ public sealed partial class RfInspectorView : UserControl
                     {
                         var probe = WinUsbRfProbe.Probe(d.InstanceId);
                         version ??= probe.FirmwareRelease;
-                        if (probe.RecommendUsb3) errors.Add($"{d.UsbId} · {probe.LinkSpeedHint} · {localize("RfUsbSpeedWarning")}");
+                        if (probe.RecommendUsb3) errors.Add(() => $"{d.UsbId} · {probe.LinkSpeedHint} · {localize("RfUsbSpeedWarning")}");
                     }
-                    catch (IOException ex) { errors.Add(ex.Message); }
-                    catch (InvalidDataException ex) { errors.Add(ex.Message); }
+                    catch (DomesdayIdentityException ex) { errors.Add(() => ex.Localize(localize)); }
+                    catch (IOException ex) { errors.Add(() => ex.Message); }
+                    catch (InvalidDataException ex) { errors.Add(() => ex.Message); }
                     devices.Add(new(RfDeviceSelectionHelper.BuildDddKey(d.InstanceId),
                         version is null ? d.Model : $"{d.Model} {version}", d, null, false));
                 }
             }
-            catch (Exception ex) { errors.Add(ex.Message); }
+            catch (Exception ex) { errors.Add(() => ex.Message); }
             try
             {
                 foreach (var r in RtlSdrProbe.List())
@@ -584,13 +587,13 @@ public sealed partial class RfInspectorView : UserControl
                         devices.Add(new(RfDeviceSelectionHelper.BuildRtlKey(r.Index, r.Name),
                             r.Name, null, r, caps.SupportsManualVga));
                     }
-                    catch (Exception ex) { errors.Add(ex.Message); }
+                    catch (Exception ex) { errors.Add(() => ex.Message); }
                 }
             }
-            catch (Exception ex) { errors.Add(ex.Message); }
+            catch (Exception ex) { errors.Add(() => ex.Message); }
             return (devices, errors);
         });
-        if (choices.Count == 0) messages.Insert(0, localize("RfNoDevice"));
+        if (choices.Count == 0) messages.Insert(0, () => localize("RfNoDevice"));
         choices.Add(new(RfDeviceSelectionHelper.PlaybackDeviceKey, localize("RfPlayback"), null, null, false, true));
 
         restoring = true;
@@ -614,9 +617,15 @@ public sealed partial class RfInspectorView : UserControl
             restoring = false;
         }
 
-        Diagnostics.Text = string.Join(Environment.NewLine, messages);
-        DiagnosticsBanner.Visibility = messages.Count == 0 ? Visibility.Collapsed : Visibility.Visible;
+        discoveryMessages = messages;
+        RenderDiscoveryMessages();
         refreshing = false;
         Update();
+    }
+
+    private void RenderDiscoveryMessages()
+    {
+        Diagnostics.Text = string.Join(Environment.NewLine, discoveryMessages.Select(render => render()));
+        DiagnosticsBanner.Visibility = discoveryMessages.Count == 0 ? Visibility.Collapsed : Visibility.Visible;
     }
 }

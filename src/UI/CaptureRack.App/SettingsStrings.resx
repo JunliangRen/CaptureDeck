@@ -1825,6 +1825,9 @@
   <data name="RfMarkerUnlocked" xml:space="preserve"><value>Sequence unlocked · continuity unverified</value></data>
   <data name="RfMarkerLocked" xml:space="preserve"><value>Sequence locked</value></data>
   <data name="RfMarkerLost" xml:space="preserve"><value>Sequence lock lost</value></data>
+  <data name="RfIdentityShortRead" xml:space="preserve"><value>Firmware identity incomplete after {0} reads (last read {1} of {2} bytes).</value></data>
+  <data name="RfIdentityMismatch" xml:space="preserve"><value>Unsupported Domesday Duplicator firmware identity (signature 0x{0:X2}, register map {1}, image {2}).</value></data>
+  <data name="RfIdentityUsbError" xml:space="preserve"><value>Cannot read the Domesday Duplicator firmware identity (WinUSB {0}).</value></data>
   <data name="RfUsbSpeedWarning" xml:space="preserve"><value>Use a USB 3 port and cable for 40 MSPS.</value></data>
   <data name="RfSwitchHeader" xml:space="preserve"><value>SW401 (switches 1–4, 1 = ON)</value></data>
   <data name="RfSwitchUnknown" xml:space="preserve"><value>Not declared</value></data>

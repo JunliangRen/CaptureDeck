@@ -20,6 +20,7 @@ public sealed partial class MainWindow
     private bool IsRfHifiFile => IsRfActive && rfInspector.PreviewOptions.PreviewType == RfPreviewType.VhsHifi;
     private bool RfHasAudio => IsRfActive && rfInspector.PreviewOptions.HasAudio;
     private bool RfHasVideoOutput => IsRfActive && !IsRfHifiFile && rfInspector.PreviewOptions.PreviewType != RfPreviewType.RfOnly;
+    private string RfErrorMessage(Exception ex) => ex is DomesdayIdentityException identity ? identity.Localize(L) : ex.Message;
     private bool IsRfActive => activeModule.Descriptor.Category == CaptureBackendCategory.SignalCapture;
     private readonly RfCaptureSession rfSession = new();
     private bool rfWriterActive;
@@ -194,7 +195,7 @@ public sealed partial class MainWindow
                 pair = heldPair = found;
                 selected = forward ? pair.First : pair.Second;
             }
-            catch (Exception ex) { SetStatus("PreviewFailed", () => ex.Message, InfoBarSeverity.Error); return; }
+            catch (Exception ex) { SetStatus("PreviewFailed", () => RfErrorMessage(ex), InfoBarSeverity.Error); return; }
             finally { inspectingField = false; UpdateControls(); }
         }
         playbackPosition = Math.Clamp((long)Math.Round(selected.Timestamp.TotalSeconds * file.Rate), 0, file.Samples);
@@ -475,7 +476,7 @@ public sealed partial class MainWindow
             UpdateControls();
             await LoadRfPlaybackAsync(rfFile.Path);
         }
-        catch (Exception ex) { SetStatus("PreviewFailed", () => ex.Message, InfoBarSeverity.Error); }
+        catch (Exception ex) { SetStatus("PreviewFailed", () => RfErrorMessage(ex), InfoBarSeverity.Error); }
         finally { if (openingPlayback) { openingPlayback = false; UpdateControls(); } }
     }
 
@@ -544,7 +545,7 @@ public sealed partial class MainWindow
             if (picked is null) return;
             await LoadRfPlaybackAsync(picked.Path);
         }
-        catch (Exception ex) { SetStatus("PreviewFailed", () => ex.Message, InfoBarSeverity.Error); }
+        catch (Exception ex) { SetStatus("PreviewFailed", () => RfErrorMessage(ex), InfoBarSeverity.Error); }
         finally { openingPlayback = false; UpdateControls(); }
     }
 
@@ -592,7 +593,7 @@ public sealed partial class MainWindow
         {
             await rfSession.StartPreviewAsync(request, stop => PresentRfAsync(request, file, stop));
         }
-        catch (Exception ex) { SetStatus("PreviewFailed", () => ex.Message, InfoBarSeverity.Error); }
+        catch (Exception ex) { SetStatus("PreviewFailed", () => RfErrorMessage(ex), InfoBarSeverity.Error); }
         finally
         {
             rfPreviewReady = false;
@@ -774,7 +775,7 @@ public sealed partial class MainWindow
             }
             SetStatus("PreviewStopped", "RfReadyHint");
         }
-        catch (Exception ex) { SetStatus("PreviewFailed", () => ex.Message, InfoBarSeverity.Error); }
+        catch (Exception ex) { SetStatus("PreviewFailed", () => RfErrorMessage(ex), InfoBarSeverity.Error); }
         finally
         {
             timer.Stop();
@@ -900,8 +901,8 @@ public sealed partial class MainWindow
         }
         catch (Exception ex)
         {
-            RfFile.Text = ex.Message;
-            SetStatus("RecordingFailed", () => ex.Message, InfoBarSeverity.Error);
+            RfFile.Text = RfErrorMessage(ex);
+            SetStatus("RecordingFailed", () => RfErrorMessage(ex), InfoBarSeverity.Error);
         }
         finally
         {

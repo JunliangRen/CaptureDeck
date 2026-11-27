@@ -161,21 +161,7 @@ public sealed record RfRecording(RfUsbDevice? Ddd, RtlSdrDevice? Rtl, bool HalfR
                 cancel.Cancel();
             }
         });
-        void Enqueue(byte[] buffer, int count)
-        {
-            var copy = ArrayPool<byte>.Shared.Rent(count);
-            Buffer.BlockCopy(buffer, 0, copy, 0, count);
-            lock (queue)
-            {
-                if (queue.Writer.TryWrite((copy, count)))
-                {
-                    diagnostics?.ObserveQueue(queue.Reader.Count);
-                    return;
-                }
-            }
-            ArrayPool<byte>.Shared.Return(copy);
-            throw new IOException("RF recording queue overflow. Output retained as partial.");
-        }
+        void Enqueue(byte[] buffer, int count) => EnqueueBlock(queue, buffer, count, diagnostics);
         try
         {
             acquire(Enqueue, cancel.Token);
@@ -209,6 +195,33 @@ public sealed record RfRecording(RfUsbDevice? Ddd, RtlSdrDevice? Rtl, bool HalfR
         output.Finish();
         inspect?.Invoke(partial, frames);
         if (!deferPublish) File.Move(partial, final);
+    }
+
+    internal static void EnqueueBlock(System.Threading.Channels.Channel<(byte[] Data, int Length)> queue,
+        byte[] buffer, int count, DomesdayDiagnostics? diagnostics)
+    {
+        var timing = diagnostics?.UsbCallbackTiming;
+        timing?.Stage(CallbackStage.Rent);
+        var copy = ArrayPool<byte>.Shared.Rent(count);
+        timing?.Stage(CallbackStage.Copy);
+        Buffer.BlockCopy(buffer, 0, copy, 0, count);
+        timing?.Stage(CallbackStage.QueueLock);
+        lock (queue)
+        {
+            timing?.Stage(CallbackStage.Enqueue);
+            if (queue.Writer.TryWrite((copy, count)))
+            {
+                if (diagnostics is not null)
+                {
+                    int depth = queue.Reader.Count;
+                    diagnostics.ObserveQueue(depth);
+                    timing!.Queued(depth);
+                }
+                return;
+            }
+        }
+        ArrayPool<byte>.Shared.Return(copy);
+        throw new IOException("RF recording queue overflow. Output retained as partial.");
     }
 
     internal sealed class LevelWindow

@@ -162,7 +162,9 @@ internal sealed class DomesdayStream(bool legacy, DomesdayRamp? ramp = null, Dom
                 if (skip == count) return false;
                 if (skip != 0) Buffer.BlockCopy(buffer, skip, buffer, 0, count - skip);
                 count -= skip;
+                diagnostics.UsbCallbackTiming.Stage(CallbackStage.Convert);
                 decoder.Convert(buffer.AsSpan(0, count));
+                diagnostics.UsbCallbackTiming.Stage(CallbackStage.Other);
                 consume(buffer, count);
                 return true;
             }, stop, legacy ? null : diagnostics, session, diagnostics);

@@ -8,6 +8,53 @@ namespace CaptureRack.UT;
 
 public class RfRecordingTests
 {
+    [Fact]
+    public void ContendedWriteQueueIdentifiesTheDelayedUsbCallbackAndPreservesTheFaultWindow()
+    {
+        var diagnostics = new DomesdayDiagnostics();
+        var timing = diagnostics.UsbCallbackTiming;
+        var queue = System.Threading.Channels.Channel.CreateBounded<(byte[] Data, int Length)>(1);
+        using var started = new ManualResetEventSlim();
+        var worker = new Thread(() =>
+        {
+            timing.Begin(3, 0);
+            started.Set();
+            RfRecording.EnqueueBlock(queue, new byte[256], 256, diagnostics);
+            diagnostics.Position = new(128, 0, null, null, 128);
+            diagnostics.FinishUsbCallback();
+        });
+        lock (queue)
+        {
+            worker.Start();
+            Assert.True(started.Wait(TimeSpan.FromSeconds(5)));
+            Assert.True(SpinWait.SpinUntil(() => (worker.ThreadState & System.Threading.ThreadState.WaitSleepJoin) != 0,
+                TimeSpan.FromSeconds(5)));
+            Thread.Sleep(102);
+        }
+        Assert.True(worker.Join(TimeSpan.FromSeconds(5)));
+        Assert.True(queue.Reader.TryRead(out var block));
+        System.Buffers.ArrayPool<byte>.Shared.Return(block.Data);
+        diagnostics.UsbState = new("CheckUnderflow", 129, 2, 15, 256, 256, false, null);
+        diagnostics.CaptureFault(new IOException("Simulated exhausted request ring"));
+        var delayed = Assert.Single(timing.Recent);
+        Assert.Equal((1L, 3, 0L, 128L), (delayed.Number, delayed.Slot, delayed.FirstSample, delayed.EndSample));
+        Assert.True(delayed.QueueLockMs >= 95, $"Measured queue lock {delayed.QueueLockMs} ms");
+        Assert.Equal(delayed.TotalMs, delayed.OtherMs + delayed.ConvertMs + delayed.RentMs + delayed.CopyMs +
+            delayed.QueueLockMs + delayed.EnqueueMs, 6);
+        Assert.Equal(1, delayed.QueueBlocks);
+        Assert.Equal(delayed, timing.Longest);
+        Assert.Equal(delayed.TotalMs, diagnostics.UsbCallbackMaxMs, 6);
+        ValidationEvidence.Save("usb-callback-stall", diagnostics);
+        for (int i = 0; i < 17; i++)
+        {
+            timing.Begin(i % 16, 128);
+            diagnostics.FinishUsbCallback();
+        }
+        Assert.Equal(16, timing.Recent.Length);
+        Assert.Equal(3, timing.Recent[0].Number);
+        Assert.Equal(18, timing.Recent[^1].Number);
+    }
+
     [Theory]
     [InlineData(250000)]
     [InlineData(1024000)]

@@ -17,6 +17,7 @@ TESTS = {
     "LosingActiveSpeakerDuringRecordingPreservesAllMedia": "input",
     "RetiringWorkerCannotClearNewSessionOrPublishItsClock": "input",
     "DroppedSampleReportCorrelatesSequenceUsbFifoAndWriterQueue": "transport",
+    "ContendedWriteQueueIdentifiesTheDelayedUsbCallbackAndPreservesTheFaultWindow": "transport",
 }
 
 

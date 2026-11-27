@@ -286,10 +286,10 @@ internal sealed unsafe partial class WinUsbDevice : IDisposable
                 if (bytes != size) throw new IOException($"Short DdD bulk read: requested {size}, received {bytes}.");
                 operation = "Consume";
                 diagnostics.UsbState = State();
-                long start = System.Diagnostics.Stopwatch.GetTimestamp();
+                diagnostics.UsbCallbackTiming.Begin(slot, diagnostics.Position?.SampleIndex ?? 0);
                 bool streaming;
                 try { streaming = consume(request.Buffer, size); }
-                finally { diagnostics.ObserveCallback(start); }
+                finally { diagnostics.FinishUsbCallback(); }
                 stopping |= stop.IsCancellationRequested;
                 if (stopping) continue;
                 operation = "Resubmit";

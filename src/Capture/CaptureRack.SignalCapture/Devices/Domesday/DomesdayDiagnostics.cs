@@ -39,6 +39,8 @@ internal sealed class DomesdayDiagnostics : DomesdayFifoTelemetry
     public int WriteQueuePeakBlocks => Volatile.Read(ref queuePeak);
     public string? Error { get; private set; }
 
+    public DomesdayCallbackTiming UsbCallbackTiming { get; } = new();
+
     private long callbackTicks, longestCallbackTicks;
     public long UsbCallbackCount { get; private set; }
     public double UsbCallbackMaxMs => longestCallbackTicks * 1000d / Stopwatch.Frequency;
@@ -46,8 +48,12 @@ internal sealed class DomesdayDiagnostics : DomesdayFifoTelemetry
 
     // Only the USB thread updates these, and the report is serialized after it returns.
     public void ObserveCallback(long start)
+        => AddCallback(Stopwatch.GetTimestamp() - start);
+
+    internal void FinishUsbCallback() => AddCallback(UsbCallbackTiming.End(Position?.SampleIndex ?? 0));
+
+    private void AddCallback(long elapsed)
     {
-        long elapsed = Stopwatch.GetTimestamp() - start;
         UsbCallbackCount++;
         callbackTicks += elapsed;
         longestCallbackTicks = Math.Max(longestCallbackTicks, elapsed);

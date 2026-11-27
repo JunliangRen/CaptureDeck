@@ -15,6 +15,7 @@ public sealed class RfPreviewSession(RfRecording request)
     private Exception? failure;
     private bool ended;
     private long frames;
+    internal bool Matches(RfRecording selected) => selected == request;
 
     public void Run(Func<int?> vga, Action<RfMeasurement> report, CancellationToken stop,
         Action<byte[], int, long>? previewSamples = null) =>

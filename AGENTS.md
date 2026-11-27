@@ -86,6 +86,8 @@ This is the repository handoff for coding agents. Start with the current Git sta
 
 - RTL-SDR recording defaults to 1.024 MSPS input. Frequency and rate menus follow MISRC-GUI main and accept integer Hz entries. Hardware-verified 1.600 MHz / 1.024 MSPS Hi-Fi FLAC (8 MSPS mono) and custom 101.7 MHz / 1,234,567 Hz native I/Q FLAC. Both runs showed VGA index 8 with its default label. Fractional input-rate conversion has cross-block and output-count regression tests.
 
+- RF transport commands and serial ramp verification are owned by RfCaptureSession in SignalCapture. WinUI supplies presentation, seek and decoder controls, and observes each completed clip's QC task. Headless tests exercise one receiver across consecutive clips with the first verification blocked. A WinUI 40 MSPS ramp regression on firmware 3.2.0 verified both FLAC files, independent clip counters and continuing meter updates across stops and layout changes.
+
 ## QC and shared decoder plans
 
 - The desktop **Recording output** selection starts at Device original with legacy settings. DeckLink, DirectShow and the built-in test signal share the live FFmpeg writer in CaptureRack.Recording. FFV1 v3 uses slice CRC and FLAC level 8. H.264, H.265, AV1 and MPEG-2 expose bitrate and level, with explicit software deinterlacing for progressive-only profiles. Preview transformations remain independent. FireWire retains its native writer.

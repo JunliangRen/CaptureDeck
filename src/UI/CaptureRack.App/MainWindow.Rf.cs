@@ -20,8 +20,7 @@ public sealed partial class MainWindow
     private bool RfHasAudio => IsRfActive && rfInspector.PreviewOptions.PreviewType is RfPreviewType.VhsHifi or RfPreviewType.BetamaxHifi or RfPreviewType.LaserDisc;
     private bool RfHasVideoOutput => IsRfActive && !IsRfHifiFile && rfInspector.PreviewOptions.PreviewType != RfPreviewType.RfOnly;
     private bool IsRfActive => activeModule.Descriptor.Category == CaptureBackendCategory.SignalCapture;
-    private CancellationTokenSource? rfStop;
-    private Task? rfTask;
+    private readonly RfCaptureSession rfSession = new();
     private bool rfWriterActive;
     private int rfQcPendingCount;
     private bool rfPlaybackBarWasVisible;
@@ -29,9 +28,6 @@ public sealed partial class MainWindow
     private RfMeasurement? displayedRfMeasurement;
     private RfRecording? measuredSource;
 
-    private CancellationTokenSource? rfPreviewStop;
-    private Task? rfPreviewTask;
-    private RfPreviewSession? rfPreview;
     private bool rfPreviewReady;
 
     private RfPreviewAudio? rfAudio;
@@ -66,9 +62,9 @@ public sealed partial class MainWindow
 
     private string ResolveRfDotBrushKey()
     {
-        if (rfStop is not null)
+        if (rfSession.RecordingActive)
             return "StudioRecBrush";
-        if (rfPreviewStop is not null)
+        if (rfSession.PreviewActive)
         {
             var clips = (displayedRfMeasurement?.A.Clips ?? 0) + (displayedRfMeasurement?.B?.Clips ?? 0);
             return clips > 0 ? "StudioCautionBrush" : "StudioSignalLockBrush";
@@ -78,9 +74,9 @@ public sealed partial class MainWindow
 
     private (string DotKey, string LabelKey, string SoftKey) ResolveRfStageBadge()
     {
-        if (rfStop is not null)
+        if (rfSession.RecordingActive)
             return ("StudioRecBrush", "RfStatusRecording", "StudioRecSoftBrush");
-        if (rfPreviewStop is not null)
+        if (rfSession.PreviewActive)
         {
             var label = rfInspector.IsPlayback ? "RfStatusPlaying" : "RfStatusPreviewing";
             return ("StudioSignalLockBrush", label, "StudioSignalLockSoftBrush");
@@ -92,7 +88,7 @@ public sealed partial class MainWindow
 
     private void UpdateRfMeterTimer()
     {
-        var shouldRun = IsRfActive && (rfPreviewStop is not null || rfStop is not null) && !PauseMainWindowRendering;
+        var shouldRun = IsRfActive && (rfSession.PreviewActive || rfSession.RecordingActive) && !PauseMainWindowRendering;
         if (shouldRun && !rfMeterTimer.IsRunning)
             rfMeterTimer.Start();
         else if (!shouldRun && rfMeterTimer.IsRunning)
@@ -171,7 +167,7 @@ public sealed partial class MainWindow
 #if REALTIME_RF
     private async void StepRfFieldAsync(object sender)
     {
-        if (inspectingField || rfPreviewStop is not null || heldDecoder is not { } renderer ||
+        if (inspectingField || rfSession.PreviewActive || heldDecoder is not { } renderer ||
             heldPair is not { } pair || rfInspector.PlaybackFile is not { } file || sender is not Button button) return;
         bool forward = button.Tag as string == "1";
         int mode = rfInspector.PreviewOptions.FieldMode;
@@ -187,7 +183,7 @@ public sealed partial class MainWindow
             {
                 var ffmpeg = file.ContainerRate > 0 ? QcReports.FindTools().FfmpegPath : null;
                 var found = await Task.Run(() => FindAdjacentPair(file, renderer.Options, current, forward, ffmpeg));
-                if (found is null || heldDecoder != renderer || rfPreviewStop is not null || closing) return;
+                if (found is null || heldDecoder != renderer || rfSession.PreviewActive || closing) return;
                 pair = heldPair = found;
                 selected = forward ? pair.First : pair.Second;
             }
@@ -240,7 +236,7 @@ public sealed partial class MainWindow
     private void UpdateFieldButtons()
     {
 #if REALTIME_RF
-        bool held = heldDecoder is not null && heldPair is not null && rfPreviewStop is null && rfInspector.IsPlayback;
+        bool held = heldDecoder is not null && heldPair is not null && !rfSession.PreviewActive && rfInspector.IsPlayback;
 #else
         bool held = false;
 #endif
@@ -267,7 +263,7 @@ public sealed partial class MainWindow
     private void RefreshRfInspection()
     {
 #if REALTIME_RF
-        if (heldDecoder is not { } renderer || heldPair is not { } pair || rfPreviewStop is not null) return;
+        if (heldDecoder is not { } renderer || heldPair is not { } pair || rfSession.PreviewActive) return;
         renderer.FieldMode = rfInspector.PreviewOptions.FieldMode;
         renderer.FullRaster = rfInspector.PreviewOptions.FullRaster;
         renderer.ScopeFeed.ScopeWaveformMode = scopeWaveformMode;
@@ -377,9 +373,9 @@ public sealed partial class MainWindow
         RfOpenFileIcon.Visibility = openingPlayback ? Visibility.Collapsed : Visibility.Visible;
         RfOpenFileSpinner.Visibility = openingPlayback ? Visibility.Visible : Visibility.Collapsed;
         RfOpenFileSpinner.IsActive = openingPlayback;
-        RfOpenFile.IsEnabled = !inspectingField && !openingPlayback && rfPreviewStop is null;
+        RfOpenFile.IsEnabled = !inspectingField && !openingPlayback && !rfSession.PreviewActive;
 
-        var playing = rfPreviewStop is not null;
+        var playing = rfSession.PreviewActive;
         RfPlayPauseIcon.Glyph = playing ? "\uE769" : "\uE768";
         RfPlayPauseButton.IsEnabled = StartButton.IsEnabled;
         ToolTipService.SetToolTip(RfPlayPauseButton, L(playing ? "RfPause" : "RfPlay"));
@@ -495,7 +491,7 @@ public sealed partial class MainWindow
 
     private async void RfOpenFile_Click(object sender, RoutedEventArgs args)
     {
-        if (openingPlayback || rfPreviewStop is not null || !rfInspector.IsPlayback) return;
+        if (openingPlayback || rfSession.PreviewActive || !rfInspector.IsPlayback) return;
         openingPlayback = true;
         UpdateControls();
         try
@@ -527,7 +523,7 @@ public sealed partial class MainWindow
         if (updatingSeek || !rfInspector.IsPlayback || rfInspector.PlaybackFile is not { } file) return;
         playbackPosition = Math.Clamp((long)Math.Round(args.NewValue * file.Rate), 0, file.Samples);
         RfPlaybackTime.Text = $"{PlaybackTime(args.NewValue)} / {PlaybackTime(RfSeek.Maximum)}";
-        if (rfPreviewStop is null)
+        if (!rfSession.PreviewActive)
         {
             DiscardRfInspection();
             seekVersion++;
@@ -550,9 +546,23 @@ public sealed partial class MainWindow
 
     private async Task PreviewRfAsync(RfRecording? request, RfPlaybackFile? file = null)
     {
-        using var stop = new CancellationTokenSource();
-        rfPreviewStop = stop;
-        var session = rfPreview = request is null ? null : new RfPreviewSession(request);
+        try
+        {
+            await rfSession.StartPreviewAsync(request, stop => PresentRfAsync(request, file, stop));
+        }
+        catch (Exception ex) { SetStatus("PreviewFailed", () => ex.Message, InfoBarSeverity.Error); }
+        finally
+        {
+            rfPreviewReady = false;
+            UpdateRfMeterTimer();
+            rfInspector.SetRecording(rfSession.RecordingActive);
+            RenderSourceRackList();
+            UpdateControls();
+        }
+    }
+
+    private async Task PresentRfAsync(RfRecording? request, RfPlaybackFile? file, CancellationToken stop)
+    {
         if (file is not null && playbackPosition >= file.Samples) playbackPosition = 0;
         int activeSeek = seekVersion;
         var vga = rfInspector.VgaReader();
@@ -696,14 +706,14 @@ public sealed partial class MainWindow
             timer.Start();
             void Report(RfMeasurement m) => Volatile.Write(ref latestRfMeasurement, m);
             if (file is null)
-                await Task.Run(() => session!.Run(vga, Report, stop.Token, offer));
+                await rfSession.ReadReceiverAsync(vga, Report, stop, offer);
             else
             {
                 RfFile.Text = file.Path;
                 var ffmpeg = file.ContainerRate == 0 ? null : QcReports.FindTools().FfmpegPath;
                 while (!stop.IsCancellationRequested)
                 {
-                    using var segment = CancellationTokenSource.CreateLinkedTokenSource(stop.Token);
+                    using var segment = CancellationTokenSource.CreateLinkedTokenSource(stop);
                     playbackSegment = segment;
                     bool seeking = activeSeek != seekVersion;
                     activeSeek = seekVersion;
@@ -767,15 +777,8 @@ public sealed partial class MainWindow
             bool hold = false;
 #endif
             if (!hold) { ResetPreview(null); rfGuide = null; }
-            rfPreviewReady = false;
-            rfPreview = null;
             if (hold) rfAudioTimer.Stop();
             if (!hold) ConfigureRfAudioMeter(newSession: true);
-            rfPreviewStop = null;
-            UpdateRfMeterTimer();
-            rfInspector.SetRecording(rfStop is not null);
-            RenderSourceRackList();
-            UpdateControls();
         }
     }
 
@@ -802,9 +805,7 @@ public sealed partial class MainWindow
 
     private async Task RecordRfAsync(RfRecording request)
     {
-        using var stop = new CancellationTokenSource();
-        rfStop = stop;
-        var preview = rfPreview;
+        bool preview = rfSession.PreviewActive;
         string prefix = Path.Combine(OutputPath.Text.Trim(), RecordingFileNaming.BuildPrefix(GetRecordingLabel(), DateTime.Now));
         string path = prefix + request.Suffix;
         var vga = rfInspector.VgaReader();
@@ -813,7 +814,7 @@ public sealed partial class MainWindow
         bool received = false;
         void ReportWriter(RfMeasurement m)
         {
-            if (preview is null) Volatile.Write(ref latestRfMeasurement, m);
+            if (!preview) Volatile.Write(ref latestRfMeasurement, m);
             Volatile.Write(ref received, true);
         }
         timer.Tick += (_, _) =>
@@ -823,14 +824,16 @@ public sealed partial class MainWindow
                 rfWriterActive = true;
                 RenderSourceRackList();
             }
-            if (preview is null) RenderRfMeasurement();
+            if (!preview) RenderRfMeasurement();
             UpdateRecordingClock();
         };
         try
         {
+            var ffmpeg = request.Flac ? QcReports.FindTools().FfmpegPath : null;
+            var recording = rfSession.RecordAsync(rfInspector.IsPlayback, request, prefix, ffmpeg, vga, ReportWriter);
             rfInspector.SetRecording(true);
             RenderSourceRackList();
-            if (preview is null) ResetRfMonitor();
+            if (!preview) ResetRfMonitor();
             RenderCounts(null);
             RfFile.Text = path;
             timer.Start();
@@ -841,15 +844,9 @@ public sealed partial class MainWindow
             UpdateRfMeterTimer();
             UpdateRecordingIndicator(true);
             SetStatus("RecordingActive", () => path);
-            var ffmpeg = request.Flac ? QcReports.FindTools().FfmpegPath : null;
-            var qc = await Task.Run(() => preview is not null ? preview.Record(prefix, ffmpeg, stop.Token, ReportWriter) : request.Capture(prefix, ffmpeg, vga, ReportWriter, stop.Token));
-            if (qc is null)
-                SetStatus("RecordingSaved", () => path, InfoBarSeverity.Success);
-            else
-            {
-                rfQcTail = RunRfQcAsync(rfQcTail, qc);
-                SetStatus("RfQcQueued", () => path);
-            }
+            await recording;
+            if (request.TestRamp) SetStatus("RfQcQueued", () => path);
+            else SetStatus("RecordingSaved", () => path, InfoBarSeverity.Success);
         }
         catch (Exception ex)
         {
@@ -863,9 +860,8 @@ public sealed partial class MainWindow
             recordingClock.Reset();
             UpdateRecordingIndicator(false);
             rfWriterActive = false;
-            rfStop = null;
             UpdateRfMeterTimer();
-            rfInspector.SetRecording(rfPreview is not null);
+            rfInspector.SetRecording(rfSession.PreviewActive);
             RenderSourceRackList();
             UpdateControls();
         }
@@ -873,7 +869,7 @@ public sealed partial class MainWindow
 
     private Task rfQcTail = Task.CompletedTask;
 
-    private async Task RunRfQcAsync(Task previous, RfRampQc qc)
+    private async Task RunRfQcAsync(RfRampQc qc, Task previous, Task result)
     {
         rfQcPendingCount++;
         UpdateControls();
@@ -898,7 +894,7 @@ public sealed partial class MainWindow
             Show("RfQcQueued", TelemetrySeverity.Info, samples, entry.FilePath);
             await previous;
             Show("RfVerifyRamp", TelemetrySeverity.Info, samples, entry.FilePath);
-            await Task.Run(qc.VerifyAndPublish);
+            await result;
             Show("QcPassed", TelemetrySeverity.Normal, samples, qc.FinalPath);
         }
         catch (Exception ex)

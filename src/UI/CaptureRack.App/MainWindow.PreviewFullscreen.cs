@@ -270,9 +270,9 @@ public sealed partial class MainWindow
             audioMuteTooltip: L(audioOn ? "AudioMonitorOnTooltip" : "AudioMonitorOffTooltip"),
             audioRouteBadge: routeTag,
             showPlaybackButton: isRfPlayback,
-            playbackPlaying: rfPreviewStop is not null,
+            playbackPlaying: rfSession.PreviewActive,
             playbackEnabled: StartButton.IsEnabled,
-            playbackLabel: L(rfPreviewStop is not null ? "RfPause" : "RfPlay"),
+            playbackLabel: L(rfSession.PreviewActive ? "RfPause" : "RfPlay"),
             showSwitchDisplay: displayCount > 1,
             switchDisplayTooltip: L("FullscreenDisplayTooltip"));
     }

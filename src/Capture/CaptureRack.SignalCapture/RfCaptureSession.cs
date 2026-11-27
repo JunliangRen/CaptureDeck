@@ -1,21 +1,12 @@
+using CaptureRack.Core;
+
 namespace CaptureRack.SignalCapture;
 
 // Transport commands run on the owner's context. Acquisition and verification run off that context.
 public sealed class RfCaptureSession
 {
-    private sealed class Operation
-    {
-        internal readonly CancellationTokenSource Stop = new();
-        internal readonly TaskCompletionSource Finished = new(TaskCreationOptions.RunContinuationsAsynchronously);
-        internal void Finish()
-        {
-            Stop.Dispose();
-            Finished.SetResult();
-        }
-    }
-
-    private Operation? preview;
-    private Operation? recording;
+    private CaptureOperation? preview;
+    private CaptureOperation? recording;
     private RfPreviewSession? receiver;
     private Task? readerTask;
     private bool closing;
@@ -37,9 +28,9 @@ public sealed class RfCaptureSession
     }
 
     public bool PreviewActive => preview is not null;
-    public bool PreviewStopping => preview?.Stop.IsCancellationRequested == true;
+    public bool PreviewStopping => preview?.IsStopping == true;
     public bool RecordingActive => recording is not null;
-    public bool RecordingStopping => recording?.Stop.IsCancellationRequested == true;
+    public bool RecordingStopping => recording?.IsStopping == true;
     public Task VerificationIdle { get; private set; } = Task.CompletedTask;
     public event Action<RfRampQc, Task, Task>? VerificationQueued;
 
@@ -49,14 +40,14 @@ public sealed class RfCaptureSession
             throw new InvalidOperationException("RF source is busy.");
         var operation = preview = new();
         receiver = input is null ? null : new RfPreviewSession(input);
-        try { await present(operation.Stop.Token); }
+        try { await present(operation.Token); }
         finally
         {
             try
             {
                 if (readerTask is { IsCompleted: false } reading)
                 {
-                    operation.Stop.Cancel();
+                    operation.RequestStop();
                     await reading;
                 }
             }
@@ -65,7 +56,7 @@ public sealed class RfCaptureSession
                 readerTask = null;
                 receiver = null;
                 preview = null;
-                operation.Finish();
+                operation.Dispose();
             }
         }
     }
@@ -74,7 +65,7 @@ public sealed class RfCaptureSession
         Action<byte[], int, long>? previewSamples = null)
     {
         var live = receiver;
-        if (live is null || preview is null || preview.Stop.Token != token)
+        if (live is null || preview is null || preview.Token != token)
             throw new InvalidOperationException("RF receiver does not belong to this preview.");
         if (readerTask is not null) throw new InvalidOperationException("RF receiver already started.");
         return readerTask = Task.Run(() =>
@@ -100,8 +91,8 @@ public sealed class RfCaptureSession
         try
         {
             var qc = await Task.Run(() => live is null
-                ? capture(request, prefix, ffmpeg, vga, report, operation.Stop.Token)
-                : live.Record(prefix, ffmpeg, operation.Stop.Token, report));
+                ? capture(request, prefix, ffmpeg, vga, report, operation.Token)
+                : live.Record(prefix, ffmpeg, operation.Token, report));
             if (qc is not null)
             {
                 var previous = VerificationIdle;
@@ -113,7 +104,7 @@ public sealed class RfCaptureSession
         finally
         {
             recording = null;
-            operation.Finish();
+            operation.Dispose();
         }
     }
 
@@ -130,11 +121,11 @@ public sealed class RfCaptureSession
         catch (Exception) { }
     }
 
-    public void StopRecording() => recording?.Stop.Cancel();
+    public void StopRecording() => recording?.RequestStop();
 
     public void StopPreview()
     {
-        if (!RecordingActive) preview?.Stop.Cancel();
+        if (!RecordingActive) preview?.RequestStop();
     }
 
     public async Task StopForCloseAsync()
@@ -142,13 +133,11 @@ public sealed class RfCaptureSession
         closing = true;
         if (recording is { } clip)
         {
-            clip.Stop.Cancel();
-            await clip.Finished.Task;
+            await clip.StopAsync();
         }
         if (preview is { } source)
         {
-            source.Stop.Cancel();
-            await source.Finished.Task;
+            await source.StopAsync();
         }
         await VerificationIdle;
     }

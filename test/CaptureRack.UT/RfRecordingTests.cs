@@ -279,7 +279,12 @@ public class RfRecordingTests
             block[20] = 32;
             return 23;
         }
-        for (int i = 0; i < 8; i++) fifo.Tick(i * 250, () => {}, Complete, block);
+        for (int i = 0; i < 8; i++)
+        {
+            fifo.Tick(i * 250, () => {}, Complete, block);
+            if (i == 1) Assert.Null(fifo.Latest!.ObservedDroppedSamples); // Baseline predates capture.
+        }
+        Assert.Equal(19, fifo.Latest!.ObservedDroppedSamples);
         Assert.Equal(5, calls);
         Assert.Equal(2, fifo.ReadFailures);
         Assert.True(fifo.PollingDisabled);

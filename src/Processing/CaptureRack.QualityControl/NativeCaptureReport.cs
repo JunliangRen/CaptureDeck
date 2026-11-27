@@ -22,6 +22,7 @@ public sealed record NativeCaptureReport(
     NativeCaptureFormat Video, NativeCaptureFormat? Audio, NativeCaptureCounts VideoCounts, NativeCaptureCounts? AudioCounts,
     long? ExpectedVideoFrames, long PcmSampleFrames, IReadOnlyList<NativeContainerAttempt> ContainerAttempts, string? Error)
 {
+    public long? WriterRejectedPackets { get; init; }
     public long? DriverDroppedVideoFrames { get; init; }
 
     public static string PathFor(string mediaPath) => mediaPath + ".recording.json";

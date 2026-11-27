@@ -5,7 +5,7 @@ using Microsoft.UI.Xaml.Controls;
 
 namespace CaptureRack.App.Views;
 
-public sealed partial class DirectShowCapabilitiesView : UserControl, ILiveMediaSource
+public sealed partial class DirectShowCapabilitiesView : UserControl, ILiveMediaSource, ILiveMediaInspector
 {
     private Func<string, string> localize = key => key;
     private DirectShowDeviceCapabilities? capabilities;
@@ -421,7 +421,7 @@ public sealed partial class DirectShowCapabilitiesView : UserControl, ILiveMedia
 
     private async Task RunAsync(Func<CancellationToken, Task> action, bool allowPreview = false)
     {
-        if (operation is not null || (!allowPreview && previewStop is not null))
+        if (operation is not null || (!allowPreview && IsCapturing))
             return;
         using var stop = new CancellationTokenSource();
         operation = stop;

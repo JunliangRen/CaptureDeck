@@ -80,15 +80,50 @@ public sealed class WorkspaceArchitectureTests
         Assert.True(module.Descriptor.IsImplementedInUi);
 
         var clean = DirectShowWorkspaceModule.BuildLiveTelemetry(120, 120, 0, -2, k => k, CultureInfo.InvariantCulture);
-        Assert.Equal(3, clean.Count);
+        Assert.Equal(4, clean.Count);
         Assert.All(clean, m => Assert.Equal(TelemetrySeverity.Normal, m.Severity));
         Assert.Equal("0", clean.Single(m => m.Id == "ds-skipped").Value);
 
         var faulted = DirectShowWorkspaceModule.BuildLiveTelemetry(250, 240, 10, 4, k => k, CultureInfo.InvariantCulture);
-        Assert.Equal(4, faulted.Count);
+        Assert.Equal(5, faulted.Count);
         Assert.Equal(TelemetrySeverity.Danger, faulted.Single(m => m.Id == "ds-unreadable").Severity);
         Assert.Equal("10", faulted.Single(m => m.Id == "ds-unreadable").Value);
         Assert.Equal(TelemetrySeverity.Caution, faulted.Single(m => m.Id == "ds-skipped").Severity);
+    }
+
+    [Theory]
+    [InlineData(7, null, "—", TelemetrySeverity.Normal)]
+    [InlineData(7, 0L, "0", TelemetrySeverity.Normal)]
+    [InlineData(0, 2L, "2", TelemetrySeverity.Danger)]
+    public void DirectShowKeepsDisplaySkipsSeparateFromWriterEvidence(int skips, long? rejected,
+        string text, TelemetrySeverity severity)
+    {
+        var metrics = DirectShowWorkspaceModule.BuildLiveTelemetry(12, 11, 0, skips,
+            key => key, CultureInfo.InvariantCulture, rejected);
+        var writer = Assert.Single(metrics, m => m.Id == "ds-record-rejected");
+        Assert.Equal(text, writer.Value);
+        Assert.Equal(severity, writer.Severity);
+        Assert.Equal(skips.ToString(), metrics.Single(m => m.Id == "ds-skipped").Value);
+    }
+
+    [Theory]
+    [InlineData(null, false, "—")]
+    [InlineData(0L, false, "0")]
+    [InlineData(0L, true, "—")]
+    [InlineData(19L, true, "≥19")]
+    [InlineData(19L, false, "19")]
+    public void FifoLossRequiresAnObservedInterval(long? samples, bool limited, string value)
+    {
+        var metric = RfFifoMetrics.DroppedSamples(samples, limited, "FIFO", CultureInfo.InvariantCulture);
+        Assert.Equal(value, metric.Value);
+        if (samples > 0) Assert.Equal(TelemetrySeverity.Danger, metric.Severity);
+    }
+
+    [Fact]
+    public void MissingTsTelemetryDoesNotReportZeroContinuityErrors()
+    {
+        var missing = FireWireWorkspaceModule.BuildTsTelemetry(0, 0, null, 0, 0, 0, k => k, CultureInfo.InvariantCulture);
+        Assert.Equal("—", missing.Single(m => m.Id == "ts-cc").Value);
     }
 
     [Fact]
@@ -285,10 +320,10 @@ public sealed class WorkspaceArchitectureTests
 
         string Localize(string key) => key == "CaptureCounts" ? "{0}/{1}/{2}/{3}/{4}" : key;
 
-        var idleMetrics = module.BuildTelemetry(null, -5, Localize, CultureInfo.InvariantCulture);
+        var idleMetrics = module.BuildIdleTelemetry(Localize);
         Assert.Equal(4, idleMetrics.Count);
         Assert.All(idleMetrics, metric => Assert.Equal(TelemetrySeverity.Normal, metric.Severity));
-        Assert.Equal("0", idleMetrics.Single(m => m.Id == "skipped").Value);
+        Assert.Equal("—", idleMetrics.Single(m => m.Id == "skipped").Value);
 
         var activeStats = new CaptureStats
         {
@@ -301,7 +336,7 @@ public sealed class WorkspaceArchitectureTests
             RecordingModeChanged = false
         };
 
-        var activeMetrics = module.BuildTelemetry(activeStats, 7, Localize, CultureInfo.InvariantCulture);
+        var activeMetrics = DeckLinkWorkspaceModule.BuildVideoTelemetry(activeStats, 7, Localize, CultureInfo.InvariantCulture);
         Assert.Equal(TelemetrySeverity.Normal, activeMetrics.Single(m => m.Id == "valid").Severity);
         Assert.Equal("1,200", activeMetrics.Single(m => m.Id == "valid").Value);
         Assert.Equal(TelemetrySeverity.Caution, activeMetrics.Single(m => m.Id == "noinput").Severity);
@@ -689,7 +724,7 @@ public sealed class WorkspaceArchitectureTests
 
         foreach (var module in registry.Modules)
         {
-            var metrics = module.BuildTelemetry(null, 0, key => key, CultureInfo.InvariantCulture);
+            var metrics = module.BuildIdleTelemetry(key => key);
             Assert.NotEmpty(metrics);
             Assert.All(metrics, m => Assert.False(string.IsNullOrWhiteSpace(m.Label)));
         }

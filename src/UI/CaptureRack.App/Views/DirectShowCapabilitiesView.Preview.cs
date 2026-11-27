@@ -9,15 +9,15 @@ namespace CaptureRack.App.Views;
 public sealed partial class DirectShowCapabilitiesView
 {
     private DirectShowPreviewSession? preview;
-    private CancellationTokenSource? previewStop;
-    private Task? previewTask;
+    private CaptureOperation? previewOperation;
+    private bool closing;
     private DirectShowFormat? VideoFormat => (VideoFormatPicker.SelectedItem as FormatOption)?.Format;
     private DirectShowFormat? AudioFormat => (AudioPicker.SelectedItem as FormatOption)?.Format;
 
     public event EventHandler? StateChanged;
-    public bool IsCapturing => previewStop is not null;
-    public bool IsStopping => previewStop?.IsCancellationRequested == true;
-    public bool CanStart => operation is null && capabilities is not null && (HasPreview || SupportsRecording);
+    public bool IsCapturing => previewOperation is not null;
+    public bool IsStopping => previewOperation?.IsStopping == true;
+    public bool CanStart => !closing && operation is null && capabilities is not null && (HasPreview || SupportsRecording);
     public bool HasInput => ReceivedUnits > 0;
     public long ReceivedUnits => preview?.Received ?? 0;
     public long DecodedFrames => preview?.Decoded ?? 0;
@@ -32,21 +32,6 @@ public sealed partial class DirectShowCapabilitiesView
     public string? PreviewFailure { get; private set; }
     public string? PreviewHint => !IsCapturing ? null : VideoFormat?.IsMpeg2Video == true ? "DsMpeg2RecordOnly" :
         preview is { Decoded: 0, Unreadable: > 0 } ? "DsPreviewUnreadable" : "DsWaitingForFrames";
-
-    public string? ConfigurationSummaryText
-    {
-        get
-        {
-            if (DevicePicker.SelectedItem is not DirectShowDevice device)
-                return null;
-            if (ActiveVideo is not { } video)
-                return device.Name;
-            var encoding = Encoding(video);
-            var size = video.Width is { } w && video.Height is { } h ? $"{w} × {h}" : null;
-            var fps = video.FramesPerSecond is { } rate ? $"{rate:0.###} fps" : null;
-            return string.Join(" · ", new[] { device.Name, size, fps, encoding }.OfType<string>());
-        }
-    }
 
     public string? BuildFilenamePreview(string label)
     {
@@ -66,29 +51,32 @@ public sealed partial class DirectShowCapabilitiesView
 
     public IReadOnlyList<TelemetryMetric> BuildLiveTelemetry(long previewSkippedFrames,
         Func<string, string> localize, IFormatProvider formatProvider) =>
-        DirectShowWorkspaceModule.BuildLiveTelemetry(
-            ReceivedUnits, DecodedFrames, preview?.Unreadable ?? 0, previewSkippedFrames, localize, formatProvider);
+        preview is { NegotiatedVideo: not null } source
+            ? DirectShowWorkspaceModule.BuildLiveTelemetry(source.Received, source.Decoded, source.Unreadable,
+                source.SkippedBeforeDecode + previewSkippedFrames, localize, formatProvider, recording?.RejectedPackets ?? lastRejectedPackets)
+            : DirectShowWorkspaceModule.IdleMetrics(localize);
 
     public void NotifyOutputFolderChanged() => UpdateRecordingControls();
 
     public void StopPreview()
     {
-        if (previewStop is not { IsCancellationRequested: false } stop)
+        if (previewOperation is not { IsStopping: false } stop)
             return;
         if (recording is { } writer && !IsFinalizing)
             FinishRecording(writer);
         operation?.Cancel();
-        stop.Cancel();
+        stop.RequestStop();
         RenderEvidence();
     }
 
     public async Task StopForCloseAsync()
     {
+        closing = true;
+        var source = previewOperation;
+        var clip = recordingOperation;
         StopPreview();
-        if (previewTask is { } task)
-            await task;
-        if (recordingTask is { } finishing)
-            await finishing;
+        if (source is not null) await source.Completion;
+        if (clip is not null) await clip.Completion;
     }
 
     public void SetAudioMonitor(bool enabled, double volume) => preview?.SetAudioMonitor(enabled, volume);
@@ -108,22 +96,22 @@ public sealed partial class DirectShowCapabilitiesView
     public Task StartAsync(PreviewFeed feed)
     {
         if (CanStart && !IsCapturing && !IsRecording && capabilities?.Device is { } device && VideoFormat is { } video)
-            return previewTask = RunPreviewAsync(feed, device, video, AudioFormat);
+            return RunPreviewAsync(feed, device, video, AudioFormat);
         return Task.CompletedTask;
     }
 
     private async Task RunPreviewAsync(PreviewFeed feed, DirectShowDevice device, DirectShowFormat video, DirectShowFormat? audio)
     {
-        using var stop = new CancellationTokenSource();
-        previewStop = stop;
         var session = new DirectShowPreviewSession(feed);
+        using var stop = previewOperation = new CaptureOperation();
         preview = session;
+        lastRejectedPackets = null;
         previewDiagnostic = null;
-        HideNotice();
-        PreviewFailure = null;
-        RenderEvidence();
         try
         {
+            HideNotice();
+            PreviewFailure = null;
+            RenderEvidence();
             var report = await session.RunAsync(new(device.Id, video.Index, audio?.Index, TimeSpan.Zero)
             {
                 ExpectedVideo = video,
@@ -139,7 +127,7 @@ public sealed partial class DirectShowCapabilitiesView
                 ShowNotice("PreviewFailed", InfoBarSeverity.Error, error);
             }
         }
-        catch (OperationCanceledException) when (stop.IsCancellationRequested) { }
+        catch (OperationCanceledException) when (stop.IsStopping) { }
         catch (Exception error)
         {
             previewDiagnostic = SnapshotPreview(session, "error",
@@ -150,7 +138,7 @@ public sealed partial class DirectShowCapabilitiesView
         finally
         {
             preview = null;
-            previewStop = null;
+            previewOperation = null;
             RenderEvidence();
         }
     }

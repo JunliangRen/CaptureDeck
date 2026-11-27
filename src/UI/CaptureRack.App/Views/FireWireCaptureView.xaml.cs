@@ -9,7 +9,7 @@ using Microsoft.UI.Xaml.Controls;
 
 namespace CaptureRack.App.Views;
 
-public sealed partial class FireWireCaptureView : UserControl, ILiveMediaSource
+public sealed partial class FireWireCaptureView : UserControl, ILiveMediaSource, ILiveMediaInspector
 {
     private Func<string, string> localize = key => key;
     private Func<string> outputDirectory = () => "";
@@ -54,7 +54,6 @@ public sealed partial class FireWireCaptureView : UserControl, ILiveMediaSource
     internal string FormatSummary => ExpectedFormat.IsDv
         ? (session?.DvInfo?.LastFrame?.Encoding ?? session?.Format?.Encoding ?? SelectedDevice?.SimulatedFormat?.Encoding)?.DisplayName() ?? "DV" :
         (session?.Format ?? SelectedDevice?.SimulatedFormat)?.Transport is { } layout ? $"MPEG-TS ({layout.Stride} B)" : "MPEG-TS";
-    public string? ConfigurationSummaryText => SelectedDevice is { } device ? $"{device.Name} · {FormatSummary}" : FormatSummary;
     public long DecodedFrames => decoder?.DecodedFrames ?? 0;
     public bool HasPreview => ffmpeg is not null && CanStart && !decodeFailed;
     public CaptureAudioInfo? AudioInfo => Volatile.Read(ref switchingProgram) ? null :
@@ -115,7 +114,7 @@ public sealed partial class FireWireCaptureView : UserControl, ILiveMediaSource
 
         var stream = session?.StreamInfo;
         return FireWireWorkspaceModule.BuildTsTelemetry(
-            stream?.Packets ?? ReceivedUnits, DecodedFrames, stream?.ContinuityErrors ?? 0,
+            stream?.Packets ?? ReceivedUnits, DecodedFrames, stream?.ContinuityErrors,
             stream?.SyncErrors ?? 0, stream?.BitsPerSecond ?? 0, previewSkippedFrames, localize, formatProvider);
     }
 

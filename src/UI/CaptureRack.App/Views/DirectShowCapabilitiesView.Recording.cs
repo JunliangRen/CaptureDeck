@@ -1,3 +1,4 @@
+using CaptureRack.Core;
 using CaptureRack.DirectShow.Windows.Capture;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
@@ -15,16 +16,16 @@ public sealed partial class DirectShowCapabilitiesView
     private Func<RecordingEncoding> recordingEncoding = () => new();
     private Func<RecordingOutput> recordingOutput = () => RecordingOutput.Native;
     private DirectShowRecording? recording;
-    private bool finalizingRecording;
+    private long? lastRejectedPackets;
+    private CaptureOperation? recordingOperation;
     private string? savedMediaPath, savedReportPath;
     private int recordGeneration;
 
-    private Task? recordingTask;
     private string? recordingDetail;
     public bool IsRecording => recording is not null;
-    public bool IsFinalizing => finalizingRecording;
+    public bool IsFinalizing => recordingOperation?.IsStopping == true;
     public bool SupportsRecording => ActiveVideo is { } video && DirectShowRecording.Supports(video, ActiveAudio);
-    public bool CanRecord => operation is null && SupportsRecording && IsCapturing && !IsStopping && HasInput;
+    public bool CanRecord => !closing && operation is null && SupportsRecording && IsCapturing && !IsStopping && HasInput;
     public string? SavedPath => savedMediaPath;
     public string? RecordingReportPath => savedReportPath;
     public string? RecordingDetail => recordingDetail;
@@ -57,14 +58,14 @@ public sealed partial class DirectShowCapabilitiesView
 
     private void FinishRecording(DirectShowRecording active)
     {
-        finalizingRecording = true;
+        recordingOperation?.RequestStop();
         recordingDetail = L("DsRecordFinalizing");
-        UpdateRecordingControls();
-        StateChanged?.Invoke(this, EventArgs.Empty);
         if (preview is { } session)
             session.FinishRecording(active);
         else
             active.Complete();
+        UpdateRecordingControls();
+        StateChanged?.Invoke(this, EventArgs.Empty);
     }
 
     private async void OpenRecordingReportClicked(object sender, RoutedEventArgs e)
@@ -89,9 +90,9 @@ public sealed partial class DirectShowCapabilitiesView
         {
             if (!IsFinalizing)
                 FinishRecording(current);
-            return recordingTask ?? Task.CompletedTask;
+            return recordingOperation?.Completion ?? Task.CompletedTask;
         }
-        return recordingTask = RecordAsync();
+        return recordingOperation?.Completion ?? RecordAsync();
     }
 
     private async Task RecordAsync()
@@ -99,6 +100,7 @@ public sealed partial class DirectShowCapabilitiesView
         if (!CanRecord || preview is not { } session || ActiveVideo is not { } video)
             return;
 
+        using var clip = recordingOperation = new CaptureOperation();
         var audio = ActiveAudio;
         try
         {
@@ -146,6 +148,7 @@ public sealed partial class DirectShowCapabilitiesView
                         }
                     });
             }, encoding);
+            lastRejectedPackets = null;
             recording = active;
             recordingDetail = string.Format(L("DsRecordActive"), unique,
                 string.Join(" → ", extensions.Select(ext => ext[1..].ToUpperInvariant())));
@@ -170,9 +173,12 @@ public sealed partial class DirectShowCapabilitiesView
         finally
         {
             if (recording is { } active)
+            {
                 session.FinishRecording(active);
+                lastRejectedPackets = active.RejectedPackets;
+            }
             recording = null;
-            finalizingRecording = false;
+            recordingOperation = null;
             UpdateRecordingControls();
             RenderEvidence();
         }

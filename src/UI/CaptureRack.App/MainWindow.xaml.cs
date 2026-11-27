@@ -1268,7 +1268,7 @@ public sealed partial class MainWindow : Window
 
     private void OutputPath_TextChanged(object sender, TextChangedEventArgs e)
     {
-        LiveMediaSource?.NotifyOutputFolderChanged();
+        LiveMediaInspector?.NotifyOutputFolderChanged();
         UpdateRecordingFilenamePreview();
         UpdateControls();
         SettingsChanged();
@@ -1293,9 +1293,9 @@ public sealed partial class MainWindow : Window
     {
         var label = GetRecordingLabel();
         UpdateRecordingEncodingControls();
-        if (LiveMediaSource is { } media)
+        if (LiveMediaInspector is { } inspector)
         {
-            RecordingFilenamePreview.Text = media.BuildFilenamePreview(label)
+            RecordingFilenamePreview.Text = inspector.BuildFilenamePreview(label)
                 ?? (RecordingFileNaming.SanitizeLabel(label) is { Length: > 0 } sanitizedLabel
                     ? $"{sanitizedLabel}_CaptureRack_YYYYMMDD_HHmmss"
                     : "CaptureRack_YYYYMMDD_HHmmss");

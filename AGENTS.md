@@ -45,7 +45,7 @@ Windows App and Probe builds require the RID-specific RTL-SDR and libusb DLLs fr
 
 Domesday protocol-v1 identity reads retry short responses up to three total attempts. A complete mismatched identity fails immediately. Keep this handshake independent of FIFO telemetry polling. Ten consecutive WinUI refreshes on the local 3.2.0 device returned its version with no diagnostic banner.
 
-Use MISRC-GUI upstream main when comparing RF capture behavior. Bind RF decode options to the public win-x64 Realtime package capabilities. Use its post-block lock snapshot for receiver status and its signed signal planes for RF line measurements. Legacy Domesday Duplicator and protocol-v1 devices require separate endpoint and firmware checks. Gateware identity and a successful full-file verification are both required for a hardware ramp baseline.
+Use MISRC-GUI upstream main when comparing RF capture behavior. Bind RF decode options to the public win-x64 Realtime package capabilities. Package 2.35.0-preview.ci.27 passed the Windows RF replay regression, and its managed and native DLLs matched the published x64 app output. Use its post-block lock snapshot for receiver status and its signed signal planes for RF line measurements. Legacy Domesday Duplicator and protocol-v1 devices require separate endpoint and firmware checks. Gateware identity and a successful full-file verification are both required for a hardware ramp baseline.
 
 RF preview safe guides and the center cross use the displayed field pair's active-video rectangle. The NTSC 480 crop option requires an explicitly identified NTSC picture mode. Its label and bands use the same source-row counts. NTSC full-raster replay at 640 x 525 verified 40 top and 5 bottom lines.
 

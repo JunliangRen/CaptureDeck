@@ -4,7 +4,7 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
     <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
         <!-- Primary Decoder Type Picker -->
-        <ComboBox x:Name="PreviewTypeBox" Height="30" CornerRadius="3" VerticalAlignment="Center" />
+        <ComboBox x:Name="PreviewTypeBox" Width="110" Height="30" CornerRadius="3" VerticalAlignment="Center" />
 
         <!-- Contextual Quick Selector (Standard / LD Track / Betamax Profile) -->
         <ComboBox x:Name="VideoStandard" Height="30" CornerRadius="3" SelectedIndex="0"
@@ -12,13 +12,13 @@
             <x:String>NTSC</x:String>
             <x:String>PAL</x:String>
         </ComboBox>
-        <ComboBox x:Name="VhsStandard" SelectedIndex="0" Visibility="Collapsed">
+        <ComboBox x:Name="VhsStandard" Width="120" SelectedIndex="0" Visibility="Collapsed">
             <x:String>NTSC</x:String>
             <x:String>PAL</x:String>
             <x:String>SECAM</x:String>
             <x:String>MESECAM</x:String>
         </ComboBox>
-        <ComboBox x:Name="VhsProfile" SelectedIndex="0" Visibility="Collapsed">
+        <ComboBox x:Name="VhsProfile" Width="88" SelectedIndex="0" Visibility="Collapsed">
             <ComboBoxItem Content="VHS" />
             <ComboBoxItem x:Name="SuperVhsItem" Content="S-VHS" />
         </ComboBox>

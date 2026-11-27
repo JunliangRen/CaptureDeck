@@ -38,11 +38,7 @@ public interface ICaptureWorkspaceModule
 {
     CaptureSourceDescriptor Descriptor { get; }
 
-    IReadOnlyList<TelemetryMetric> BuildTelemetry(
-        CaptureStats? stats,
-        long previewSkippedFrames,
-        Func<string, string> localize,
-        IFormatProvider formatProvider);
+    IReadOnlyList<TelemetryMetric> BuildIdleTelemetry(Func<string, string> localize);
 }
 
 public sealed class DeckLinkWorkspaceModule : ICaptureWorkspaceModule
@@ -67,23 +63,20 @@ public sealed class DeckLinkWorkspaceModule : ICaptureWorkspaceModule
         DeckLinkCapabilities,
         IconGlyph: "\uE714");
 
-    public IReadOnlyList<TelemetryMetric> BuildTelemetry(
-        CaptureStats? stats,
-        long previewSkippedFrames,
-        Func<string, string> localize,
-        IFormatProvider formatProvider)
-    {
-        return BuildVideoTelemetry(stats, previewSkippedFrames, localize, formatProvider);
-    }
+    public IReadOnlyList<TelemetryMetric> BuildIdleTelemetry(Func<string, string> localize) => IdleMetrics(localize);
 
-    internal static IReadOnlyList<TelemetryMetric> BuildVideoTelemetry(CaptureStats? stats, long previewSkippedFrames,
+    internal static TelemetryMetric[] IdleMetrics(Func<string, string> localize) =>
+        [new("valid", localize("MetricValidFrames"), "—"), new("noinput", localize("MetricNoInput"), "—"),
+         new("missing", localize("MetricMissing"), "—"), new("skipped", localize("MetricSkipped"), "—")];
+
+    internal static IReadOnlyList<TelemetryMetric> BuildVideoTelemetry(CaptureStats stats, long previewSkippedFrames,
         Func<string, string> localize, IFormatProvider formatProvider)
     {
-        var valid = stats?.VideoFrames ?? 0;
-        var noInput = stats?.NoInputFrames ?? 0;
-        var missing = stats?.MissingVideoFrames ?? 0;
+        var valid = stats.VideoFrames;
+        var noInput = stats.NoInputFrames;
+        var missing = stats.MissingVideoFrames;
         var skipped = Math.Max(0, previewSkippedFrames);
-        var audio = stats?.AudioPackets ?? 0;
+        var audio = stats.AudioPackets;
         var summary = string.Format(formatProvider, localize("CaptureCounts"), valid, noInput, audio, missing, skipped);
 
         return new TelemetryMetric[]
@@ -107,9 +100,8 @@ public sealed class TestSignalWorkspaceModule : ICaptureWorkspaceModule
         IsImplementedInUi: true, DeckLinkWorkspaceModule.DeckLinkCapabilities with { SupportsTransportControl = false },
         IconGlyph: "\uE7F4");
 
-    public IReadOnlyList<TelemetryMetric> BuildTelemetry(CaptureStats? stats, long previewSkippedFrames,
-        Func<string, string> localize, IFormatProvider formatProvider) =>
-        DeckLinkWorkspaceModule.BuildVideoTelemetry(stats, previewSkippedFrames, localize, formatProvider);
+    public IReadOnlyList<TelemetryMetric> BuildIdleTelemetry(Func<string, string> localize) =>
+        DeckLinkWorkspaceModule.IdleMetrics(localize);
 }
 
 public sealed class DirectShowWorkspaceModule : ICaptureWorkspaceModule
@@ -126,12 +118,11 @@ public sealed class DirectShowWorkspaceModule : ICaptureWorkspaceModule
         IconGlyph: "\uE722",
         CliCommandHint: "CaptureRack.Probe.exe directshow list");
 
-    public IReadOnlyList<TelemetryMetric> BuildTelemetry(
-        CaptureStats? stats,
-        long previewSkippedFrames,
-        Func<string, string> localize,
-        IFormatProvider formatProvider) =>
-        BuildLiveTelemetry(0, 0, 0, previewSkippedFrames, localize, formatProvider);
+    public IReadOnlyList<TelemetryMetric> BuildIdleTelemetry(Func<string, string> localize) => IdleMetrics(localize);
+
+    internal static TelemetryMetric[] IdleMetrics(Func<string, string> localize) =>
+        [new("ds-received", localize("DsVideo"), "—"), new("ds-decoded", localize("MetricValidFrames"), "—"),
+         new("ds-skipped", localize("MetricSkipped"), "—"), new("ds-record-rejected", localize("DsRecordRejected"), "—")];
 
     public static IReadOnlyList<TelemetryMetric> BuildLiveTelemetry(
         long received,
@@ -139,7 +130,7 @@ public sealed class DirectShowWorkspaceModule : ICaptureWorkspaceModule
         long unreadable,
         long previewSkippedFrames,
         Func<string, string> localize,
-        IFormatProvider formatProvider)
+        IFormatProvider formatProvider, long? rejectedPackets = null)
     {
         var skipped = Math.Max(0, previewSkippedFrames);
         var metrics = new List<TelemetryMetric>(4)
@@ -154,6 +145,8 @@ public sealed class DirectShowWorkspaceModule : ICaptureWorkspaceModule
         }
         metrics.Add(new("ds-skipped", localize("MetricSkipped"), skipped.ToString("N0", formatProvider),
             skipped > 0 ? TelemetrySeverity.Caution : TelemetrySeverity.Normal));
+        metrics.Add(new("ds-record-rejected", localize("DsRecordRejected"), rejectedPackets?.ToString("N0", formatProvider) ?? "—",
+            rejectedPackets > 0 ? TelemetrySeverity.Danger : TelemetrySeverity.Normal));
         return metrics;
     }
 }
@@ -172,17 +165,13 @@ public sealed class FireWireWorkspaceModule : ICaptureWorkspaceModule
         IconGlyph: "\uE88E",
         CliCommandHint: "CaptureRack.Probe.exe firewire list");
 
-    public IReadOnlyList<TelemetryMetric> BuildTelemetry(
-        CaptureStats? stats,
-        long previewSkippedFrames,
-        Func<string, string> localize,
-        IFormatProvider formatProvider) =>
-        BuildTsTelemetry(0, 0, 0, 0, 0, previewSkippedFrames, localize, formatProvider);
+    public IReadOnlyList<TelemetryMetric> BuildIdleTelemetry(Func<string, string> localize) =>
+        (TelemetryMetric[])[new("ts-packets", localize("TsMetricPackets"), "—"), new("ts-cc", localize("TsMetricContinuity"), "—")];
 
     public static IReadOnlyList<TelemetryMetric> BuildTsTelemetry(
         long packets,
         long decodedFrames,
-        long continuityErrors,
+        long? continuityErrors,
         long syncErrors,
         double bitsPerSecond,
         long previewSkippedFrames,
@@ -208,7 +197,7 @@ public sealed class FireWireWorkspaceModule : ICaptureWorkspaceModule
             metrics.Add(new("ts-sync", localize("TsMetricSync"), syncErrors.ToString("N0", formatProvider),
                 TelemetrySeverity.Danger));
         }
-        metrics.Add(new("ts-cc", localize("TsMetricContinuity"), continuityErrors.ToString("N0", formatProvider),
+        metrics.Add(new("ts-cc", localize("TsMetricContinuity"), continuityErrors?.ToString("N0", formatProvider) ?? "—",
             continuityErrors > 0 ? TelemetrySeverity.Danger : TelemetrySeverity.Normal));
         if (skipped > 0)
         {
@@ -249,17 +238,24 @@ public sealed class FireWireWorkspaceModule : ICaptureWorkspaceModule
     }
 }
 
+internal static class RfFifoMetrics
+{
+    public static TelemetryMetric DroppedSamples(long? observed, bool limited, string label, IFormatProvider format)
+    {
+        var value = observed is null || (limited && observed == 0) ? "—" :
+            (limited ? "≥" : "") + observed.Value.ToString("N0", format);
+        return new("rf-fifo-lost", label, value, observed > 0 ? TelemetrySeverity.Danger :
+            limited ? TelemetrySeverity.Caution : TelemetrySeverity.Normal);
+    }
+}
+
 public sealed class PlannedWorkspaceModule(
     CaptureSourceDescriptor descriptor,
     Func<Func<string, string>, TelemetryMetric[]> telemetryFactory) : ICaptureWorkspaceModule
 {
     public CaptureSourceDescriptor Descriptor { get; } = descriptor;
 
-    public IReadOnlyList<TelemetryMetric> BuildTelemetry(
-        CaptureStats? stats,
-        long previewSkippedFrames,
-        Func<string, string> localize,
-        IFormatProvider formatProvider) =>
+    public IReadOnlyList<TelemetryMetric> BuildIdleTelemetry(Func<string, string> localize) =>
         telemetryFactory(localize);
 }
 

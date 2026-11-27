@@ -6,6 +6,7 @@ public sealed record FifoReading(DateTimeOffset TimeUtc, byte Latch, byte Status
     int LifetimePeakWords, int OverflowEvents, int DroppedWords, int PacketsRead, int NearFullUnits,
     int DepthWords, int PacketWords, int NearFullWords, int RunPeakWords, long TotalNearFullUnits, bool CoverageLimited)
 {
+    public long? ObservedDroppedSamples { get; init; }
     public long NearFullSamples => TotalNearFullUnits * 256;
 }
 
@@ -84,9 +85,10 @@ internal class DomesdayFifoTelemetry
             TotalNearFullUnits += Word(15);
             RunPeakWords = Math.Max(RunPeakWords, Word(5));
         }
-        Volatile.Write(ref latest, new(DateTimeOffset.UtcNow, latch, block[1], Word(3), Word(5), Word(7),
+        Volatile.Write(ref latest, new FifoReading(DateTimeOffset.UtcNow, latch, block[1], Word(3), Word(5), Word(7),
             Word(9), Word(11), Word(13), Word(15), Word(17), packet, Word(21), RunPeakWords, TotalNearFullUnits,
-            MissedIntervals || CounterSaturated || ReadFailures > 0));
+            MissedIntervals || CounterSaturated || ReadFailures > 0)
+            { ObservedDroppedSamples = ValidIntervals == 0 ? null : DroppedSamples });
     }
 
 }

@@ -12,64 +12,31 @@ namespace CaptureRack.App.Views;
 
 internal sealed class DirectShowPreviewSession(PreviewFeed feed)
 {
-    private readonly Channel<RawFrame> frames = Channel.CreateBounded<RawFrame>(
-        new BoundedChannelOptions(1) { SingleReader = true, FullMode = BoundedChannelFullMode.DropOldest },
-        frame => frame.Dispose());
+    private readonly DirectShowSampleSession samples = new();
+    internal long SkippedBeforeDecode => samples.SkippedBeforeDecode;
     private readonly Channel<ControlRequest> controlRequests = Channel.CreateUnbounded<ControlRequest>(
         new UnboundedChannelOptions { SingleReader = true });
-    private DirectShowFormat? videoFormat;
-    private readonly object recordingGate = new();
-    private DirectShowRecording? recording;
-    private bool ended;
     private string stage = "Open device";
 
     internal DirectShowRecording StartRecording(string path, string? device = null,
-        Action<NativeContainerAttempt>? progress = null, RecordingEncoding? encoding = null)
-    {
-        lock (recordingGate)
-        {
-            if (ended || videoFormat is null || recording is not null)
-                throw new InvalidOperationException("The DirectShow recording cannot start in the current preview state.");
-            recording = DirectShowRecording.Start(path, videoFormat, audioFormat, QcReports.FindTools(), device, progress, encoding);
-            return recording;
-        }
-    }
+        Action<NativeContainerAttempt>? progress = null, RecordingEncoding? encoding = null) =>
+        samples.StartRecording(path, QcReports.FindTools(), device, progress, encoding);
 
-    internal void FinishRecording(DirectShowRecording target)
-    {
-        lock (recordingGate)
-        {
-            if (recording == target)
-                recording = null;
-            target.Complete();
-        }
-    }
-
-    private void EndRecording(Exception? error)
-    {
-        lock (recordingGate)
-        {
-            ended = true;
-            recording?.Complete(error);
-            recording = null;
-        }
-    }
-    private DirectShowFormat? audioFormat;
-    private string? encoding;
+    internal void FinishRecording(DirectShowRecording target) => samples.FinishRecording(target);
     private readonly object monitorGate = new();
     private LocalAudioMonitor? monitor;
     private StereoMonitor? spectrum;
-    private long received, decoded, unreadable;
+    private long decoded, decodeFailures;
     private bool audioEnabled;
     private double audioVolume = 0.8;
     private AudioMonitorRoute audioRoute = AudioMonitorRoute.Default;
 
-    internal DirectShowFormat? NegotiatedVideo => Volatile.Read(ref videoFormat);
-    internal DirectShowFormat? NegotiatedAudio => Volatile.Read(ref audioFormat);
+    internal DirectShowFormat? NegotiatedVideo => samples.NegotiatedVideo;
+    internal DirectShowFormat? NegotiatedAudio => samples.NegotiatedAudio;
 
-    internal long Received => Interlocked.Read(ref received);
+    internal long Received => samples.Received;
     internal long Decoded => Interlocked.Read(ref decoded);
-    internal long Unreadable => Interlocked.Read(ref unreadable);
+    internal long Unreadable => samples.Unreadable + Interlocked.Read(ref decodeFailures);
     internal string DiagnosticStage => Volatile.Read(ref stage);
     internal StereoLevels? ReadAudioLevels()
     {
@@ -108,19 +75,19 @@ internal sealed class DirectShowPreviewSession(PreviewFeed feed)
         var decoder = Task.Run(() => DecodeAsync(stop));
         try
         {
-            var result = await Task.Run(() => new DirectShowBackend().RunPreview(request, SetFormats, ReceiveVideo, ReceiveAudio,
+            var result = await Task.Run(() => new DirectShowBackend().RunPreview(request, samples.SetFormats, samples.ReceiveVideo, ReceiveAudio,
                 stop, ServiceControls, step =>
                 {
                     if (step != "Stop the DirectShow graph.")
                         Volatile.Write(ref stage, step);
                 }))
                 .ConfigureAwait(false);
-            EndRecording(result.Error is { } error ? new IOException(error) : null);
+            samples.End(result.Error is { } error ? new IOException(error) : null);
             return result;
         }
         catch (Exception error)
         {
-            EndRecording(error);
+            samples.End(error);
             throw;
         }
         finally
@@ -128,11 +95,10 @@ internal sealed class DirectShowPreviewSession(PreviewFeed feed)
             controlRequests.Writer.TryComplete();
             while (controlRequests.Reader.TryRead(out var pendingControl))
                 pendingControl.Completion.TrySetException(new InvalidOperationException("The DirectShow preview ended."));
-            frames.Writer.TryComplete();
             try { await decoder.ConfigureAwait(false); }
             finally
             {
-                while (frames.Reader.TryRead(out var pending))
+                while (samples.Frames.TryRead(out var pending))
                     pending.Dispose();
                 lock (monitorGate)
                 {
@@ -167,43 +133,10 @@ internal sealed class DirectShowPreviewSession(PreviewFeed feed)
     private sealed record ControlRequest(DirectShowControlChange? Change, CancellationToken Cancellation,
         TaskCompletionSource<DirectShowControl[]> Completion);
 
-    private void SetFormats(DirectShowFormat video, DirectShowFormat? audio)
-    {
-        encoding = DirectShowPreviewVideo.Encoding(video);
-        if (encoding is null && !video.IsMpeg2Video)
-            throw new NotSupportedException(video.Description);
-        lock (recordingGate)
-        {
-            Volatile.Write(ref audioFormat, audio);
-            Volatile.Write(ref videoFormat, video);
-        }
-    }
-
-    private bool ReceiveVideo(CaptureSample sample)
-    {
-        lock (recordingGate)
-            recording?.Accept(true, sample);
-        Interlocked.Increment(ref received);
-        if (encoding is null)
-            return true;
-        if (sample.Bytes.IsEmpty || sample.Bytes.Length > 256 * 1024 * 1024)
-        {
-            Interlocked.Increment(ref unreadable);
-            return true;
-        }
-        var buffer = ArrayPool<byte>.Shared.Rent(sample.Bytes.Length);
-        sample.Bytes.CopyTo(buffer);
-        var frame = new RawFrame(buffer, sample.Bytes.Length);
-        if (!frames.Writer.TryWrite(frame))
-            frame.Dispose();
-        return true;
-    }
-
     private bool ReceiveAudio(CaptureSample sample)
     {
-        lock (recordingGate)
-            recording?.Accept(false, sample);
-        var audio = audioFormat;
+        samples.ReceiveAudio(sample);
+        var audio = NegotiatedAudio;
         if (!DirectShowPreviewAudio.Supports(audio))
             return true;
         if (audio?.SampleRate is not (> 0 and <= 384000) ||
@@ -257,13 +190,14 @@ internal sealed class DirectShowPreviewSession(PreviewFeed feed)
     {
         try
         {
-            await foreach (var raw in frames.Reader.ReadAllAsync(stop).ConfigureAwait(false))
+            await foreach (var raw in samples.Frames.ReadAllAsync(stop).ConfigureAwait(false))
             {
                 using (raw)
                 {
                     if (stop.IsCancellationRequested)
                         break;
-                    var video = videoFormat!;
+                    var video = NegotiatedVideo!;
+                    var encoding = samples.Encoding!;
                     var (width, height) = DirectShowPreviewVideo.DisplaySize(video.Width!.Value, video.Height!.Value);
                     var jpeg = DirectShowPreviewVideo.IsJpeg(encoding!);
                     var scanMode = video.FieldOrder switch
@@ -293,11 +227,11 @@ internal sealed class DirectShowPreviewSession(PreviewFeed feed)
                             Interlocked.Increment(ref decoded);
                         }
                         else
-                            Interlocked.Increment(ref unreadable);
+                            Interlocked.Increment(ref decodeFailures);
                     }
                     catch (Exception ex) when (ex is ArgumentException or IOException or System.Runtime.InteropServices.COMException)
                     {
-                        Interlocked.Increment(ref unreadable);
+                        Interlocked.Increment(ref decodeFailures);
                     }
                 }
             }
@@ -305,12 +239,12 @@ internal sealed class DirectShowPreviewSession(PreviewFeed feed)
         catch (OperationCanceledException) when (stop.IsCancellationRequested) { }
         finally
         {
-            while (frames.Reader.TryRead(out var pending))
+            while (samples.Frames.TryRead(out var pending))
                 pending.Dispose();
         }
     }
 
-    private static PreviewImage? DecodeRaw(RawFrame raw, DirectShowFormat format, string encoding, int width, int height)
+    private static PreviewImage? DecodeRaw(DirectShowSampleSession.RawFrame raw, DirectShowFormat format, string encoding, int width, int height)
     {
         var image = new PreviewImage(ArrayPool<byte>.Shared.Rent(width * height * 4), width, height, pooled: true);
         if (DirectShowPreviewVideo.TryConvert(format, encoding, raw.Buffer.AsSpan(0, raw.Length), image.Bytes, width, height))
@@ -319,7 +253,7 @@ internal sealed class DirectShowPreviewSession(PreviewFeed feed)
         return null;
     }
 
-    private static async Task<PreviewImage> DecodeJpegAsync(RawFrame raw, int width, int height)
+    private static async Task<PreviewImage> DecodeJpegAsync(DirectShowSampleSession.RawFrame raw, int width, int height)
     {
         using var data = new MemoryStream(raw.Buffer, 0, raw.Length, writable: false);
         using var stream = data.AsRandomAccessStream();
@@ -328,13 +262,6 @@ internal sealed class DirectShowPreviewSession(PreviewFeed feed)
         var pixels = await decoder.GetPixelDataAsync(BitmapPixelFormat.Bgra8, BitmapAlphaMode.Ignore, transform,
             ExifOrientationMode.IgnoreExifOrientation, ColorManagementMode.DoNotColorManage);
         return new PreviewImage(pixels.DetachPixelData(), width, height, pooled: false);
-    }
-
-    private sealed class RawFrame(byte[] buffer, int length) : IDisposable
-    {
-        internal byte[] Buffer { get; } = buffer;
-        internal int Length { get; } = length;
-        public void Dispose() => ArrayPool<byte>.Shared.Return(Buffer);
     }
 
     internal sealed class PreviewImage(byte[] buffer, int width, int height, bool pooled) : IDisposable

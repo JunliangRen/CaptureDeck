@@ -796,11 +796,15 @@ public sealed partial class MainWindow
         RfPeakSpan.Text = m is null ? "—" : m.B is null ? $"{m.A.Max - m.A.Min}" : $"{m.A.Max - m.A.Min} / {m.B.Max - m.B.Min}";
         if (RfMeasureFlyout.IsOpen) RenderRfDetails();
         long clips = (m?.A.Clips ?? 0) + (m?.B?.Clips ?? 0);
-        return [
+        List<TelemetryMetric> metrics = [
             new("rf-rate", L("RfMetricSampleRate"), (rfInspector.IsPlayback ? rfInspector.PlaybackFile?.Rate : selection?.Rate) is int rate ? $"{rate / 1e6:G} MSPS" : "—"),
             new("rf-clips", L("RfMetricAdcClips"), m is null ? "—" : clips.ToString("N0"),
                 clips > 0 ? TelemetrySeverity.Caution : TelemetrySeverity.Normal)
         ];
+        if (selection?.Ddd is { VendorId: 0x1209, ProductId: 0x2347 } && !rfInspector.IsPlayback)
+            metrics.Add(RfFifoMetrics.DroppedSamples(m?.Fifo?.ObservedDroppedSamples,
+                m?.FifoDisabled == true || m?.Fifo?.CoverageLimited == true, L("RfFifoLost"), settingsCulture));
+        return metrics.ToArray();
     }
 
     private async Task RecordRfAsync(RfRecording request)

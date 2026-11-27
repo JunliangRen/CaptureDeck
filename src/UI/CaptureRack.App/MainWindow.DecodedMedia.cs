@@ -9,6 +9,7 @@ public sealed partial class MainWindow
 {
     private ILiveMediaSource? LiveMediaSource => IsDirectShowActive ? directShowCapabilitiesView :
         IsFireWireActive ? fireWireView : null;
+    private ILiveMediaInspector? LiveMediaInspector => LiveMediaSource as ILiveMediaInspector;
     private bool IsCaptureInputActive => rfSession.PreviewActive || captureTask is not null || LiveMediaSource?.IsCapturing == true;
     private bool IsCaptureRecording => rfSession.RecordingActive || recordingSession || LiveMediaSource?.IsRecording == true;
     private bool finishingMediaForClose;

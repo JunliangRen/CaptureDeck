@@ -27,6 +27,8 @@ public sealed class DirectShowRecording
     private readonly StreamEvidence audioEvidence = new();
     private readonly Action<NativeContainerAttempt>? reportProgress;
     private readonly List<NativeContainerAttempt> attempts = [];
+    private long rejectedPackets;
+    public long RejectedPackets => Interlocked.Read(ref rejectedPackets);
     private bool completed;
     private bool startedVideo;
     private readonly bool compressed;
@@ -144,6 +146,7 @@ public sealed class DirectShowRecording
             }
             if (length > QueueBudget - Volatile.Read(ref queuedBytes))
             {
+                Interlocked.Increment(ref rejectedPackets);
                 encodingDiagnostics?.Reject(isVideo);
                 Complete(new IOException(software
                     ? "The software recording queue filled. The encoder or storage did not keep up with capture."
@@ -152,6 +155,7 @@ public sealed class DirectShowRecording
             }
             if (!isVideo && length % audio!.BlockAlign != 0)
             {
+                Interlocked.Increment(ref rejectedPackets);
                 Complete(new IOException("The DirectShow source delivered an incomplete PCM sample."));
                 return;
             }
@@ -270,7 +274,7 @@ public sealed class DirectShowRecording
                         videoFormat, audioFormat, videoEvidence.Snapshot(), audio is null ? null : audioEvidence.Snapshot(),
                         video.Mpeg2 ? null : videoEvidence.WrittenPackets,
                         audio is null ? 0 : audioEvidence.WrittenBytes / audio.BlockAlign,
-                        attempts, failure).SaveAsync(reportMedia).ConfigureAwait(false);
+                        attempts, failure) { WriterRejectedPackets = RejectedPackets }.SaveAsync(reportMedia).ConfigureAwait(false);
             }
             catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
             {

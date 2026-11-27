@@ -112,7 +112,7 @@ public sealed partial class MainWindow
         RecordingOutputPicker?.IsDropDownOpen == true ||
         RfScopeSource?.IsDropDownOpen == true ||
         RfSpectrumSource?.IsDropDownOpen == true ||
-        LiveMediaSource?.HasOpenDropdown == true;
+        LiveMediaInspector?.HasOpenDropdown == true;
 
     private ScrollView? ResolveScrollTargetAt(WindowPoint point)
     {

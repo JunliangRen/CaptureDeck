@@ -10,6 +10,107 @@ namespace CaptureRack.UT;
 public sealed class DirectShowRecordingTests
 {
     [Fact]
+    public async Task StopRequestsWaitForOwnerCleanupOnlyOnce()
+    {
+        using var operation = new CaptureRack.Core.CaptureOperation();
+        int stops = 0;
+        using var registration = operation.Token.Register(() => stops++);
+        var first = operation.StopAsync();
+        var second = operation.StopAsync();
+        Assert.Same(first, second);
+        Assert.False(first.IsCompleted);
+        Assert.True(operation.IsStopping);
+        Assert.Equal(1, stops);
+        operation.Dispose();
+        await first.WaitAsync(TimeSpan.FromSeconds(2));
+        await operation.StopAsync();
+        Assert.Equal(1, stops);
+    }
+
+    [Fact]
+    public async Task SimulatedGraphCanReplacePreviewFramesAndRecordTwoCompleteClips()
+    {
+        var graph = new DirectShowSampleSession();
+        var format = Video(4, 2);
+        graph.SetFormats(format, Audio());
+        var folder = Directory.CreateTempSubdirectory();
+        byte[] pixels = new byte[16];
+        Array.Fill(pixels, (byte)128);
+        void Frame(byte luma)
+        {
+            pixels[0] = luma;
+            graph.ReceiveVideo(new(pixels, false));
+        }
+        void CheckPreview(byte luma)
+        {
+            Assert.True(graph.Frames.TryRead(out var raw));
+            using (raw)
+            {
+                Assert.Equal(luma, raw.Buffer[0]);
+                Assert.True(DirectShowPreviewVideo.TryConvert(format, graph.Encoding!,
+                    raw.Buffer.AsSpan(0, raw.Length), new byte[4 * 2 * 4], 4, 2));
+            }
+        }
+        try
+        {
+            Frame(16);
+            CheckPreview(16);
+            for (int clip = 1; clip <= 2; clip++)
+            {
+                var path = Path.Combine(folder.FullName, $"clip{clip}.mkv");
+                var writer = graph.StartRecording(path);
+                var expected = new List<byte>();
+                for (byte frame = 1; frame <= clip * 3; frame++)
+                {
+                    Frame((byte)(16 + frame));
+                    expected.AddRange(pixels);
+                    graph.ReceiveAudio(new(new byte[6], false));
+                }
+                graph.FinishRecording(writer);
+                CheckPreview((byte)(16 + clip * 3));
+                Assert.Equal(path, await writer.Completion.WaitAsync(TimeSpan.FromSeconds(10)));
+                using var report = JsonDocument.Parse(await File.ReadAllBytesAsync(NativeCaptureReport.PathFor(path)));
+                Assert.Equal(clip * 3, report.RootElement.GetProperty("expectedVideoFrames").GetInt64());
+                Assert.Equal(clip * 3, report.RootElement.GetProperty("pcmSampleFrames").GetInt64());
+                Assert.Equal(0, writer.RejectedPackets);
+                if (Environment.GetEnvironmentVariable("CAPTURERACK_TEST_SIGNAL_QC") == "1")
+                    await AssertDecodedPixelsAsync(path, expected);
+                Frame(48);
+                CheckPreview(48);
+            }
+            Assert.Equal(7, graph.SkippedBeforeDecode); // Two of three and five of six.
+            Assert.Equal(12, graph.Received);
+            graph.End(null);
+            Assert.Throws<InvalidOperationException>(() => graph.StartRecording(Path.Combine(folder.FullName, "late.mkv")));
+        }
+        finally
+        {
+            graph.End(null);
+            while (graph.Frames.TryRead(out var raw)) raw.Dispose();
+            folder.Delete(true);
+        }
+    }
+
+    private static async Task AssertDecodedPixelsAsync(string path, List<byte> expected)
+    {
+        var tools = QcReports.FindTools();
+        Assert.NotNull(tools.FfmpegPath);
+        var start = new System.Diagnostics.ProcessStartInfo(tools.FfmpegPath)
+        {
+            UseShellExecute = false, RedirectStandardOutput = true
+        };
+        foreach (var arg in new[] { "-v", "error", "-i", path, "-map", "0:v:0", "-fps_mode", "passthrough",
+            "-threads", "1", "-pix_fmt", "yuyv422", "-f", "rawvideo", "pipe:1" })
+            start.ArgumentList.Add(arg);
+        using var ffmpeg = System.Diagnostics.Process.Start(start)!;
+        using var decoded = new MemoryStream();
+        await ffmpeg.StandardOutput.BaseStream.CopyToAsync(decoded);
+        await ffmpeg.WaitForExitAsync();
+        Assert.Equal(0, ffmpeg.ExitCode);
+        Assert.Equal(expected.ToArray(), decoded.ToArray());
+    }
+
+    [Fact]
     public void CompressedFormatsTryTransportStreamFirst()
     {
         Assert.Equal(new[] { ".mov", ".mp4", ".mkv" }, DirectShowRecording.OutputExtensions(Video()));
@@ -58,7 +159,10 @@ public sealed class DirectShowRecordingTests
             await Assert.ThrowsAsync<IOException>(async () => await record.Completion);
             Assert.True(File.Exists(record.PartialPath));
             Assert.False(File.Exists(path));
+            Assert.Equal(1, record.RejectedPackets);
             using var report = JsonDocument.Parse(await File.ReadAllTextAsync(NativeCaptureReport.PathFor(record.PartialPath)));
+            Assert.Equal(1, report.RootElement.GetProperty("writerRejectedPackets").GetInt64());
+            Assert.Equal(JsonValueKind.Null, report.RootElement.GetProperty("driverDroppedVideoFrames").ValueKind);
             Assert.NotNull(report.RootElement.GetProperty("error").GetString());
         }
         finally { Cleanup(path); }
@@ -122,6 +226,7 @@ public sealed class DirectShowRecordingTests
             recording.Accept(true, new(bytes, false, TimeSpan.FromMilliseconds(1440)));
             var failure = await Assert.ThrowsAsync<IOException>(() => recording.Completion);
             Assert.Contains("did not keep up", failure.Message);
+            Assert.Equal(1, recording.RejectedPackets);
             Assert.False(File.Exists(path));
             using var checkpoint = JsonDocument.Parse(await File.ReadAllTextAsync(recording.PartialPath + ".checkpoint.json"));
             Assert.Equal(35, checkpoint.RootElement.GetProperty("videoPacketsToEncoder").GetInt64());

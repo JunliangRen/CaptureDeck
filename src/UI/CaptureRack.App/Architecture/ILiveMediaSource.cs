@@ -14,7 +14,6 @@ internal interface ILiveMediaSource
     bool IsRecording { get; }
     bool IsFinalizing { get; }
     bool HasInput { get; }
-    bool HasOpenDropdown { get; }
     long ReceivedUnits { get; }
     long DecodedFrames { get; }
     bool HasPreview { get; }
@@ -26,11 +25,8 @@ internal interface ILiveMediaSource
     string? SavedPath { get; }
     string? RecordingReportPath { get; }
     string? RecordingDetail { get; }
-    string? ConfigurationSummaryText { get; }
 
-    string? BuildFilenamePreview(string label);
     IReadOnlyList<TelemetryMetric> BuildLiveTelemetry(long previewSkippedFrames, Func<string, string> localize, IFormatProvider formatProvider);
-    void NotifyOutputFolderChanged();
     Task StartAsync(PreviewFeed feed);
     void StopPreview();
     Task ToggleRecordingAsync();
@@ -38,4 +34,11 @@ internal interface ILiveMediaSource
     void SetAudioMonitor(bool enabled, double volume);
     void SetAudioMonitorRoute(AudioMonitorRoute route);
     StereoLevels? ReadAudioLevels();
+}
+
+internal interface ILiveMediaInspector
+{
+    bool HasOpenDropdown { get; }
+    string? BuildFilenamePreview(string label);
+    void NotifyOutputFolderChanged();
 }

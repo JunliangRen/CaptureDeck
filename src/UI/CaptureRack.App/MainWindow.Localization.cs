@@ -259,7 +259,9 @@ public sealed partial class MainWindow
     private void RenderCounts(CaptureStats? stats)
     {
         var metrics = IsRfActive ? RfTelemetry() : LiveMediaSource is { } media ? BuildDecodedMediaTelemetry(media) :
-            activeModule.BuildTelemetry(stats, displayedPreviewSkips, L, settingsCulture);
+            stats is not null && activeModule is (DeckLinkWorkspaceModule or TestSignalWorkspaceModule)
+                ? DeckLinkWorkspaceModule.BuildVideoTelemetry(stats, displayedPreviewSkips, L, settingsCulture)
+                : activeModule.BuildIdleTelemetry(L);
         if (!ReferenceEquals(TelemetryStrip.ItemsSource, telemetryItems))
             TelemetryStrip.ItemsSource = telemetryItems;
 

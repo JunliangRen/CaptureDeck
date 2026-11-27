@@ -1912,4 +1912,6 @@
   <data name="AudioOutputDescription" xml:space="preserve"><value>WASAPI shared mode</value></data>
   <data name="AudioOutputDefault" xml:space="preserve"><value>Follow system default</value></data>
   <data name="AudioOutputUnavailable" xml:space="preserve"><value>{0} (disconnected)</value></data>
+  <data name="DsRecordRejected" xml:space="preserve"><value>Writer rejected packets</value></data>
+  <data name="RfFifoLost" xml:space="preserve"><value>FIFO lost samples</value></data>
 </root>

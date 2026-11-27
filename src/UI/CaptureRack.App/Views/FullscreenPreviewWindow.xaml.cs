@@ -27,7 +27,7 @@ internal sealed partial class FullscreenPreviewWindow : Window
     private double aspectRatio = 4d / 3;
     private bool showSafeArea;
     private bool showNtsc480Guide;
-    private (double Top, double Bottom)? cropGuide;
+    private RfGuideGeometry? cropGuide;
     private bool hasFrame;
     private bool miniBarVisible;
     private bool pointerOverMiniBar;
@@ -147,7 +147,7 @@ internal sealed partial class FullscreenPreviewWindow : Window
         UpdateOverlayVisibility();
     }
 
-    public void UpdateGeometry(double newAspectRatio, bool safeArea, bool ntsc480Guide, (double Top, double Bottom)? guide = null)
+    public void UpdateGeometry(double newAspectRatio, bool safeArea, bool ntsc480Guide, RfGuideGeometry? guide = null)
     {
         var aspectChanged = Math.Abs(aspectRatio - newAspectRatio) > 0.0001;
         aspectRatio = newAspectRatio;
@@ -328,12 +328,19 @@ internal sealed partial class FullscreenPreviewWindow : Window
 
     private void UpdateNtsc480GuideLayout()
     {
+        var geometry = cropGuide;
+        double width = PreviewSurface.Width, height = PreviewSurface.Height;
+        SafeAreaOverlay.Margin = geometry is not null && double.IsFinite(width + height)
+            ? new Thickness(width * geometry.Left / geometry.Width, height * geometry.Top / geometry.Height,
+                width * geometry.Right / geometry.Width, height * geometry.Bottom / geometry.Height)
+            : default;
+
         var show = hasFrame && showNtsc480Guide;
         Ntsc480GuideOverlay.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
         if (!show)
             return;
 
-        var (top, bottom) = cropGuide is { } guide ? (guide.Top * PreviewSurface.Height, guide.Bottom * PreviewSurface.Height)
+        var (top, bottom) = geometry?.Crop is { } crop ? (height * crop.Top / geometry.Height, height * crop.Bottom / geometry.Height)
             : FullscreenRenderPolicy.ComputeNtsc480GuideHeights(PreviewSurface.Height);
         if (!double.IsFinite(top + bottom))
             return;

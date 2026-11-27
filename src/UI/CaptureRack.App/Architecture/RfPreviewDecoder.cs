@@ -21,6 +21,7 @@ internal sealed class RfPreviewDecoder
     private readonly LocalAudioMonitor? speaker;
     internal sealed record FieldPair(PreviewField First, PreviewField Second, short[]? SwitchTrace)
     {
+        public RfGuideGeometry? Geometry { get; init; }
         public PreviewField Top => First.IsTopField ? First : Second;
         public PreviewField Bottom => First.IsTopField ? Second : First;
     }
@@ -32,9 +33,6 @@ internal sealed class RfPreviewDecoder
     public volatile int FieldMode;
     private byte[] woven = [];
     public volatile bool FullRaster;
-    internal sealed record CropGuide(double Top, double Bottom);
-    private CropGuide? guide;
-    public CropGuide? NtscGuide => Volatile.Read(ref guide);
     private string? error;
     private int ended;
     private RealtimePreviewSession? session;
@@ -104,14 +102,19 @@ internal sealed class RfPreviewDecoder
             int offset = (y + bounds.Y) * source.Stride + bounds.X * 4;
             source.Bgra.Span.Slice(offset, stride).CopyTo(woven.AsSpan(row++ * stride));
         }
-        int activeRows = top.ActiveVideoRect.Height + bottom.ActiveVideoRect.Height;
-        int extra = Math.Max(0, activeRows - 480);
-        int topRows = (full ? top.ActiveVideoRect.Y + bottom.ActiveVideoRect.Y : 0) + (2 * extra + 1) / 3;
-        int bottomRows = Math.Max(0, height - topRows - Math.Min(activeRows, 480));
-        Volatile.Write(ref guide, mode == 0 && field.FieldsPerSecond > 55 && (topRows > 0 || bottomRows > 0)
-            ? new CropGuide((double)topRows / height, (double)bottomRows / height) : null);
+        var upperActive = top.ActiveVideoRect;
+        var lowerActive = bottom.ActiveVideoRect;
+        int upperTop = upperActive.Y - upper.Y, lowerTop = lowerActive.Y - lower.Y;
+        int upperBottom = upper.Height - upperTop - upperActive.Height;
+        int lowerBottom = lower.Height - lowerTop - lowerActive.Height;
+        int left = mode == 3 ? lowerActive.X - lower.X : upperActive.X - upper.X;
+        int activeWidth = mode == 3 ? lowerActive.Width : upperActive.Width;
+        int activeTop = mode switch { 0 => upperTop + lowerTop, 3 => lowerTop, _ => upperTop };
+        int activeBottom = mode switch { 0 => upperBottom + lowerBottom, 2 => upperBottom, _ => lowerBottom };
+        var geometry = RfGuideGeometry.Create(upper.Width, height, left, activeTop,
+            upper.Width - left - activeWidth, activeBottom, mode == 0 && field.FieldsPerSecond > 55);
         ScopeFeed.SubmitDecodedFrame(woven, upper.Width, height, mode == 0 ? first.IsTopField : null,
-            field.FieldsPerSecond / 2, upper.Width, height, upper.Width * field.PixelAspectRatio / fullHeight, sourceTag: pair);
+            field.FieldsPerSecond / 2, upper.Width, height, upper.Width * field.PixelAspectRatio / fullHeight, sourceTag: pair with { Geometry = geometry });
     }
 
     public RfPreviewDecoder(RealtimePreviewOptions options, RfPreviewAudio? audio, string? trackLabel = null, LocalAudioMonitor? speaker = null)

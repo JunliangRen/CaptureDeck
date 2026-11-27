@@ -907,7 +907,10 @@
     <value>モニタリング表示用の Y′CbCr → RGB 変換マトリクスを選択します。</value>
   </data>
   <data name="Ntsc480Guide" xml:space="preserve">
-    <value>NTSC 480 クロップガイド（上 4 / 下 2 ライン）</value>
+    <value>NTSC 480 クロップガイド（上 {0} / 下 {1} ライン）</value>
+  </data>
+  <data name="Ntsc480GuideTitle" xml:space="preserve">
+    <value>NTSC 480 クロップガイド</value>
   </data>
   <data name="AudioMonitorTitle" xml:space="preserve">
     <value>ローカル音声モニター</value>

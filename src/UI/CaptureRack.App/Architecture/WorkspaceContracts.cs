@@ -782,6 +782,22 @@ internal static class FireWireSettingsResolver
             : new FireWireSettings { DeviceId = selectedDeviceId };
 }
 
+internal sealed record RfGuideGeometry(int Width, int Height, int Left, int Top, int Right, int Bottom,
+    (int Top, int Bottom)? Crop)
+{
+    public static RfGuideGeometry Create(int width, int height, int left, int top, int right, int bottom, bool ntscFrame)
+    {
+        int extra = height - top - bottom - 480;
+        (int Top, int Bottom)? crop = null;
+        if (ntscFrame && extra >= 0 && height > 480)
+        {
+            int trimTop = (2 * extra + 1) / 3;
+            crop = (top + trimTop, bottom + extra - trimTop);
+        }
+        return new(width, height, left, top, right, bottom, crop);
+    }
+}
+
 public static class FullscreenRenderPolicy
 {
     public static bool ShouldPauseMainWindowRendering(bool fullscreenActive, bool sameDisplayAsMainWindow) =>

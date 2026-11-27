@@ -907,7 +907,10 @@
     <value>选择监看预览时的 Y′CbCr 转 RGB 色彩矩阵。</value>
   </data>
   <data name="Ntsc480Guide" xml:space="preserve">
-    <value>NTSC 480 裁切参考线（顶 4 行 / 底 2 行）</value>
+    <value>NTSC 480 裁切参考线（顶 {0} 行 / 底 {1} 行）</value>
+  </data>
+  <data name="Ntsc480GuideTitle" xml:space="preserve">
+    <value>NTSC 480 裁切参考线</value>
   </data>
   <data name="AudioMonitorTitle" xml:space="preserve">
     <value>本地音频监听</value>

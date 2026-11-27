@@ -280,8 +280,6 @@ public sealed partial class MainWindow
         renderer.ScopeFeed.RenderScopes = true;
         previewFrame = null;
         renderer.RenderPair(pair);
-        rfGuide = renderer.NtscGuide is { } guide ? (guide.Top, guide.Bottom) : null;
-        UpdateNtsc480GuideLayout();
         PresentPreview(renderer.ScopeFeed);
         renderer.ScopeFeed.VisitScopes(PaintVideoScopes);
         PaintSignalScope(pair, force: true);
@@ -388,7 +386,7 @@ public sealed partial class MainWindow
         rfInspector.SetTelemetry("", null);
     }
 
-    private (double Top, double Bottom)? rfGuide;
+    private RfGuideGeometry? rfGuide;
 
 #if REALTIME_RF
     private RfPreviewDecoder? heldDecoder;
@@ -635,14 +633,6 @@ public sealed partial class MainWindow
                 feed.ScopeWaveformMode = scopeWaveformMode;
                 feed.ScopeIreScale = scopeLumaScale == ScopeLumaScaleMode.Ire;
                 feed.RenderScopes = !PauseMainWindowRendering && EffectiveWorkspaceLayout is WorkspaceLayoutMode.Split or WorkspaceLayoutMode.Scopes;
-                var crop = decoder.NtscGuide;
-                (double Top, double Bottom)? guide = crop is null ? null : (crop.Top, crop.Bottom);
-                if (rfGuide != guide)
-                {
-                    rfGuide = guide;
-                    UpdateNtsc480GuideLayout();
-                    SyncFullscreenPreviewWindow();
-                }
                 PresentPreview(feed);
                 if (feed.PresentedSequence != presented)
                 {

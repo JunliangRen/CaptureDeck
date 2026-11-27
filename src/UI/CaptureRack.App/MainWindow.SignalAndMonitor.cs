@@ -179,16 +179,24 @@ public sealed partial class MainWindow
     };
 
     private bool NtscGuideEnabled => LiveMediaSource is null && showNtsc480Guide &&
-        (!IsRfActive || rfGuide.HasValue);
+        (!IsRfActive || rfGuide?.Crop is not null);
 
     private void UpdateNtsc480GuideLayout()
     {
+        var geometry = IsRfActive ? rfGuide : null;
+        double width = PreviewSurface.Width, height = PreviewSurface.Height;
+        SafeAreaOverlay.Margin = geometry is not null && double.IsFinite(width + height)
+            ? new Thickness(width * geometry.Left / geometry.Width, height * geometry.Top / geometry.Height,
+                width * geometry.Right / geometry.Width, height * geometry.Bottom / geometry.Height)
+            : default;
+        monitorOptionsBar.SetCropLines(IsRfActive ? geometry?.Crop : (4, 2));
+
         var show = NtscGuideEnabled && (!IsRfActive || previewBitmap is not null) && PreviewPlaceholder.Visibility == Visibility.Collapsed;
         Ntsc480GuideOverlay.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
         if (!show)
             return;
 
-        var (top, bottom) = IsRfActive && rfGuide is { } guide ? (guide.Top * PreviewSurface.Height, guide.Bottom * PreviewSurface.Height)
+        var (top, bottom) = geometry?.Crop is { } crop ? (height * crop.Top / geometry.Height, height * crop.Bottom / geometry.Height)
             : FullscreenRenderPolicy.ComputeNtsc480GuideHeights(PreviewSurface.Height);
         if (!double.IsFinite(top + bottom))
             return;

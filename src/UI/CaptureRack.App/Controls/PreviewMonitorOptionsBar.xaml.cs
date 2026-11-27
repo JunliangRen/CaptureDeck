@@ -88,6 +88,20 @@ public sealed partial class PreviewMonitorOptionsBar : UserControl
         UpdateAudioMonitorVisuals();
     }
 
+    private (int Top, int Bottom)? cropLines = (4, 2);
+
+    internal void SetCropLines((int Top, int Bottom)? lines)
+    {
+        if (cropLines == lines) return;
+        cropLines = lines;
+        UpdateCropLabel();
+    }
+
+    private void UpdateCropLabel() =>
+        Ntsc480GuideCheckBox.Content = cropLines is { } lines
+            ? string.Format(localize("Ntsc480Guide"), lines.Top, lines.Bottom)
+            : localize("Ntsc480GuideTitle");
+
     public void ApplyLanguage(
         Func<string, string> localizer,
         string deinterlaceTag,
@@ -106,7 +120,7 @@ public sealed partial class PreviewMonitorOptionsBar : UserControl
         PreviewAspectLabel.Text = localize("PreviewAspectLabel");
         PreviewMatrixLabel.Text = localize("PreviewMatrixLabel");
         SafeAreaCheckBox.Content = localize("SafeAreaGuides");
-        Ntsc480GuideCheckBox.Content = localize("Ntsc480Guide");
+        UpdateCropLabel();
         AudioMonitorTitleText.Text = localize("AudioMonitorTitle");
         AudioMonitorRouteLabel.Text = localize("AudioMonitorRouteLabel");
         AutomationProperties.SetName(AudioMonitorRoutePicker, localize("AudioMonitorRouteLabel"));

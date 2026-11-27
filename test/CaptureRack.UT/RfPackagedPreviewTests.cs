@@ -125,6 +125,7 @@ public sealed class RfPackagedPreviewTests(ITestOutputHelper output)
         var decoder = new RfPreviewDecoder(RfDecoderOptions.Create(type, rate, pal, false, profile, 0),
             hifi ? audio : null, hifi ? "Beta Hi-Fi" : null);
         decoder.ScopeFeed.DeinterlaceMode = PreviewDeinterlaceMode.Off;
+        decoder.FullRaster = true;
         PreviewFrame? frame = null;
         long offset = 0;
         async Task<long> Replay()
@@ -142,7 +143,19 @@ public sealed class RfPackagedPreviewTests(ITestOutputHelper output)
                 if (audio.Read() is { Locked: true, Levels: { ChannelCount: 2, LeftPeak: > 0, RightPeak: > 0 } } reading)
                     generation = reading.Generation;
                 if (!decoder.ScopeFeed.TryTakeLatest(ref frame)) return;
-                var field = Assert.IsType<RfPreviewDecoder.FieldPair>(frame!.SourceTag).Second;
+                var pair = Assert.IsType<RfPreviewDecoder.FieldPair>(frame!.SourceTag);
+                var field = pair.Second;
+                var guides = Assert.IsType<RfGuideGeometry>(pair.Geometry);
+                Assert.Equal(pair.Top.ActiveVideoRect.Width, guides.Width - guides.Left - guides.Right);
+                Assert.Equal(pair.Top.ActiveVideoRect.Height + pair.Bottom.ActiveVideoRect.Height,
+                    guides.Height - guides.Top - guides.Bottom);
+                if (pal) Assert.Null(guides.Crop);
+                else
+                {
+                    var (top, bottom) = guides.Crop!.Value;
+                    Assert.Equal(480, guides.Height - top - bottom);
+                    if (pairs == 0) output.WriteLine($"Full raster {guides.Width}x{guides.Height}: crop {top}/{bottom}, active margins {guides.Left}/{guides.Top}/{guides.Right}/{guides.Bottom}.");
+                }
                 // The latest-frame slot can still contain the last field from before the injected RF gap.
                 if (field.Timestamp < segmentStart) return;
                 if (previous.HasValue)

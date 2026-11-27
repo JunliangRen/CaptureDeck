@@ -2492,6 +2492,7 @@ public sealed partial class MainWindow : Window
         bitmapPixels = null;
         previewBitmap = null;
         previewFrame = null;
+        rfGuide = null;
         preview = feed;
         if (feed is not null && PauseMainWindowRendering)
             feed.RenderScopes = false;
@@ -2503,7 +2504,7 @@ public sealed partial class MainWindow : Window
         PreviewPlaceholder.Visibility = Visibility.Visible;
         PreviewHudPill.Visibility = Visibility.Collapsed;
         SafeAreaOverlay.Visibility = Visibility.Collapsed;
-        Ntsc480GuideOverlay.Visibility = Visibility.Collapsed;
+        UpdateNtsc480GuideLayout();
         decodedDisplayAspectRatio = 0;
         if (feed is null)
             UpdatePreviewScanMode(null);
@@ -2517,6 +2518,15 @@ public sealed partial class MainWindow : Window
         if (feed is null || !feed.TryTakeLatest(ref previewFrame) || previewFrame is not { } frame)
             return;
 
+#if REALTIME_RF
+        var geometry = (frame.SourceTag as RfPreviewDecoder.FieldPair)?.Geometry;
+        if (rfGuide != geometry)
+        {
+            rfGuide = geometry;
+            UpdateNtsc480GuideLayout();
+            SyncFullscreenPreviewWindow();
+        }
+#endif
         UpdatePreviewScanMode(frame.IsInterlaced);
         if (previewBitmap?.PixelWidth != frame.Width || previewBitmap.PixelHeight != frame.Height)
         {

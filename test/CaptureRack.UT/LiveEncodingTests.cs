@@ -188,6 +188,7 @@ public sealed class LiveEncodingTests
             Assert.InRange(lastTimestamp, 500, 3200);
             if (injectDiskStall)
             {
+                ValidationEvidence.Save("write-stall", report);
                 var write = report.GetProperty("longestDiskWriteMilliseconds").GetDouble();
                 Assert.True(write >= 250, $"Expected the injected disk delay, measured {write} ms.");
                 Assert.Equal(Math.Max(write, report.GetProperty("longestDiskFlushMilliseconds").GetDouble()),
@@ -382,6 +383,7 @@ public sealed class LiveEncodingTests
             Assert.False(File.Exists(path));
             using var journal = JsonDocument.Parse(await File.ReadAllTextAsync(path + ".partial.mkv.checkpoint.json"));
             var report = journal.RootElement;
+            ValidationEvidence.Save("exhausted-queue", report);
             Assert.Equal(18, report.GetProperty("captureVideoPackets").GetInt64());
             Assert.Equal(0, report.GetProperty("captureEstimatedMissingVideoFrames").GetInt64());
             Assert.Equal(16, report.GetProperty("queuePeakPackets").GetInt32());

@@ -214,6 +214,7 @@ public sealed class RfCaptureSessionTests
         Assert.Equal(qc.FileSamples, report.GetProperty("WrittenSamples").GetInt64());
         Assert.Equal(qc.FileSamples / 1021, report.GetProperty("NegativeClips").GetInt64());
         Assert.Equal(0, report.GetProperty("PositiveClips").GetInt64());
+        ValidationEvidence.Save(Path.GetFileName(qc.FinalPath), new { capture = report, verifiedSamples = qc.FileSamples });
         return (report.GetProperty("PreviewSessionId").GetGuid(), report.GetProperty("FirstPreviewSample").GetInt64());
     }
 }

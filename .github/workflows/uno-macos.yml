@@ -10,6 +10,7 @@ on:
       - 'global.json'
       - 'Directory.Build.targets'
       - '.github/workflows/uno-macos.yml'
+  workflow_call:
   workflow_dispatch:
 
 permissions:

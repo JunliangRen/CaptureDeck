@@ -213,6 +213,7 @@ public sealed class TestSignalTests
                 Assert.Equal(QcStatus.Passed, result.Status);
                 Assert.Equal(15, result.DecodedVideoFrames);
                 Assert.Equal(24024, result.DecodedAudioSampleFrames);
+                ValidationEvidence.Save("endpoint-loss", new { result.DecodedVideoFrames, result.DecodedAudioSampleFrames, log.Expected });
             }
         }
         finally

@@ -327,3 +327,31 @@ In the RF device list, select **File playback**, open a mono RF (.s16, .raw, .fl
 RF display settings include Active video or Full raster, original interlaced frames or motion-adaptive Bob-Weave x1/x2, display aspect, safe areas and NTSC 480-line guides. Changing the decoder while previewing keeps the input session open.
 
 For RTL-SDR Hi-Fi RF playback, open the reconstructed mono FLAC or signed 16-bit RAW file in the RF file player. Recognized Hi-Fi captures select VHS Hi-Fi automatically. Select NTSC or PAL to match the recording. Playback feeds 48 kHz stereo to the audio meter, PCM spectrum and local speaker monitor. The speaker button or M mutes monitoring independently of the meter. Native I/Q files stay in the RF monitor.
+
+## Validation and hardware support
+
+Run from the repository root with Python 3.11+, the repository SDK and FFmpeg/FFprobe on PATH. Use a new output directory per run. Each contains `validation.json` with the candidate version and commit, evidence source, elapsed time, outcome and first failed stage. Compare the same profile across checkouts. Short runs also retain individual test results and capture/queue measurements. The recovery profile kills its own test-signal capture process after the first durable cluster, recovers the file and fully decodes both tracks.
+
+```powershell
+python tools/validate.py short bin/check-short
+dotnet publish src/CaptureRack.Probe -c Release -r win-x64 -o bin/check-probe
+python tools/validate.py recovery bin/check-recovery --probe bin/check-probe/CaptureRack.Probe.exe
+python tools/validate.py file bin/check-file --probe bin/check-probe/CaptureRack.Probe.exe --media example.mov
+```
+
+With a Domesday Duplicator 3.2 connected, obtain its instance ID with `CaptureRack.Probe rf list`. Run `python tools/validate.py ddd bin/check-ramp --probe bin/check-probe/CaptureRack.Probe.exe --device "<instance-id>"` for the 600-second, 40 MSPS FLAC baseline. Review the live and verified sample counts, FIFO coverage, queue peak and available disk before extending to `--seconds 28800`. The 2:1 disk estimate is 24 GB for ten minutes and 1.152 TB for eight hours. Actual compression varies. For A/V clock drift, feed stable audio and video to a DeckLink input and run `python tools/validate.py av-clock bin/check-clocks --probe bin/check-probe/CaptureRack.Probe.exe --device 0 --seconds 28800`. This profile measures change in A/V timestamp offset in 1/48000-second ticks. It stores clock observations without writing a long capture file.
+
+| Source and mode | Platform | Evidence |
+| --- | --- | --- |
+| Domesday Duplicator 3.2, 40 MSPS ramp FLAC | Windows x64 | Physical ten-minute capture and per-sample decode, plus consecutive clips in one receiver session |
+| Domesday Duplicator Legacy / 3.1 | Windows x64 | Legacy marker and transport fault simulation. Physical validation pending for both revisions |
+| RTL-SDR Blog V4, I/Q and mono Hi-Fi | Windows x64 | Physical short RAW/FLAC captures and VGA adjustment. Recorded Hi-Fi files replayed |
+| DeckLink and DirectShow | Windows x64 | Physical input and preview tests, simulated file counts and encoder faults. Eight-hour A/V drift baseline pending |
+| i.LINK DV and HDV / D-VHS | Windows x64 | HM-DHX2 physical TS192 capture. DV/HDV format coverage from simulated sources |
+| Offline QC | Windows x64 / ARM64, macOS ARM64 Uno | Windows unit and file-decode tests, macOS portable tests and package verification. ARM64 live hardware validation is separate |
+
+[Versioned hardware and engineering evidence through v0.7.0](docs/validation/through-v0.7.0.md)
+
+### Release candidates
+
+Dispatch **Verify release candidate** at the desired ref. Both Windows builds and the macOS bundle come from the same workflow SHA. The final artifact contains three verified ZIPs and `SHA256SUMS.txt`. For downloaded Actions artifacts, run `python tools/release.py NEW_DIRECTORY --artifacts ARTIFACT_DIRECTORY --version VERSION --commit FULL_SHA`. Omit `--artifacts` to verify existing ZIPs. Update the realtime package content hashes from the official NuGet archive when its version changes. Windows CI pins the FFmpeg release asset and digest independently for each architecture.

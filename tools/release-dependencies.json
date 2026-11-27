@@ -1,0 +1,18 @@
+{
+  "package": "VHSDecode.Preview.Realtime/2.29.0-preview.ci.5",
+  "files": {
+    "App/licenses/VHSDecode.Preview.Realtime/LICENSE": "bfde1fd94c3b17b89fbbfa6321660c8284f631bf126db1e0a32c897944a842db",
+    "App/licenses/VHSDecode.Preview.Realtime/THIRD-PARTY-NOTICES.md": "b81b9781902eeeec6fd4bf9eb71d55454939874f92b927f5710062ab8779bfc0",
+    "App/VHSDecode.Preview.Realtime.dll": "44d0ed7e3bc9901590ebfa38936d4854ec20ad5fe53e52c09412a7ca6509c978",
+    "App/licenses/VHSDecode.Preview.Realtime/FFmpeg/licenses/COPYING.LGPLv2.1": "92a759ec0febde4750821736bbde642a3b835c0604fc81bee62f9e428f86981f",
+    "App/licenses/VHSDecode.Preview.Realtime/liba52/COPYING": "b15f41248f0957edfd2d91202ee810a6ef2d92c0256d330585d806677306a706",
+    "App/vhsdecode_realtime_preview.dll": "ecdaf0322fb0546e1e62f9a4007871f2165c669f725dc9bfd8919a144d2a664e"
+  },
+  "wasapi": {
+    "package": "NAudio.Wasapi/2.3.0",
+    "sha256": {
+      "App": "00c1b1644ed3423f930507085752ebeb7977e0a01cdd4f3766f303396c033bf9",
+      "Probe": "a05e371abf96195770ac4f84653d987d63731fed528e98c7fe0d10ce66e37d7e"
+    }
+  }
+}

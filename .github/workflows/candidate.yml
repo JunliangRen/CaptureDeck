@@ -1,0 +1,31 @@
+name: Verify release candidate
+on: workflow_dispatch
+permissions:
+  contents: read
+  packages: read
+
+jobs:
+  windows:
+    uses: ./.github/workflows/windows.yml
+  mac:
+    uses: ./.github/workflows/uno-macos.yml
+  verify:
+    needs: [windows, mac]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@v6
+        with:
+          path: artifacts
+      - name: Assemble and verify candidate
+        run: |
+          python -B -m unittest discover -s test/release
+          version=$(python -c "import xml.etree.ElementTree as E; print(E.parse('src/CaptureRack.Probe/CaptureRack.Probe.csproj').findtext('.//Version'))")
+          python tools/release.py release --artifacts artifacts --version "$version" --commit "$GITHUB_SHA"
+      - uses: actions/upload-artifact@v6
+        with:
+          name: verified-release
+          path: release/
+          if-no-files-found: error

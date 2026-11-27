@@ -14,6 +14,9 @@ internal static class Program
     [MTAThread]
     private static int Main(string[] args)
     {
+        if (args.Length > 0 && args[0] == "validate")
+            return ValidationCommand.Run(args[1..]);
+
         if (args.Length > 0 && args[0] == "rf")
             return RfCommand.Run(args[1..]);
 
@@ -101,6 +104,7 @@ internal static class Program
 
     private static void PrintUsage()
     {
+        Console.WriteLine("CaptureRack.Probe validate --help");
         Console.WriteLine("CaptureRack.Probe list");
         Console.WriteLine("CaptureRack.Probe capture <device-index> <seconds:1-3600> [mode-fourcc]");
         Console.WriteLine("CaptureRack.Probe qc <mov-or-mkv-path>");

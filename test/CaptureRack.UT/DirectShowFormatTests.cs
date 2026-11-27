@@ -95,7 +95,7 @@ public sealed unsafe class DirectShowFormatTests
             [interlaced, interlaced with { InterlaceFlags = 0x85 }]).FieldOrder);
         Assert.Null(CaptureMediaType.ResolveScanMode(legacy, "camera",
             [interlaced, interlaced with { InterlaceFlags = 7 }]).FieldOrder);
-        Assert.Null(CaptureMediaType.ResolveScanMode(legacy, "camera", [progressive with { FrameInterval100ns = 400000 }]).FieldOrder);
+        Assert.Equal("progressive", CaptureMediaType.ResolveScanMode(legacy, "camera", [interlaced with { FrameInterval100ns = 400000 }]).FieldOrder);
         Assert.Equal("top-first", CaptureMediaType.ResolveScanMode(interlaced, "camera", [progressive]).FieldOrder);
     }
 
@@ -111,23 +111,19 @@ public sealed unsafe class DirectShowFormatTests
 
         Assert.Equal(expected, resolved.FieldOrder);
         Assert.Null(resolved.InterlaceFlags);
-        Assert.Null(CaptureMediaType.ResolveScanMode(format, "generic capture", []).FieldOrder);
+        Assert.Equal("progressive", CaptureMediaType.ResolveScanMode(format, "generic capture", []).FieldOrder);
     }
 
-    [Fact]
-    public void ObsVirtualCameraProgressiveFallbackKeepsDriverFlagsDistinct()
+    [Theory]
+    [InlineData("NV12", "3231564e-0000-0010-8000-00aa00389b71", "progressive")]
+    [InlineData(null, "e436eb7d-524f-11ce-9f53-0020af0ba770", "progressive")]
+    [InlineData("MJPG", "47504a4d-0000-0010-8000-00aa00389b71", null)]
+    public void LegacyRawFrameDefaultIsIndependentOfDeviceAndPin(string? fourCc, string subtype, string? expected)
     {
-        const string device = @"@device:sw:{860BB310-5D01-11D0-BD3B-00A0C911CE86}\{A3FCE0F5-3493-419F-958A-ABA1250EC20B}";
-        var obs = LegacyUyvy(1080, 166833) with
-        {
-            Width = 1920, PinId = "Output Pin", FourCc = "NV12", Subtype = new("3231564e-0000-0010-8000-00aa00389b71")
-        };
-        var resolved = CaptureMediaType.ResolveScanMode(obs, device, []);
+        var format = LegacyUyvy(1080, 166833) with { Width = 1920, FourCc = fourCc, Subtype = new(subtype) };
+        var resolved = CaptureMediaType.ResolveScanMode(format, "generic source", []);
         Assert.Null(resolved.InterlaceFlags);
-        Assert.Equal("progressive", resolved.FieldOrder);
-        Assert.Null(CaptureMediaType.ResolveScanMode(obs, "OBS Virtual Camera", []).FieldOrder);
-        Assert.Null(CaptureMediaType.ResolveScanMode(obs with { PinId = "Other" }, device, []).FieldOrder);
-        Assert.Equal("top-first", CaptureMediaType.ResolveScanMode(obs with { InterlaceFlags = 0x25 }, device, []).FieldOrder);
+        Assert.Equal(expected, resolved.FieldOrder);
     }
 
     private static DirectShowFormat LegacyUyvy(int height, long interval) => new(0, "0", "Capture", "video",

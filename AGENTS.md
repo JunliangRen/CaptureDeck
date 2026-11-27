@@ -39,7 +39,7 @@ This is the repository handoff for coding agents. Start with the current Git sta
 
 Keep WinUI preview, speaker playback and recording queues independent. Preserve capture buffers before returning from borrowed sample callbacks. Treat preview skips, recording loss and unavailable telemetry as distinct observations. Report software recording failures and preserve interrupted media for QC.
 
-The built-in OBS Studio DirectShow virtual camera delivers compositor frames. Its legacy VIDEOINFOHEADER on the registered output pin omits scan flags. Use the device-specific progressive fallback for its NV12/I420/YUY2 outputs after checking explicit metadata. Local verification received 120 NV12 samples at 1920 x 1080 and 59.94 fps in two seconds.
+For supported raw DirectShow frame layouts with a legacy VIDEOINFOHEADER, use the progressive rendering default after checking matching extended media types and the Blackmagic AVStream exception. Keep conflicting flags and compressed streams unresolved when no stronger evidence exists. The original interlace flags remain available separately from fallback flags.
 
 Windows App and Probe builds require the RID-specific RTL-SDR and libusb DLLs from `third_party/rtl-sdr`. Both build and publish include the corresponding source and notices. The x64 bundle enumerated and probed a physical RTL-SDR Blog V4 (R828D, manual VGA available) without an environment override. ARM64 device operation is unverified.
 

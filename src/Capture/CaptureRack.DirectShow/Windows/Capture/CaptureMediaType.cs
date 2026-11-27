@@ -115,15 +115,18 @@ internal static unsafe class CaptureMediaType
         if (alternatives.Length > 0)
             return alternatives.Length == 1 ? format with { FallbackInterlaceFlags = alternatives[0] } : format;
 
-        // OBS Studio's virtual camera delivers complete compositor frames through this software filter.
-        const string obsVirtualCamera = @"@device:sw:{860BB310-5D01-11D0-BD3B-00A0C911CE86}\{A3FCE0F5-3493-419F-958A-ABA1250EC20B}";
-        if (deviceId.Equals(obsVirtualCamera, StringComparison.OrdinalIgnoreCase) &&
-            format.PinId == "Output Pin" && format.FourCc is "NV12" or "I420" or "YUY2")
-            return format with { FallbackInterlaceFlags = 0 };
+        // DirectShow renders FORMAT_VideoInfo frames as progressive in the absence of
+        // stronger evidence. Compressed streams can carry their own scan information.
+        // https://learn.microsoft.com/windows/win32/directshow/setting-deinterlace-preferences
+        if (!deviceId.StartsWith(@"@device:pnp:\\?\decklink#avstream#", StringComparison.OrdinalIgnoreCase))
+        {
+            var encoding = DirectShowPreviewVideo.Encoding(format);
+            return encoding is not null && !DirectShowPreviewVideo.IsJpeg(encoding)
+                ? format with { FallbackInterlaceFlags = 0 } : format;
+        }
 
-        // The Blackmagic AVStream pin omits scan metadata for these two native SD modes.
-        if (!deviceId.StartsWith(@"@device:pnp:\\?\decklink#avstream#", StringComparison.OrdinalIgnoreCase) ||
-            format.FourCc is not ("UYVY" or "v210") || format.Width != 720)
+        // Blackmagic also uses this header for interlaced capture. Only infer its known SD modes.
+        if (format.FourCc is not ("UYVY" or "v210") || format.Width != 720)
             return format;
 
         const uint interlaced = 0x01;

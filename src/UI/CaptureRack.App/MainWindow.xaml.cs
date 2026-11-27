@@ -120,9 +120,26 @@ public sealed partial class MainWindow : Window
         InitializeComponent();
         Activated += MainWindow_Activated;
         Closed += OnWindowClosed;
+        rfInspector.PreviewOptions.DisplayChanged += RefreshRfInspection;
+        rfInspector.PreviewOptions.DecoderChanged += () =>
+        {
+            if (settingsReady && !closing && IsRfActive && rfPreviewStop is null) DiscardRfInspection();
+            if (settingsReady && !closing && IsRfActive && rfPreviewStop is null && rfInspector.PreviewOptions.PreviewType == RfPreviewType.LaserDisc)
+                ConfigureRfAudioMeter(newSession: true);
+        };
         rfInspector.Changed += () =>
         {
             if (!IsRfActive || !settingsReady || closing) return;
+            if (rfWasPlayback != rfInspector.IsPlayback)
+            {
+                rfWasPlayback = rfInspector.IsPlayback;
+                ResetRfMonitor();
+            }
+#if REALTIME_RF
+            if (heldDecoder is not null && rfPreviewStop is null &&
+                (!rfInspector.IsPlayback || heldDecoder.Options.InputSampleRateHz != rfInspector.PlaybackFile?.Rate))
+                DiscardRfInspection();
+#endif
             ConfigureRfAudioMeter();
             UpdateConfigurationStatus();
             RenderCounts(null);
@@ -367,8 +384,9 @@ public sealed partial class MainWindow : Window
     {
         InspectorSlot.Content = LiveMediaSource as UserControl ?? (IsDeckLinkActive ? deckLinkInspector :
             IsTestSignalActive ? testSignalInspector : IsRfActive ? rfInspector : plannedInspectorView);
-        MonitorBarSlot.Content = HasLiveCapture ? monitorOptionsBar : null;
-        MonitorBarSlot.Visibility = HasLiveCapture ? Visibility.Visible : Visibility.Collapsed;
+        RfOptionsSlot.Content = IsRfActive ? rfInspector.PreviewOptions : null;
+        MonitorBarSlot.Content = IsRfActive || HasLiveCapture ? monitorOptionsBar : null;
+        MonitorBarSlot.Visibility = IsRfActive || HasLiveCapture ? Visibility.Visible : Visibility.Collapsed;
         MonitorViewport.Visibility = HasLiveCapture || IsRfActive ? Visibility.Visible : Visibility.Collapsed;
         StageSlot.Content = HasLiveCapture ? null : plannedStageView;
         RfStage.Visibility = IsRfActive ? Visibility.Visible : Visibility.Collapsed;
@@ -426,6 +444,7 @@ public sealed partial class MainWindow : Window
         activeModule = target;
         if (changed)
         {
+            DiscardRfInspection();
             if (previewFullscreen)
                 SetPreviewFullscreen(false);
             previewSelection = default;
@@ -468,9 +487,21 @@ public sealed partial class MainWindow : Window
         SelectBackendModule(backendId, persist: true);
     }
 
+    private void StageToolbar_SizeChanged(object sender, SizeChangedEventArgs args) => ArrangeStageOptions();
+
+    private void ArrangeStageOptions()
+    {
+        bool wrap = IsRfActive && StageToolbar.ActualWidth < 980;
+        Grid.SetRow(StageOptionsScroll, wrap ? 1 : 0);
+        Grid.SetColumn(StageOptionsScroll, wrap ? 0 : 1);
+        Grid.SetColumnSpan(StageOptionsScroll, wrap ? 2 : 1);
+        StageOptionsScroll.HorizontalAlignment = wrap ? HorizontalAlignment.Right : HorizontalAlignment.Stretch;
+    }
+
     private void ApplyModuleCapabilities()
     {
         var caps = ActiveWorkspaceCapabilities;
+        ArrangeStageOptions();
         var liveStage = HasLiveCapture;
         LayoutSegmentTrack.Visibility = liveStage && (caps.SupportsVideoPreview || caps.SupportsAudioSpectrum || caps.SupportsEvents)
             ? Visibility.Visible : Visibility.Collapsed;
@@ -481,10 +512,10 @@ public sealed partial class MainWindow : Window
         LayoutSpectrumBtn.Visibility = liveStage && caps.SupportsAudioSpectrum ? Visibility.Visible : Visibility.Collapsed;
         LayoutEventsBtn.Visibility = liveStage && caps.SupportsEvents ? Visibility.Visible : Visibility.Collapsed;
         if (IsRfActive)
-            LayoutSegmentTrack.Visibility = LayoutFocusBtn.Visibility = LayoutSplitBtn.Visibility = LayoutSpectrumBtn.Visibility = Visibility.Visible;
+            LayoutSegmentTrack.Visibility = LayoutFocusBtn.Visibility = LayoutSplitBtn.Visibility = LayoutScopesBtn.Visibility = LayoutSpectrumBtn.Visibility = Visibility.Visible;
         monitorOptionsBar.ApplyCapabilities(caps, LiveMediaSource?.HasDeinterlace ?? true,
-            matrix: LiveMediaSource is null, ntscGuide: LiveMediaSource is null);
-        SplitSpectrumBtn.Visibility = caps.SupportsAudioSpectrum ? Visibility.Visible : Visibility.Collapsed;
+            matrix: !IsRfActive && LiveMediaSource is null, ntscGuide: LiveMediaSource is null);
+        SplitSpectrumBtn.Visibility = IsRfActive || caps.SupportsAudioSpectrum ? Visibility.Visible : Visibility.Collapsed;
         SplitEventsBtn.Visibility = caps.SupportsEvents ? Visibility.Visible : Visibility.Collapsed;
         ApplyWorkspaceLayout();
         RfMeasureButton.Visibility = IsRfActive ? Visibility.Visible : Visibility.Collapsed;
@@ -868,15 +899,15 @@ public sealed partial class MainWindow : Window
         ApplySegmentState(LayoutEventsBtn, layout == WorkspaceLayoutMode.Events);
 
         RfMeterRack.Visibility = IsRfActive ? Visibility.Visible : Visibility.Collapsed;
-        RfBlankPreview.Visibility = IsRfActive && layout != WorkspaceLayoutMode.Spectrum ? Visibility.Visible : Visibility.Collapsed;
-        RfStage.Visibility = IsRfActive && layout != WorkspaceLayoutMode.Focus ? Visibility.Visible : Visibility.Collapsed;
+        RfAdcRow.Height = IsRfActive && layout is WorkspaceLayoutMode.Split or WorkspaceLayoutMode.Spectrum or WorkspaceLayoutMode.Scopes ? new GridLength(1, GridUnitType.Star) : new GridLength(0);
+        RfStage.Visibility = RfAdcRow.Height.Value > 0 ? Visibility.Visible : Visibility.Collapsed;
         var showPreview = layout is WorkspaceLayoutMode.Focus or WorkspaceLayoutMode.Split;
         var showInstruments = layout != WorkspaceLayoutMode.Focus;
         var showSplitDivider = layout == WorkspaceLayoutMode.Split;
 
-        PreviewMonitorHousing.Visibility = !IsRfActive && showPreview ? Visibility.Visible : Visibility.Collapsed;
+        PreviewMonitorHousing.Visibility = showPreview ? Visibility.Visible : Visibility.Collapsed;
         SplitResizeHandle.Visibility = showSplitDivider ? Visibility.Visible : Visibility.Collapsed;
-        InstrumentsHost.Visibility = !IsRfActive && showInstruments ? Visibility.Visible : Visibility.Collapsed;
+        InstrumentsHost.Visibility = showInstruments ? Visibility.Visible : Visibility.Collapsed;
 
         if (layout == WorkspaceLayoutMode.Focus)
         {
@@ -978,6 +1009,7 @@ public sealed partial class MainWindow : Window
 
         VectorBody.Visibility = instrument == SplitSecondaryInstrument.Vector ? Visibility.Visible : Visibility.Collapsed;
         SpectrumBody.Visibility = instrument == SplitSecondaryInstrument.Spectrum ? Visibility.Visible : Visibility.Collapsed;
+        UpdateRfSpectrumSource();
         EventsBody.Visibility = instrument == SplitSecondaryInstrument.Events ? Visibility.Visible : Visibility.Collapsed;
         EventsToolbar.Visibility = instrument == SplitSecondaryInstrument.Events && EffectiveWorkspaceLayout == WorkspaceLayoutMode.Events
             ? Visibility.Visible : Visibility.Collapsed;
@@ -998,7 +1030,7 @@ public sealed partial class MainWindow : Window
 
     private void ApplySafeAreaOverlay()
     {
-        SafeAreaOverlay.Visibility = showSafeArea && PreviewPlaceholder.Visibility == Visibility.Collapsed
+        SafeAreaOverlay.Visibility = showSafeArea && (!IsRfActive || previewBitmap is not null) && PreviewPlaceholder.Visibility == Visibility.Collapsed
             ? Visibility.Visible : Visibility.Collapsed;
         UpdateNtsc480GuideLayout();
         SyncFullscreenPreviewWindow();
@@ -1023,7 +1055,7 @@ public sealed partial class MainWindow : Window
             PreviewSurface.Height = height;
             UpdateNtsc480GuideLayout();
         }
-        fullscreenWindow?.UpdateGeometry(previewAspectRatio, showSafeArea, LiveMediaSource is null && showNtsc480Guide);
+        fullscreenWindow?.UpdateGeometry(previewAspectRatio, showSafeArea, NtscGuideEnabled, IsRfActive ? rfGuide : null);
     }
 
     private void UpdatePreviewAspectRatio(int width, int height)
@@ -1235,7 +1267,7 @@ public sealed partial class MainWindow : Window
         var samplePrefix = sanitized.Length == 0 ? "CaptureRack_YYYYMMDD_HHmmss" : $"{sanitized}_CaptureRack_YYYYMMDD_HHmmss";
         if (IsRfActive)
         {
-            RecordingFilenamePreview.Text = samplePrefix + rfInspector.Selection?.Suffix;
+            RecordingFilenamePreview.Text = rfInspector.IsPlayback ? "" : samplePrefix + rfInspector.Selection?.Suffix;
             return;
         }
         if (SupportsSoftwareOutput && SelectedRecordingOutput != RecordingOutput.Native)
@@ -1339,7 +1371,9 @@ public sealed partial class MainWindow : Window
         if (IsRfActive)
         {
             if (rfPreviewStop is not null) rfPreviewStop.Cancel();
-            else if (rfInspector.Selection is { } request) await (rfPreviewTask = PreviewRfAsync(request));
+            else if (StartButton.IsEnabled && rfInspector.IsPlayback && rfInspector.PlaybackFile is { } file)
+                await (rfPreviewTask = PreviewRfAsync(null, file));
+            else if (StartButton.IsEnabled && rfInspector.Selection is { } request) await (rfPreviewTask = PreviewRfAsync(request));
             return;
         }
         if (LiveMediaSource is { } media)
@@ -1367,6 +1401,7 @@ public sealed partial class MainWindow : Window
             return;
         if (IsRfActive)
         {
+            if (rfInspector.IsPlayback) return;
             if (rfStop is not null) { rfStop.Cancel(); UpdateControls(); }
             else if (rfInspector.Selection is { } selected) await (rfTask = RecordRfAsync(selected));
             return;
@@ -1460,7 +1495,7 @@ public sealed partial class MainWindow : Window
 
     private void ToggleAudioMonitor_Invoked(KeyboardAccelerator sender, KeyboardAcceleratorInvokedEventArgs args)
     {
-        if (activePage != ActiveAppPage.Capture || !HasLiveCapture || !ActiveWorkspaceCapabilities.SupportsLocalAudioMonitor || AnyDropdownOpen())
+        if (activePage != ActiveAppPage.Capture || (!HasLiveCapture && !RfHasAudio) || !ActiveWorkspaceCapabilities.SupportsLocalAudioMonitor || AnyDropdownOpen())
             return;
 
         if (RootShell.XamlRoot is { } root)
@@ -2350,9 +2385,11 @@ public sealed partial class MainWindow : Window
         SyncFullscreenPreviewWindow();
     }
 
-    private void PresentPreview()
+    private void PresentPreview() => PresentPreview(preview);
+
+    private void PresentPreview(PreviewFeed? feed)
     {
-        if (preview is not { } feed || !feed.TryTakeLatest(ref previewFrame) || previewFrame is not { } frame)
+        if (feed is null || !feed.TryTakeLatest(ref previewFrame) || previewFrame is not { } frame)
             return;
 
         UpdatePreviewScanMode(frame.IsInterlaced);
@@ -2379,7 +2416,7 @@ public sealed partial class MainWindow : Window
         previewCaption = new(frame.NoInput, frame.SignalWidth, frame.SignalHeight,
             frame.SignalFormat ?? (frame.Format == CapturePixelFormat.Bgra ? "—" : DeckLinkCapture.FormatFourCc((uint)frame.Format)),
             frame.SignalScanMode, feed.PresentedSequence);
-        if (PreviewPlaceholder.Visibility == Visibility.Visible)
+        if (PreviewPlaceholder.Visibility == Visibility.Visible || PreviewHudPill.Visibility == Visibility.Collapsed)
         {
             PreviewPlaceholder.Visibility = Visibility.Collapsed;
             PreviewPlaceholderSpinner.IsActive = false;
@@ -2428,6 +2465,9 @@ public sealed partial class MainWindow : Window
         var changingRecording = IsCaptureRecording || recordingTransition;
         var canChooseOutput = settingsReady && !closing && !loading && !pickingOutput &&
             !changingRecording && !restartPreviewRequested;
+        bool fileMode = IsRfActive && rfInspector.IsPlayback;
+        canChooseOutput &= !fileMode;
+        UpdateRfPlaybackBar(fileMode);
         OutputPath.IsEnabled = canChooseOutput;
         RecordingLabelBox.IsEnabled = canChooseOutput;
         BrowseButton.IsEnabled = canChooseOutput;
@@ -2435,10 +2475,12 @@ public sealed partial class MainWindow : Window
             (media is null ? captureStop is { IsCancellationRequested: false } : !media.IsStopping);
         RenderCaptureActions();
         StartButton.IsEnabled = IsRfActive
-            ? !closing && !changingRecording && (rfPreviewStop is { IsCancellationRequested: false } || idle && rfInspector.Ready)
+            ? !closing && !changingRecording && (rfPreviewStop is { IsCancellationRequested: false } || idle && !inspectingField && !openingPlayback && rfInspector.Ready)
             : active ? previewCanStop : canStart;
         PlaceholderStartButton.IsEnabled = canStart;
         PlaceholderStartButton.Visibility = HasLiveCapture && !active && canStart ? Visibility.Visible : Visibility.Collapsed;
+        if (IsRfActive && previewBitmap is null)
+            PreviewPlaceholder.Visibility = rfInspector.PreviewOptions.PreviewType is RfPreviewType.RfOnly or RfPreviewType.VhsHifi ? Visibility.Collapsed : Visibility.Visible;
         var waitingForFirstFrame = active && PreviewPlaceholder.Visibility == Visibility.Visible && (media?.HasPreview ?? true);
         PreviewPlaceholderSpinner.IsActive = waitingForFirstFrame;
         PreviewPlaceholderSpinner.Visibility = waitingForFirstFrame ? Visibility.Visible : Visibility.Collapsed;
@@ -2452,7 +2494,7 @@ public sealed partial class MainWindow : Window
                 captureStop is { IsCancellationRequested: false } && !string.IsNullOrWhiteSpace(OutputPath.Text)));
         RecordButton.Visibility = media?.SupportsRecording == false ? Visibility.Collapsed : Visibility.Visible;
         RecordButton.IsEnabled = IsRfActive
-            ? rfStop is { IsCancellationRequested: false } || ((idle || rfPreviewReady && rfPreviewStop is { IsCancellationRequested: false }) && rfStop is null && !closing && qcStop is null && rfInspector.Ready && Directory.Exists(OutputPath.Text.Trim()))
+            ? !fileMode && (rfStop is { IsCancellationRequested: false } || ((idle || rfPreviewReady && rfPreviewStop is { IsCancellationRequested: false }) && rfStop is null && !closing && qcStop is null && rfInspector.Ready && Directory.Exists(OutputPath.Text.Trim())))
             : recordEnabled;
         CancelQcButton.IsEnabled = qcStop is { IsCancellationRequested: false };
         QcCenterPage.IsCancelEnabled = CancelQcButton.IsEnabled;

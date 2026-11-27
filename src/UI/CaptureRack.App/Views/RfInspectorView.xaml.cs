@@ -6,7 +6,7 @@ namespace CaptureRack.App.Views;
 
 public sealed partial class RfInspectorView : UserControl
 {
-    private sealed record Choice(string Label, RfUsbDevice? Ddd, RtlSdrDevice? Rtl, bool Vga);
+    private sealed record Choice(string Label, RfUsbDevice? Ddd, RtlSdrDevice? Rtl, bool Vga, bool File = false);
     private sealed record Preset(string Label, uint Hertz);
     private uint SelectedFrequency => Hertz(FrequencyPreset, Frequency);
     private int SelectedRate => (int)Hertz(RatePreset, CustomRate);
@@ -64,9 +64,18 @@ public sealed partial class RfInspectorView : UserControl
     private bool initialized, refreshing, recording;
     private int vgaIndex = 8;
     private Func<string,string> localize = key => key;
-    internal RfPreviewType PreviewType => (RfPreviewType)Math.Max(0, PreviewTypeBox.SelectedIndex);
+    internal RfPreviewOptionsBar PreviewOptions { get; } = new();
     public event Action? Changed;
-    public bool Ready => !refreshing && DeviceBox.SelectedItem is Choice choice && (choice.Rtl is null || RtlSettingError is null);
+    public bool IsPlayback => DeviceBox.SelectedItem is Choice { File: true };
+    internal RfPlaybackFile? PlaybackFile { get; private set; }
+    internal void SetPlaybackFile(RfPlaybackFile file)
+    {
+        PlaybackFile = file;
+        FileRate.Value = file.Rate / 1e6;
+        Update();
+        if (file.SupportsHifi) PreviewOptions.SelectHifiFile(file.IsHifiRecording, file.CenterFrequency);
+    }
+    public bool Ready => (!IsPlayback || PlaybackFile is not null) && !refreshing && DeviceBox.SelectedItem is Choice choice && (choice.Rtl is null || RtlSettingError is null);
     public Func<int?> VgaReader()
     {
         bool supported = DeviceBox.SelectedItem is Choice { Vga: true };
@@ -76,13 +85,19 @@ public sealed partial class RfInspectorView : UserControl
     public RfInspectorView()
     {
         InitializeComponent();
-        PreviewTypeBox.SelectionChanged += (_, _) => Changed?.Invoke();
+        FileRate.ValueChanged += (_, _) =>
+        {
+            if (PlaybackFile is not { } file || !double.IsFinite(FileRate.Value)) return;
+            PlaybackFile = file with { Rate = (int)Math.Round(FileRate.Value * 1e6) };
+            Update();
+        };
+        PreviewOptions.Changed += Update;
         DeviceBox.SelectionChanged += (_, _) => Update();
         Format.SelectionChanged += (_, _) => Changed?.Invoke();
         RtlMode.SelectionChanged += (_, _) => UpdateRtlTuning();
         TestRamp.Checked += (_, _) => Changed?.Invoke();
         TestRamp.Unchecked += (_, _) => Changed?.Invoke();
-        DddRate.SelectionChanged += (_, _) => Changed?.Invoke();
+        DddRate.SelectionChanged += (_, _) => { if (initialized) Update(); };
         FrequencyPreset.SelectionChanged += (_, _) => UpdateRtlTuning();
         RatePreset.SelectionChanged += (_, _) => UpdateRtlTuning();
         Frequency.ValueChanged += (_, _) => UpdateRtlTuning();
@@ -92,7 +107,7 @@ public sealed partial class RfInspectorView : UserControl
 
     public string? DeviceLabel => (DeviceBox.SelectedItem as Choice)?.Label;
 
-    public RfRecording? Selection => DeviceBox.SelectedItem is Choice device
+    public RfRecording? Selection => DeviceBox.SelectedItem is Choice { File: false } device
         ? new(device.Ddd, device.Rtl, device.Ddd is not null && DddRate.SelectedItem is RateChoice { Hardware: 20 },
             SelectedFrequency, RtlMode.SelectedIndex == 0, Format.SelectedIndex switch { 1 => RfFileFormat.Raw, 2 => RfFileFormat.Ldf, _ => RfFileFormat.Flac }, device.Ddd is not null && TestRamp.IsChecked == true,
             device.Ddd is null ? null : (Sw401.SelectedItem as SwitchChoice)?.Pattern,
@@ -102,10 +117,7 @@ public sealed partial class RfInspectorView : UserControl
     {
         localize = labels;
         LdfFormat.Content = labels("RfLdfFormat");
-        var previewType = PreviewType;
-        PreviewTypeBox.Header = labels("RfPreviewType");
-        PreviewTypeBox.ItemsSource = new[] { labels("RfOnly"), labels("RfVideoOnly"), "BETAMAX_HIFI", "LD" };
-        PreviewTypeBox.SelectedIndex = (int)previewType;
+        PreviewOptions.Bind(labels);
         var pattern = Math.Max(0, Sw401.SelectedIndex);
         Sw401.Header = labels("RfSwitchHeader");
         Sw401.ItemsSource = SwitchChoices(labels("RfSwitchUnknown")).ToArray();
@@ -145,7 +157,19 @@ public sealed partial class RfInspectorView : UserControl
         LdfFormat.Visibility = choice?.Ddd is null ? Visibility.Collapsed : Visibility.Visible;
         LdfFormat.IsEnabled = choice?.Ddd is not null;
         bool edit = !recording && !refreshing;
+#if REALTIME_RF
+        bool hifi = IsPlayback && PlaybackFile?.SupportsHifi == true;
+        bool canDecode = hifi || choice?.Ddd is not null || IsPlayback && PlaybackFile?.SupportsVideo == true;
+#else
+        bool hifi = false;
+        bool canDecode = false;
+#endif
+        PreviewOptions.Update(canDecode, !refreshing, hifi, IsPlayback ? PlaybackFile?.Rate == 20_000_000 : DddRate.SelectedItem is RateChoice { Hardware: 20 });
         DeviceBox.IsEnabled = Format.IsEnabled = RefreshButton.IsEnabled = RtlMode.IsEnabled = FrequencyPreset.IsEnabled = RatePreset.IsEnabled = Frequency.IsEnabled = CustomRate.IsEnabled = edit;
+        FileRate.Header = $"{localize("RfMetricSampleRate")} (MSPS)";
+        FileRate.Visibility = IsPlayback && PlaybackFile is not null ? Visibility.Visible : Visibility.Collapsed;
+        FileRate.IsEnabled = edit;
+        Format.IsEnabled = edit && !IsPlayback;
         RtlOptions.Visibility = choice?.Rtl is null ? Visibility.Collapsed : Visibility.Visible;
         DddRate.Visibility = choice?.Ddd is null ? Visibility.Collapsed : Visibility.Visible;
         Sw401.Visibility = TestRamp.Visibility = DddRate.Visibility;
@@ -204,9 +228,10 @@ public sealed partial class RfInspectorView : UserControl
             catch (Exception ex) { errors.Add(ex.Message); }
             return (devices, errors);
         });
+        if (choices.Count == 0) messages.Insert(0, localize("RfNoDevice"));
+        choices.Add(new(localize("RfPlayback"), null, null, false, true));
         DeviceBox.ItemsSource = choices;
         DeviceBox.SelectedIndex = choices.Count == 0 ? -1 : Math.Max(0, choices.FindIndex(d => Equals(d, previous)));
-        if (choices.Count == 0) messages.Insert(0, localize("RfNoDevice"));
         Diagnostics.Text = string.Join(Environment.NewLine, messages);
         Diagnostics.Visibility = messages.Count == 0 ? Visibility.Collapsed : Visibility.Visible;
         refreshing = false;

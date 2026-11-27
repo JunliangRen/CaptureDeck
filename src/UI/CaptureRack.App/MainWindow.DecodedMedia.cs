@@ -23,6 +23,15 @@ public sealed partial class MainWindow
         get
         {
             var caps = activeModule.Descriptor.Capabilities;
+            if (IsRfActive)
+                return caps with
+                {
+                    SupportsLocalAudioMonitor = RfHasAudio,
+                    SupportsVideoPreview = !IsRfHifiFile && rfInspector.PreviewOptions.PreviewType != RfPreviewType.RfOnly,
+                    SupportsVideoScopes = true,
+                    SupportsPreviewDisplayOptions = !IsRfHifiFile,
+                    SupportsEvents = false
+                };
             return LiveMediaSource is { } media ? caps with
             {
                 SupportsVideoPreview = media.HasPreview,
@@ -39,7 +48,7 @@ public sealed partial class MainWindow
     {
         get
         {
-            if (IsRfActive) return workspaceLayout is WorkspaceLayoutMode.Focus or WorkspaceLayoutMode.Spectrum ? workspaceLayout : WorkspaceLayoutMode.Split;
+            if (IsRfActive) return workspaceLayout == WorkspaceLayoutMode.Events ? WorkspaceLayoutMode.Split : workspaceLayout;
             var caps = ActiveWorkspaceCapabilities;
             return workspaceLayout switch
             {
@@ -53,7 +62,7 @@ public sealed partial class MainWindow
 
     private SplitSecondaryInstrument EffectiveSplitInstrument => splitSecondary switch
     {
-        SplitSecondaryInstrument.Spectrum when !ActiveWorkspaceCapabilities.SupportsAudioSpectrum => SplitSecondaryInstrument.Vector,
+        SplitSecondaryInstrument.Spectrum when !IsRfActive && !ActiveWorkspaceCapabilities.SupportsAudioSpectrum => SplitSecondaryInstrument.Vector,
         SplitSecondaryInstrument.Events when !ActiveWorkspaceCapabilities.SupportsEvents => SplitSecondaryInstrument.Vector,
         _ => splitSecondary
     };

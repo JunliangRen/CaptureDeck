@@ -16,7 +16,8 @@ public sealed class RfPreviewSession(RfRecording request)
     private bool ended;
     private long frames;
 
-    public void Run(Func<int?> vga, Action<RfMeasurement> report, CancellationToken stop)
+    public void Run(Func<int?> vga, Action<RfMeasurement> report, CancellationToken stop,
+        Action<byte[], int, long>? previewSamples = null)
     {
         var a = new RfRecording.LevelWindow();
         var b = new RfRecording.LevelWindow();
@@ -27,6 +28,7 @@ public sealed class RfPreviewSession(RfRecording request)
             long start = Stopwatch.GetTimestamp();
             if (iq) { a.AddIq(bytes.AsSpan(0, size), 0); b.AddIq(bytes.AsSpan(0, size), 1); }
             else a.AddDdd(MemoryMarshal.Cast<byte, short>(bytes.AsSpan(0, size)));
+            previewSamples?.Invoke(bytes, size, frames);
             lock (gate)
             {
                 if (clip is not null)

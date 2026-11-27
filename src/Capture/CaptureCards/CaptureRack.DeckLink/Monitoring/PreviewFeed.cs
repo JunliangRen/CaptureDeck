@@ -122,7 +122,7 @@ public sealed class PreviewFeed
     // Called by a single decoder worker after it owns a decoded progressive or interlaced frame.
     public unsafe void SubmitDecodedFrame(ReadOnlySpan<byte> pixels, int width, int height,
         bool? topFieldFirst, double framesPerSecond, int signalWidth, int signalHeight, double displayAspectRatio,
-        string? signalFormat = null, PreviewScanMode? signalScanMode = null)
+        string? signalFormat = null, PreviewScanMode? signalScanMode = null, object? sourceTag = null)
     {
         var stride = checked(width * 4);
         if (width <= 0 || height <= 0 || pixels.Length < checked(stride * height))
@@ -131,7 +131,7 @@ public sealed class PreviewFeed
         fixed (byte* address = pixels)
             incoming.Offer((IntPtr)address, width, height, stride, false, CapturePixelFormat.Bgra, field);
         var interval = framesPerSecond > 0 ? (long)(Stopwatch.Frequency / (2 * framesPerSecond)) : 0;
-        ConvertLatest(8, interval, signalWidth, signalHeight, displayAspectRatio, signalFormat, signalScanMode);
+        ConvertLatest(8, interval, signalWidth, signalHeight, displayAspectRatio, signalFormat, signalScanMode, sourceTag);
     }
 
     internal static bool IsInterlaced(uint fieldDominance) =>
@@ -139,7 +139,7 @@ public sealed class PreviewFeed
 
     internal void ConvertLatest(int lumaScaleBits, long fieldInterval = 0,
         int signalWidth = 0, int signalHeight = 0, double displayAspectRatio = 0, string? signalFormat = null,
-        PreviewScanMode? signalScanMode = null)
+        PreviewScanMode? signalScanMode = null, object? sourceTag = null)
     {
         if (!incoming.TryTake(ref source) || source is null)
             return;
@@ -159,6 +159,7 @@ public sealed class PreviewFeed
         input.SignalWidth = converted.SignalWidth = signalWidth > 0 ? signalWidth : input.Width;
         input.SignalHeight = converted.SignalHeight = signalHeight > 0 ? signalHeight : input.Height;
         converted.DisplayAspectRatio = displayAspectRatio;
+        converted.SourceTag = sourceTag;
         converted.SignalFormat = signalFormat;
         converted.NoInput = input.NoInput;
         converted.Format = input.Format;
@@ -501,6 +502,7 @@ public sealed class PreviewFrame
     public int SignalHeight { get; internal set; }
     public double DisplayAspectRatio { get; internal set; }
     public string? SignalFormat { get; internal set; }
+    public object? SourceTag { get; internal set; }
     public PreviewScanMode SignalScanMode { get; internal set; }
     public bool NoInput { get; internal set; }
     public CapturePixelFormat Format { get; internal set; }

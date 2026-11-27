@@ -6,6 +6,20 @@ namespace CaptureRack.UT;
 public class RfPreviewAudioTests
 {
     [Fact]
+    public void SelectedPcmSpectrumTracksToneAndClearsOnLoss()
+    {
+        var sink = new RfPreviewAudio();
+        var track = sink.SelectTrack("PCM", 1, 48000);
+        short[] tone = Enumerable.Range(0, 2048)
+            .Select(i => (short)(16000 * Math.Sin(2 * Math.PI * i / 16))).ToArray();
+        sink.SubmitPcm(track, tone);
+        var bins = sink.Read(spectrum: true).Levels!.Spectrum!.ToArray();
+        Assert.Equal(32, Array.IndexOf(bins, bins.Max()));
+        sink.LoseLock(track);
+        Assert.Null(sink.Read(spectrum: true).Levels);
+    }
+
+    [Fact]
     public void TrackGenerationSeparatesSilenceLossAndReplacementPcm()
     {
         var sink = new RfPreviewAudio();

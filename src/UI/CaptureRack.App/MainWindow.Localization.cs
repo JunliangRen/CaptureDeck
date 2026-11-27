@@ -125,9 +125,9 @@ public sealed partial class MainWindow
         var recordingActive = IsCaptureRecording && qcStop is null;
         var finalizing = (recordingTransition && qcStop is null) || LiveMediaSource?.IsFinalizing == true;
 
-        PreviewActionIcon.Glyph = previewActive ? "\uE71A" : "\uE768";
+        PreviewActionIcon.Glyph = previewActive && IsRfActive && rfInspector.IsPlayback ? "\uE769" : previewActive ? "\uE71A" : "\uE768";
         var captureOnly = LiveMediaSource is { HasPreview: false };
-        PreviewActionLabel.Text = L(captureOnly
+        PreviewActionLabel.Text = L(IsRfActive && rfInspector.IsPlayback ? previewActive ? "RfPause" : "RfPlay" : captureOnly
             ? previewActive ? "DsStopInput" : "DsStartInput"
             : previewActive ? "StopPreview" : "StartPreview");
         PlaceholderStartLabel.Text = PreviewActionLabel.Text;

@@ -26,6 +26,7 @@ internal sealed partial class FullscreenPreviewWindow : Window
     private double aspectRatio = 4d / 3;
     private bool showSafeArea;
     private bool showNtsc480Guide;
+    private (double Top, double Bottom)? cropGuide;
     private bool hasFrame;
     private bool miniBarVisible;
     private bool pointerOverMiniBar;
@@ -134,12 +135,13 @@ internal sealed partial class FullscreenPreviewWindow : Window
         UpdateOverlayVisibility();
     }
 
-    public void UpdateGeometry(double newAspectRatio, bool safeArea, bool ntsc480Guide)
+    public void UpdateGeometry(double newAspectRatio, bool safeArea, bool ntsc480Guide, (double Top, double Bottom)? guide = null)
     {
         var aspectChanged = Math.Abs(aspectRatio - newAspectRatio) > 0.0001;
         aspectRatio = newAspectRatio;
         showSafeArea = safeArea;
         showNtsc480Guide = ntsc480Guide;
+        cropGuide = guide;
         if (aspectChanged || double.IsNaN(PreviewSurface.Width) || PreviewSurface.Width <= 0)
             UpdateSurfaceLayout();
         UpdateOverlayVisibility();
@@ -276,8 +278,9 @@ internal sealed partial class FullscreenPreviewWindow : Window
         if (!show)
             return;
 
-        var (top, bottom) = FullscreenRenderPolicy.ComputeNtsc480GuideHeights(PreviewSurface.Height);
-        if (top <= 0 || bottom <= 0)
+        var (top, bottom) = cropGuide is { } guide ? (guide.Top * PreviewSurface.Height, guide.Bottom * PreviewSurface.Height)
+            : FullscreenRenderPolicy.ComputeNtsc480GuideHeights(PreviewSurface.Height);
+        if (!double.IsFinite(top + bottom))
             return;
 
         Ntsc480TopShade.Height = top;

@@ -45,7 +45,7 @@ public sealed partial class MainWindow
             previewColorMatrix.ToString(),
             showSafeArea,
             showNtsc480Guide,
-            audioMonitorEnabled,
+            RfHasAudio ? rfFileSound : audioMonitorEnabled,
             audioMonitorVolume);
 
         SyncSettingsPageSelections();
@@ -71,7 +71,7 @@ public sealed partial class MainWindow
         previewRecorder?.SetAudioMonitorRoute(audioMonitorRoute);
         if (activeAudioMonitor is { } monitor)
         {
-            monitor.Enabled = audioMonitorEnabled;
+            monitor.Enabled = RfHasAudio ? rfFileSound : audioMonitorEnabled;
             monitor.Volume = audioMonitorVolume;
         }
     }
@@ -118,9 +118,10 @@ public sealed partial class MainWindow
 
     private void ToggleAudioMonitor()
     {
-        audioMonitorEnabled = !audioMonitorEnabled;
+        if (RfHasAudio) rfFileSound = !rfFileSound;
+        else audioMonitorEnabled = !audioMonitorEnabled;
         if (activeAudioMonitor is { } monitor)
-            monitor.Enabled = audioMonitorEnabled;
+            monitor.Enabled = RfHasAudio ? rfFileSound : audioMonitorEnabled;
         ApplyPreviewOptionsToUi();
         SettingsChanged();
     }
@@ -174,15 +175,19 @@ public sealed partial class MainWindow
             ? DefaultPreviewAspectRatio : (double)width / height
     };
 
+    private bool NtscGuideEnabled => LiveMediaSource is null && showNtsc480Guide &&
+        (!IsRfActive || rfGuide.HasValue);
+
     private void UpdateNtsc480GuideLayout()
     {
-        var show = LiveMediaSource is null && showNtsc480Guide && PreviewPlaceholder.Visibility == Visibility.Collapsed;
+        var show = NtscGuideEnabled && (!IsRfActive || previewBitmap is not null) && PreviewPlaceholder.Visibility == Visibility.Collapsed;
         Ntsc480GuideOverlay.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
         if (!show)
             return;
 
-        var (top, bottom) = FullscreenRenderPolicy.ComputeNtsc480GuideHeights(PreviewSurface.Height);
-        if (top <= 0 || bottom <= 0)
+        var (top, bottom) = IsRfActive && rfGuide is { } guide ? (guide.Top * PreviewSurface.Height, guide.Bottom * PreviewSurface.Height)
+            : FullscreenRenderPolicy.ComputeNtsc480GuideHeights(PreviewSurface.Height);
+        if (!double.IsFinite(top + bottom))
             return;
 
         Ntsc480TopShade.Height = top;
@@ -199,7 +204,7 @@ public sealed partial class MainWindow
             previewColorMatrix.ToString(),
             showSafeArea,
             showNtsc480Guide,
-            audioMonitorEnabled,
+            RfHasAudio ? rfFileSound : audioMonitorEnabled,
             audioMonitorVolume);
     }
 }

@@ -2,17 +2,17 @@ using CaptureRack.DeckLink;
 
 namespace CaptureRack.App;
 
-internal enum RfPreviewType { RfOnly, VideoOnly, BetamaxHifi, LaserDisc }
+internal enum RfPreviewType { RfOnly, VideoOnly, BetamaxHifi, LaserDisc, Vhs, Betamax, VhsHifi }
 
 internal sealed record RfAudioReading(long Generation, string? Track, bool Locked, StereoLevels? Levels);
 
 // One sink per preview selection. Track tokens prevent delayed PCM or lock events
 // from the preceding track (including a reacquisition of the same name).
-internal sealed class RfPreviewAudio
+internal sealed class RfPreviewAudio(string? initialTrack = null)
 {
     private readonly object gate = new();
     private long generation;
-    private string? track;
+    private string? track = initialTrack;
     private StereoMonitor? monitor;
     private bool locked;
 
@@ -51,8 +51,15 @@ internal sealed class RfPreviewAudio
         }
     }
 
-    public RfAudioReading Read()
+    public RfAudioReading Read(bool spectrum = false)
     {
-        lock (gate) return new(generation, track, locked, monitor?.ReadMeterLevels());
+        StereoMonitor.AudioWindow? window;
+        RfAudioReading reading;
+        lock (gate)
+        {
+            window = spectrum ? monitor?.Read() : null;
+            reading = new(generation, track, locked, window?.Level ?? monitor?.ReadMeterLevels());
+        }
+        return window is null ? reading : reading with { Levels = window.Analyze() };
     }
 }

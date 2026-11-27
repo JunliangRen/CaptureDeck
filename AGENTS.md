@@ -128,3 +128,17 @@ dotnet build src/UI/CaptureRack.Uno/CaptureRack.Uno.csproj -c Release
 - The Windows app can opt in to external VHS/LD RF file preview using the `VhsDecodeFramesProject` build property, pointing to the decoder checkout's Frames project. `VhsDecodeFilePreview` converts frames to BGRA and submits them to the existing `PreviewFeed`. The default build does not require the decoder checkout. Windows x64 builds with and without the reference passed. A file-preview harness verified PAL VHS, NTSC VHS (raw and FLAC), and PAL LaserDisc frame delivery through the same adapter.
 
 - RF release review verified 273 Windows tests with FFmpeg integration enabled and 12 offline QC tests. The recording badge follows writer activity, and the Windows FFmpeg CI step includes RF RAW, FLAC and LDF round trips.
+
+- Windows x64 RF monitoring consumes VHSDecode.Preview.Realtime 2.29.0-preview.ci.5. An independent bounded queue feeds DdD PCM with absolute sample offsets. NTSC/PAL 40 MSPS CVBS replay produced 397/319 fields; WinUI replay displayed CVBS and LD, including analog LD audio lock. The live DdD USB check acquired 252,182,528 samples without a decoded field on that input.
+
+- WinUI replay exercised NTSC VHS at 20 MSPS and Betamax HiFi, LD PCM, DTS and AC-3 RF at 40 MSPS. Source-position discontinuities after flat RF transfers restore video. Digital meter lock expires after 250 ms of source samples without a decoded audio callback. LD track changes reset the meter immediately and replace only the preview decoder. DTS checks used 14-bit and 16-bit DTS carriers combined with recorded LD video. The Betamax sample has a 303 ms field gap in both the standalone decoder baseline and the CaptureRack display.
+
+- RF file playback uses the WinUI RF preview and meters, bypassing USB and recording. Real LDF, MISRC FLAC and signed RAW passed playback, seek, pause, resume and EOF checks in WinUI x64. Prefer RF_TOTAL_SAMPLES for tagged MISRC FLAC duration.
+
+- RF preview can change decoder, Betamax profile, standard and LD track during the same input session. Adjacent opposite-parity fields feed the shared BMD preview, deinterlacer and video scopes. Active and Full use decoder geometry, including unequal field heights. RF spectrum uses the measured ADC or complex I/Q trace. Decoded tracks offer a separate PCM spectrum. Windows x64 replay verified these display paths with LDF, FLAC, signed RAW and a simulated PCM lock transition.
+
+- Windows x64 RF file playback decodes reconstructed RTL-SDR mono Hi-Fi RF to 48 kHz stereo. Source tags or Hi-Fi filenames select the audio-only profile. Real 8 MSPS NTSC FLAC and signed 16-bit replay verified stereo PCM, mute, seek and pause/resume. A CaptureRack 1.600 MHz FLAC verified PAL selection. Native I/Q remains a separate RF format.
+
+- RF preview uses only the upstream preview package's public capabilities. The experimental decoder extensions were withdrawn. Field inspection uses public frame data and the head-switch trace uses the captured ADC samples.
+
+- The 0.6.0 release candidate pins the upstream realtime package to its exact ci.5 version and carries its notices in the Windows x64 app. Normal RF file EOF drains the preview decoder. The recording-name rate token takes precedence over a rate in the reel label. Local Windows verification passed 277 tests.

@@ -131,7 +131,7 @@ public sealed partial class MainWindow
         if (fullscreen)
         {
             if (closing || closeAfterQc || finishingMediaForClose ||
-                !HasLiveCapture || !ActiveWorkspaceCapabilities.SupportsVideoPreview)
+                (!HasLiveCapture && !IsRfActive) || !ActiveWorkspaceCapabilities.SupportsVideoPreview)
                 return;
 
             enteringFullscreen = true;
@@ -227,7 +227,7 @@ public sealed partial class MainWindow
         window.UpdateGeometry(
             previewAspectRatio,
             showSafeArea,
-            LiveMediaSource is null && showNtsc480Guide);
+            NtscGuideEnabled, IsRfActive ? rfGuide : null);
 
         var recordingActive = IsCaptureRecording && qcStop is null;
         var finalizing = (recordingTransition && qcStop is null) || LiveMediaSource?.IsFinalizing == true;

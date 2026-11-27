@@ -87,7 +87,7 @@ public sealed partial class MainWindow
         if (RecordingEncodingPanel is null || RecordingDeinterlaceBox is null)
             return;
         RecordingEncodingPanel.Visibility = SupportsSoftwareOutput ? Visibility.Visible : Visibility.Collapsed;
-        var editable = !IsCaptureRecording && !recordingTransition;
+        var editable = !IsCaptureRecording && !recordingTransition && !(IsRfActive && rfInspector.IsPlayback);
         RecordingOutputPicker.IsEnabled = RecordingBitrateBox.IsEnabled = RecordingLevelBox.IsEnabled =
             RecordingDeinterlaceBox.IsEnabled = editable;
         var selected = SelectedRecordingOutput;

@@ -8,6 +8,7 @@ on:
 
 permissions:
   contents: read
+  packages: read
 
 jobs:
   windows:
@@ -38,7 +39,12 @@ jobs:
         run: dotnet test test/CaptureRack.UT/CaptureRack.UT.csproj -c Release
       - name: Run offline stream QC tests
         run: dotnet test test/CaptureRack.QualityControl.UT/CaptureRack.QualityControl.UT.csproj -c Release
+      - name: Configure realtime preview package source
+        if: matrix.arch == 'x64'
+        run: dotnet nuget add source "https://nuget.pkg.github.com/${{ github.repository_owner }}/index.json" --name RealtimePreview
       - name: Publish App and Probe
+        env:
+          NuGetPackageSourceCredentials_RealtimePreview: Username=${{ github.actor }};Password=${{ secrets.GITHUB_TOKEN }}
         run: |
           $PSNativeCommandUseErrorActionPreference = $true
           dotnet publish src/UI/CaptureRack.App/CaptureRack.App.csproj -c Release -r $env:RID --self-contained -o bin/publish/App

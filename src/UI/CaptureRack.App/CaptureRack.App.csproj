@@ -1,6 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <Version>0.5.0</Version>
+    <Version>0.6.0</Version>
     <OutputType>WinExe</OutputType>
     <TargetFramework>net11.0-windows10.0.26100.0</TargetFramework>
     <SupportedOSPlatformVersion>10.0.19041.0</SupportedOSPlatformVersion>
@@ -12,6 +12,16 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
   <Import Project="../../../WindowsExecutables.props" />
+  <PropertyGroup Condition="'$(RuntimeIdentifier)' == 'win-x64'">
+    <DefineConstants>$(DefineConstants);REALTIME_RF</DefineConstants>
+  </PropertyGroup>
+  <ItemGroup Condition="'$(RuntimeIdentifier)' == 'win-x64'">
+    <PackageReference Include="VHSDecode.Preview.Realtime" Version="[2.29.0-preview.ci.5]" GeneratePathProperty="true" />
+    <None Include="$(PkgVHSDecode_Preview_Realtime)/LICENSE;$(PkgVHSDecode_Preview_Realtime)/THIRD-PARTY-NOTICES.md"
+          Link="licenses/VHSDecode.Preview.Realtime/%(Filename)%(Extension)" CopyToPublishDirectory="PreserveNewest" />
+    <None Include="$(PkgVHSDecode_Preview_Realtime)/licenses/**/*"
+          Link="licenses/VHSDecode.Preview.Realtime/%(RecursiveDir)%(Filename)%(Extension)" CopyToPublishDirectory="PreserveNewest" />
+  </ItemGroup>
   <ItemGroup>
     <PackageReference Include="CommunityToolkit.WinUI.Controls.SettingsControls" Version="8.2.251219" />
     <PackageReference Include="Microsoft.WindowsAppSDK" Version="2.7.0" />

@@ -207,10 +207,25 @@
                     <Grid.RowDefinitions>
                         <RowDefinition Height="Auto" />
                         <RowDefinition Height="*" />
+                        <RowDefinition Height="Auto"/>
                     </Grid.RowDefinitions>
 
+                    <Grid x:Name="RfPlaybackBar" Grid.Row="2" Visibility="Collapsed" ColumnSpacing="8">
+                        <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/><ColumnDefinition Width="Auto"/></Grid.ColumnDefinitions>
+                        <StackPanel Orientation="Horizontal" Spacing="4">
+                            <Button x:Name="RfOpenFile" Click="RfOpenFile_Click" VerticalAlignment="Center"/>
+                            <Button x:Name="RfStepBack" Content="◀ F" Tag="-1" Click="RfFieldStep_Click" Visibility="Collapsed" AutomationProperties.Name="Previous field"/>
+                            <Button x:Name="RfStepForward" Content="F ▶" Tag="1" Click="RfFieldStep_Click" Visibility="Collapsed" AutomationProperties.Name="Next field"/>
+                        </StackPanel>
+                        <StackPanel Grid.Column="1">
+                            <TextBlock x:Name="RfPlaybackName" TextTrimming="CharacterEllipsis"/>
+                            <Slider x:Name="RfSeek" Minimum="0" Maximum="1" StepFrequency="0.01" ValueChanged="RfSeek_Changed"/>
+                        </StackPanel>
+                        <TextBlock x:Name="RfPlaybackTime" Grid.Column="2" VerticalAlignment="Center"/>
+                    </Grid>
                     <!-- De-cluttered Capability-Aware Stage Toolbar -->
-                    <Grid x:Name="StageToolbar" ColumnSpacing="8">
+                    <Grid x:Name="StageToolbar" ColumnSpacing="8" SizeChanged="StageToolbar_SizeChanged">
+                        <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*" />
                             <ColumnDefinition Width="Auto" />
@@ -260,8 +275,11 @@
                             </Border>
                         </ScrollViewer>
 
-                        <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
+                        <ScrollViewer x:Name="StageOptionsScroll" Grid.Column="1" HorizontalScrollMode="Auto" HorizontalScrollBarVisibility="Hidden"
+                                      VerticalScrollMode="Disabled" VerticalScrollBarVisibility="Disabled">
+                        <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
                             <!-- Pluggable Slot: Monitor Bar Options (Video Preview / Audio Monitor / Future RF FFT) -->
+                            <ContentPresenter x:Name="RfOptionsSlot" VerticalAlignment="Center"/>
                             <ContentPresenter x:Name="MonitorBarSlot" VerticalAlignment="Center" />
 
                             <Border x:Name="StageSignalBadge" CornerRadius="3" Padding="9,4"
@@ -276,6 +294,7 @@
                                 </StackPanel>
                             </Border>
                         </StackPanel>
+                        </ScrollViewer>
                     </Grid>
 
                     <!-- Stage Body: Video Monitor + Draggable Split Divider + Modular Instruments Deck -->
@@ -290,10 +309,6 @@
                             <controls:RfPeakMeter x:Name="RfMeterA"/>
                             <controls:RfPeakMeter x:Name="RfMeterB" Visibility="Collapsed"/>
                         </StackPanel>
-                        <Border x:Name="RfBlankPreview" Grid.Column="1" Background="{ThemeResource StudioStageCanvasBrush}" CornerRadius="4"
-                                BorderBrush="{ThemeResource StudioMonitorBezelBrush}" BorderThickness="1" Visibility="Collapsed"/>
-
-
                         <!-- Video Monitor Housing -->
                         <Border x:Name="PreviewMonitorHousing" Grid.Column="1" Grid.Row="0" CornerRadius="4"
                                 Background="{ThemeResource StudioStageCanvasBrush}"
@@ -432,8 +447,34 @@
                                     Background="{ThemeResource StudioHairlineBrush}" />
                         </controls:SplitResizeHandle>
 
+                        <Grid Grid.Column="1" Grid.Row="2">
+                            <Grid.RowDefinitions>
+                                <RowDefinition x:Name="RfAdcRow" Height="0"/>
+                                <RowDefinition Height="2*"/>
+                            </Grid.RowDefinitions>
+                        <Grid x:Name="RfStage" Grid.Row="0" Margin="4" RowSpacing="8" Visibility="Collapsed">
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/><RowDefinition Height="*"/>
+                            </Grid.RowDefinitions>
+                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                <TextBlock x:Name="RfHeading" VerticalAlignment="Center" Style="{StaticResource StudioSectionHeadingStyle}"/>
+                                <ComboBox x:Name="RfScopeSource" SelectedIndex="0" SelectionChanged="RfScope_Changed" AutomationProperties.Name="Signal">
+                                    <x:String>ADC</x:String><x:String>Head SW</x:String>
+                                </ComboBox>
+                                <TextBlock x:Name="RfScopeValue" VerticalAlignment="Center"/>
+                            </StackPanel>
+                            <Border Grid.Row="1" Background="{ThemeResource StudioCardBrush}" CornerRadius="4">
+                                <Viewbox Stretch="Fill" Margin="8">
+                                    <Canvas Width="256" Height="100">
+                                        <Line x:Name="RfReference" X2="256" Y1="50" Y2="50" Stroke="{ThemeResource StudioHairlineBrush}"/>
+                                        <Polyline x:Name="RfTraceA" Stroke="{ThemeResource StudioSignalLockBrush}" StrokeThickness="0.65"/>
+                                        <Polyline x:Name="RfTraceB" Stroke="{ThemeResource StudioInfoBrush}" StrokeThickness="0.65"/>
+                                    </Canvas>
+                                </Viewbox>
+                            </Border>
+                        </Grid>
                         <!-- Unified Modular Instruments Host (Luma/Parade + Vector/Spectrum/Events) -->
-                        <Grid x:Name="InstrumentsHost" Grid.Column="1" Grid.Row="2" ColumnSpacing="8">
+                        <Grid x:Name="InstrumentsHost" Grid.Row="1" ColumnSpacing="8">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition x:Name="InstrumentCol0" Width="56*" />
                                 <ColumnDefinition x:Name="InstrumentCol1" Width="44*" />
@@ -540,6 +581,10 @@
                                             <TextBlock x:Name="SecondaryInstrumentTitle" Text="Vectorscope"
                                                        FontSize="13" FontWeight="SemiBold"
                                                        Foreground="{ThemeResource StudioTextPrimaryBrush}" />
+                                            <ComboBox x:Name="RfSpectrumSource" Visibility="Collapsed" AutomationProperties.Name="RF / PCM"
+                                                      SelectedIndex="0" SelectionChanged="RfSpectrumSource_Changed">
+                                                <x:String>RF</x:String><x:String>PCM</x:String>
+                                            </ComboBox>
                                             <TextBlock x:Name="SecondaryInstrumentSubtitle" FontSize="12"
                                                        Foreground="{ThemeResource StudioTextSecondaryBrush}"
                                                        VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
@@ -621,7 +666,7 @@
                                         <TextBlock Grid.Row="1" Text="dBFS" HorizontalAlignment="Right" Margin="0,0,4,0"
                                                    FontSize="10" Foreground="{ThemeResource StudioTextMutedBrush}" />
                                         <Grid Grid.Row="1" Grid.Column="1" Margin="2,0,8,0">
-                                            <TextBlock Text="0 Hz" Style="{StaticResource StudioMonoTextStyle}"
+                                            <TextBlock x:Name="SpectrumMinFrequency" Text="0 Hz" Style="{StaticResource StudioMonoTextStyle}"
                                                        FontSize="10" Foreground="{ThemeResource StudioTextSecondaryBrush}" />
                                             <TextBlock x:Name="SpectrumMidFrequency" Text="—" HorizontalAlignment="Center"
                                                        Style="{StaticResource StudioMonoTextStyle}" FontSize="10"
@@ -683,20 +728,6 @@
                                 </Grid>
                             </Border>
                         </Grid>
-                        <Grid x:Name="RfStage" Grid.Column="1" Grid.Row="2" Margin="4" RowSpacing="8" Visibility="Collapsed">
-                            <Grid.RowDefinitions>
-                                <RowDefinition Height="Auto"/><RowDefinition Height="*"/>
-                            </Grid.RowDefinitions>
-                            <TextBlock x:Name="RfHeading" Style="{StaticResource StudioSectionHeadingStyle}"/>
-                            <Border Grid.Row="1" Background="{ThemeResource StudioCardBrush}" CornerRadius="4">
-                                <Viewbox Stretch="Fill" Margin="8">
-                                    <Canvas Width="256" Height="100">
-                                        <Line X2="256" Y1="50" Y2="50" Stroke="{ThemeResource StudioHairlineBrush}"/>
-                                        <Polyline x:Name="RfTraceA" Stroke="{ThemeResource StudioSignalLockBrush}" StrokeThickness="0.65"/>
-                                        <Polyline x:Name="RfTraceB" Stroke="{ThemeResource StudioInfoBrush}" StrokeThickness="0.65"/>
-                                    </Canvas>
-                                </Viewbox>
-                            </Border>
                         </Grid>
                     </Grid>
 

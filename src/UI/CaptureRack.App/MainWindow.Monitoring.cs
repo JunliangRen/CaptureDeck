@@ -262,6 +262,7 @@ public sealed partial class MainWindow
 
     private void RenderSpectrumLabels(StereoLevels audio)
     {
+        SpectrumMinFrequency.Text = "0 Hz";
         SpectrumMidFrequency.Text = (audio.SampleRate / 4000d).ToString("0.##", settingsCulture) + " kHz";
         SpectrumMaxFrequency.Text = (audio.SampleRate / 2000d).ToString("0.##", settingsCulture) + " kHz";
         PaintSpectrumScale(audio.SpectrumFloorDbfs);
@@ -509,6 +510,13 @@ public sealed partial class MainWindow
 
     private void SpectrumPlot_SizeChanged(object sender, SizeChangedEventArgs e)
     {
+        if (IsRfActive && ShowRfPcmSpectrum) { RenderRfAudio(); return; }
+        if (IsRfActive && displayedRfMeasurement is { } reading)
+        {
+            PaintSpectrumScale(-90);
+            PaintRfSpectrum(reading);
+            return;
+        }
         PaintSpectrumScale(visibleAudio?.SpectrumFloorDbfs);
         if (visibleAudio is { Spectrum: { } spectrum } audio)
             PaintSpectrum(spectrum, audio.SpectrumFloorDbfs);

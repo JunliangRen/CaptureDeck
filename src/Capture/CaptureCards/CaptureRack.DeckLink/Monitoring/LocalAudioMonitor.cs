@@ -9,7 +9,8 @@ public sealed class LocalAudioMonitor : IDisposable
 {
     private const int BufferCount = 6;
     private const int MaxQueuedPackets = 8;
-    private readonly ConcurrentQueue<byte[]> queue = new();
+    private readonly record struct Packet(byte[] Bytes, TimeSpan? MediaEnd);
+    private readonly ConcurrentQueue<Packet> queue = new();
     private readonly AutoResetEvent wake = new(false);
     private readonly CancellationTokenSource stop = new();
     private readonly Thread worker;
@@ -17,6 +18,16 @@ public sealed class LocalAudioMonitor : IDisposable
     private volatile bool enabled;
     private double volume = 0.8;
     private bool disposed;
+
+    private long playedTicks = long.MinValue;
+    public TimeSpan? PlayedMediaTime
+    {
+        get
+        {
+            long ticks = Volatile.Read(ref playedTicks);
+            return ticks == long.MinValue ? null : TimeSpan.FromTicks(ticks);
+        }
+    }
 
     public bool Enabled
     {
@@ -50,7 +61,7 @@ public sealed class LocalAudioMonitor : IDisposable
         worker.Start();
     }
 
-    public void SubmitPcm16(ReadOnlySpan<short> samples)
+    public void SubmitPcm16(ReadOnlySpan<short> samples, TimeSpan? mediaEnd = null)
     {
         if (!enabled || disposed || samples.IsEmpty)
             return;
@@ -63,7 +74,7 @@ public sealed class LocalAudioMonitor : IDisposable
 
         for (var i = 0; i < samples.Length; i++)
             dest[i] = (short)Math.Clamp((int)Math.Round(samples[i] * gain), short.MinValue, short.MaxValue);
-        Enqueue(bytes);
+        Enqueue(bytes, mediaEnd);
     }
 
     internal void SubmitPcm32(ReadOnlySpan<int> samples)
@@ -157,11 +168,11 @@ public sealed class LocalAudioMonitor : IDisposable
         Enqueue(bytes);
     }
 
-    private void Enqueue(byte[] packet)
+    private void Enqueue(byte[] packet, TimeSpan? mediaEnd = null)
     {
         while (queue.Count >= MaxQueuedPackets)
             queue.TryDequeue(out _);
-        queue.Enqueue(packet);
+        queue.Enqueue(new(packet, mediaEnd));
         wake.Set();
     }
 
@@ -172,17 +183,54 @@ public sealed class LocalAudioMonitor : IDisposable
         }
     }
 
+    // MMTIME permits drivers to substitute bytes or milliseconds for sample frames.
+    internal static long? GetPlayedFrames(long submitted, uint rate, uint type, uint value)
+    {
+        long units = type switch { 1 => submitted * 1000 / rate, 2 => submitted, 4 => submitted * 4, _ => -1 };
+        if (units < 0) return null;
+        long elapsed = units - unchecked((uint)units - value);
+        if (elapsed < 0) return null;
+        return type switch { 1 => elapsed * rate / 1000, 4 => elapsed / 4, _ => elapsed };
+    }
+
     private void RunPlaybackLoop()
     {
         nint device = 0;
         var active = new List<(nint HeaderPtr, GCHandle BufferHandle)>(BufferCount);
         var token = stop.Token;
 
+        var anchors = new Queue<(long End, TimeSpan MediaEnd)>();
+        long submittedFrames = 0;
+        void UpdateMediaClock()
+        {
+            if (anchors.Count == 0) return;
+            var position = new WavePosition { Type = 2 }; // TIME_SAMPLES
+            if (waveOutGetPosition(device, ref position, 12) != 0 ||
+                GetPlayedFrames(submittedFrames, sampleRate, position.Type, position.Value) is not { } played)
+            {
+                Volatile.Write(ref playedTicks, long.MinValue);
+                return;
+            }
+            while (anchors.TryPeek(out var anchor))
+            {
+                if (played < anchor.End)
+                {
+                    Volatile.Write(ref playedTicks, anchor.MediaEnd.Ticks - (anchor.End - played) * TimeSpan.TicksPerSecond / sampleRate);
+                    return;
+                }
+                anchors.Dequeue();
+            }
+            Volatile.Write(ref playedTicks, long.MinValue);
+        }
+
         void CloseDevice()
         {
             if (device == 0)
                 return;
 
+            anchors.Clear();
+            submittedFrames = 0;
+            Volatile.Write(ref playedTicks, long.MinValue);
             waveOutReset(device);
             ReclaimCompleted(device, active, forceAll: true);
             waveOutClose(device);
@@ -224,10 +272,19 @@ public sealed class LocalAudioMonitor : IDisposable
                 var submitted = false;
                 while (enabled && active.Count < BufferCount && queue.TryDequeue(out var packet))
                 {
-                    if (SubmitWaveBuffer(device, packet, active))
+                    if (SubmitWaveBuffer(device, packet.Bytes, active))
+                    {
                         submitted = true;
+                        submittedFrames += packet.Bytes.Length / 4;
+                        if (packet.MediaEnd is { } end)
+                        {
+                            anchors.Enqueue((submittedFrames, end));
+                            while (anchors.Count > BufferCount + 2) anchors.Dequeue();
+                        }
+                    }
                 }
 
+                UpdateMediaClock();
                 if (!submitted)
                     wake.WaitOne(12);
             }
@@ -305,6 +362,12 @@ public sealed class LocalAudioMonitor : IDisposable
         wake.Dispose();
         stop.Dispose();
     }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct WavePosition { public uint Type, Value, Padding; }
+
+    [DllImport("winmm.dll")]
+    private static extern uint waveOutGetPosition(nint device, ref WavePosition position, uint size);
 
     [StructLayout(LayoutKind.Sequential)]
     private struct WaveFormatEx

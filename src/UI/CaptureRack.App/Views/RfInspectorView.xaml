@@ -7,7 +7,7 @@
             <ComboBox x:Name="DeviceBox" DisplayMemberPath="Label" HorizontalAlignment="Stretch"/>
             <Button x:Name="RefreshButton" Click="RefreshClick"/>
             <TextBlock x:Name="Diagnostics" FontSize="12" TextWrapping="Wrap"/>
-            <ComboBox x:Name="PreviewTypeBox" HorizontalAlignment="Stretch"/>
+            <NumberBox x:Name="FileRate" Minimum="0.001" Maximum="100" SmallChange="1" Visibility="Collapsed"/>
             <ComboBox x:Name="Format" SelectedIndex="0" HorizontalAlignment="Stretch">
                 <ComboBoxItem Content="FLAC"/><ComboBoxItem Content="RAW"/>
                 <ComboBoxItem x:Name="LdfFormat" Visibility="Collapsed"/>

@@ -419,35 +419,43 @@ public sealed class StereoMonitor(CaptureAudioFormat format, uint sampleRate = C
         private static Complex[] Transform(double[] input)
         {
             var bins = new Complex[SpectrumWindow];
-            for (int i = 0, reversed = 0; i < bins.Length; i++)
-            {
-                bins[reversed] = new Complex(input[i] * Hann[i], 0);
-                var bit = bins.Length >> 1;
-                for (; bit != 0 && (reversed & bit) != 0; bit >>= 1)
-                    reversed ^= bit;
-                reversed ^= bit;
-            }
+            for (int i = 0; i < bins.Length; i++)
+                bins[i] = new Complex(input[i] * Hann[i], 0);
+            ForwardFft(bins);
+            return bins;
+        }
+    }
 
-            for (var size = 2; size <= bins.Length; size <<= 1)
+    public static void ForwardFft(Span<Complex> bins)
+    {
+        if (!BitOperations.IsPow2(bins.Length))
+            throw new ArgumentException("FFT length must be a power of two.", nameof(bins));
+        for (int i = 0, reversed = 0; i < bins.Length; i++)
+        {
+            if (i < reversed) (bins[i], bins[reversed]) = (bins[reversed], bins[i]);
+            var bit = bins.Length >> 1;
+            for (; bit != 0 && (reversed & bit) != 0; bit >>= 1)
+                reversed ^= bit;
+            reversed ^= bit;
+        }
+        for (var size = 2; size <= bins.Length; size <<= 1)
+        {
+            var half = size / 2;
+            var rotation = Complex.FromPolarCoordinates(1, -2 * Math.PI / size);
+            for (var block = 0; block < bins.Length; block += size)
             {
-                var half = size / 2;
-                var rotation = Complex.FromPolarCoordinates(1, -2 * Math.PI / size);
-                for (var block = 0; block < bins.Length; block += size)
+                var phase = Complex.One;
+                for (var offset = 0; offset < half; offset++)
                 {
-                    var phase = Complex.One;
-                    for (var offset = 0; offset < half; offset++)
-                    {
-                        var a = block + offset;
-                        var b = a + half;
-                        var even = bins[a];
-                        var odd = bins[b] * phase;
-                        bins[a] = even + odd;
-                        bins[b] = even - odd;
-                        phase *= rotation;
-                    }
+                    var a = block + offset;
+                    var b = a + half;
+                    var even = bins[a];
+                    var odd = bins[b] * phase;
+                    bins[a] = even + odd;
+                    bins[b] = even - odd;
+                    phase *= rotation;
                 }
             }
-            return bins;
         }
     }
 }

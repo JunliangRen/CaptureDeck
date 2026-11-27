@@ -1843,4 +1843,8 @@
   <data name="RfPeakSpan" xml:space="preserve"><value>峰對峰值</value></data>
   <data name="RfMeasureHeading" xml:space="preserve"><value>RF 量測</value></data>
   <data name="RfInputSamples" xml:space="preserve"><value>{0} 個樣本 · 輸入 {1:G} MSPS</value></data>
+  <data name="RfPlayback" xml:space="preserve"><value>檔案回放</value></data>
+  <data name="RfOpenFile" xml:space="preserve"><value>開啟 RF 檔案</value></data>
+  <data name="RfPlay" xml:space="preserve"><value>播放</value></data>
+  <data name="RfPause" xml:space="preserve"><value>暫停</value></data>
 </root>

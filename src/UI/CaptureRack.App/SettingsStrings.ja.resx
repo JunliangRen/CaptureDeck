@@ -1843,4 +1843,8 @@
   <data name="RfPeakSpan" xml:space="preserve"><value>P-P</value></data>
   <data name="RfMeasureHeading" xml:space="preserve"><value>RF 計測</value></data>
   <data name="RfInputSamples" xml:space="preserve"><value>{0} サンプル · 入力 {1:G} MSPS</value></data>
+  <data name="RfPlayback" xml:space="preserve"><value>ファイル再生</value></data>
+  <data name="RfOpenFile" xml:space="preserve"><value>RF ファイルを開く</value></data>
+  <data name="RfPlay" xml:space="preserve"><value>再生</value></data>
+  <data name="RfPause" xml:space="preserve"><value>一時停止</value></data>
 </root>

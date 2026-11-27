@@ -228,7 +228,8 @@ public sealed record RfRecording(RfUsbDevice? Ddd, RtlSdrDevice? Rtl, bool HalfR
     {
         private int min = int.MaxValue, max = int.MinValue;
         private long squares, positiveClips, negativeClips;
-        private readonly int[] trace = new int[256];
+        private readonly int[] trace = new int[4096];
+        private int traceCount;
         public long PositiveClips => positiveClips;
         public long NegativeClips => negativeClips;
         public long Count { get; private set; }
@@ -245,17 +246,20 @@ public sealed record RfRecording(RfUsbDevice? Ddd, RtlSdrDevice? Rtl, bool HalfR
         {
             for (int i = ch; i < data.Length; i += 2) Add(data[i] - 128, 128);
             Count += data.Length / 2;
-            for (int i = 0; i < Math.Min(trace.Length, data.Length / 2); i++) trace[i] = data[i * 2 + ch] - 128;
+            int take = Math.Min(trace.Length - traceCount, data.Length / 2);
+            for (int i = 0; i < take; i++) trace[traceCount++] = data[i * 2 + ch] - 128;
         }
         public void AddDdd(ReadOnlySpan<short> data)
         {
             foreach (var sample in data) Add(sample >> 6, 512);
             Count += data.Length;
-            for (int i = 0; i < Math.Min(trace.Length, data.Length); i++) trace[i] = data[i] >> 6;
+            int take = Math.Min(trace.Length - traceCount, data.Length);
+            for (int i = 0; i < take; i++) trace[traceCount++] = data[i] >> 6;
         }
         public RfLevels Take()
         {
-            var result = new RfLevels(min, max, Math.Sqrt((double)squares / Count), positiveClips + negativeClips, (int[])trace.Clone(), positiveClips, negativeClips);
+            var result = new RfLevels(min, max, Math.Sqrt((double)squares / Count), positiveClips + negativeClips, trace[..traceCount], positiveClips, negativeClips);
+            traceCount = 0;
             min = int.MaxValue;
             max = int.MinValue;
             squares = Count = 0;

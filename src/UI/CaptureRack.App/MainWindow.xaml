@@ -524,13 +524,14 @@
                                                            FontSize="10" Foreground="{ThemeResource StudioTextSecondaryBrush}" />
                                             </StackPanel>
                                         </StackPanel>
-                                        <ComboBox x:Name="RfScopeSource" Height="26" CornerRadius="3" SelectedIndex="0"
+                                        <ComboBox x:Name="RfScopeSource" MinHeight="32" Padding="10,2,30,2" VerticalContentAlignment="Center" CornerRadius="3" SelectedIndex="0"
                                                   SelectionChanged="RfScope_Changed" AutomationProperties.Name="Signal">
                                             <ComboBoxItem x:Name="RfScopeAdcItem" Content="ADC" />
                                             <ComboBoxItem x:Name="RfScopeHeadSwitchItem" Content="Head switch" />
                                             <ComboBoxItem Content="Y · IRE" />
                                             <ComboBoxItem Content="U" />
                                             <ComboBoxItem Content="V" />
+                                            <ComboBoxItem Content="RF FFT" />
                                         </ComboBox>
                                     </StackPanel>
                                 </Grid>
@@ -542,10 +543,19 @@
                                             <ColumnDefinition Width="26" />
                                             <ColumnDefinition Width="*" />
                                         </Grid.ColumnDefinitions>
+                                        <Grid.RowDefinitions>
+                                            <RowDefinition Height="*" />
+                                            <RowDefinition Height="Auto" />
+                                        </Grid.RowDefinitions>
+                                        <Grid x:Name="RfFftAxis" Grid.Column="1" Grid.Row="1" Visibility="Collapsed">
+                                            <TextBlock x:Name="RfFftLow" FontSize="10" Foreground="#9BA5B8"/>
+                                            <TextBlock x:Name="RfFftCenter" FontSize="10" Foreground="#9BA5B8" HorizontalAlignment="Center"/>
+                                            <TextBlock x:Name="RfFftHigh" FontSize="10" Foreground="#9BA5B8" HorizontalAlignment="Right"/>
+                                        </Grid>
                                         <Grid AutomationProperties.AccessibilityView="Raw">
                                             <TextBlock x:Name="RfScaleHigh" Text="+FS" Style="{StaticResource StudioMonoTextStyle}" FontSize="9"
                                                        Foreground="#9BA5B8" HorizontalAlignment="Right" VerticalAlignment="Top" />
-                                            <TextBlock Text="0" Style="{StaticResource StudioMonoTextStyle}" FontSize="9"
+                                            <TextBlock x:Name="RfScaleMiddle" Text="0" Style="{StaticResource StudioMonoTextStyle}" FontSize="9"
                                                        Foreground="#9BA5B8" HorizontalAlignment="Right" VerticalAlignment="Center" />
                                             <TextBlock x:Name="RfScaleLow" Text="−FS" Style="{StaticResource StudioMonoTextStyle}" FontSize="9"
                                                        Foreground="#9BA5B8" HorizontalAlignment="Right" VerticalAlignment="Bottom" />
@@ -555,6 +565,8 @@
                                                 <Line X1="0" X2="256" Y1="25" Y2="25" Stroke="#26FFFFFF" StrokeThickness="0.4" />
                                                 <Line x:Name="RfReference" X1="0" X2="256" Y1="50" Y2="50" Stroke="#4DFFFFFF" StrokeThickness="0.6" />
                                                 <Line X1="0" X2="256" Y1="75" Y2="75" Stroke="#26FFFFFF" StrokeThickness="0.4" />
+                                                <Path x:Name="RfFftGrid" Visibility="Collapsed" Stroke="#38FFFFFF" StrokeThickness="0.4"
+                                                      Data="M32,0 V100 M64,0 V100 M96,0 V100 M128,0 V100 M160,0 V100 M192,0 V100 M224,0 V100" />
                                                 <Polyline x:Name="RfTraceA" Stroke="{ThemeResource StudioSignalLockBrush}" StrokeThickness="0.85" StrokeLineJoin="Round" />
                                                 <Polyline x:Name="RfTraceB" Stroke="{ThemeResource StudioInfoBrush}" StrokeThickness="0.85" StrokeLineJoin="Round" />
                                             </Canvas>

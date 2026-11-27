@@ -129,6 +129,28 @@ public class RfRecordingTests
     }
 
     [Fact]
+    public void SpectrumWindowUsesContiguousAdcAndIqSamplesAcrossCallbacks()
+    {
+        var adc = new RfRecording.LevelWindow();
+        adc.AddDdd([64, 128]);
+        adc.AddDdd([192, 256]);
+        Assert.Equal(new[] { 1, 2, 3, 4 }, adc.Take().Trace);
+        adc.AddDdd([-64]);
+        Assert.Equal(new[] { -1 }, adc.Take().Trace);
+
+        var i = new RfRecording.LevelWindow();
+        var q = new RfRecording.LevelWindow();
+        byte[] pairs = [128, 127, 129, 126];
+        for (int block = 0; block < 2050; block++)
+        {
+            i.AddIq(pairs, 0);
+            q.AddIq(pairs, 1);
+        }
+        Assert.Equal(Enumerable.Repeat(new[] { 0, 1 }, 2048).SelectMany(v => v), i.Take().Trace);
+        Assert.Equal(Enumerable.Repeat(new[] { -1, -2 }, 2048).SelectMany(v => v), q.Take().Trace);
+    }
+
+    [Fact]
     public void ManualSwitchPatternIsOptionalAndIndependentOfFirmwareIdentity()
     {
         var source = new DomesdaySource("1D50:603B", "test", "Legacy", null, null, null,

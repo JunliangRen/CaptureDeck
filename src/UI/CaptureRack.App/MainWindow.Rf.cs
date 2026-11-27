@@ -125,9 +125,9 @@ public sealed partial class MainWindow
         }
         if (rfAudio is null) StereoMeter.SetPreviewTrackStatus(null);
         else RenderRfAudio();
-        for (int i = 2; i < RfScopeSource.Items.Count; i++)
+        for (int i = 2; i <= 4; i++)
             ((ComboBoxItem)RfScopeSource.Items[i]).IsEnabled = RfHasVideoOutput;
-        if (!RfHasVideoOutput && RfScopeSource.SelectedIndex >= 2) RfScopeSource.SelectedIndex = 0;
+        if (!RfHasVideoOutput && RfScopeSource.SelectedIndex is >= 2 and <= 4) RfScopeSource.SelectedIndex = 0;
         UpdateAudioMeterVisibility(lastWindowWidth);
         UpdateRfSpectrumSource();
     }
@@ -262,8 +262,8 @@ public sealed partial class MainWindow
         if (hadPicture) { ResetPreview(null); ClearRfVideoScopes(); }
 #endif
         if (RfScopeValue is null) return;
-        RfScopeValue.Text = "";
-        if (RfScopeSource.SelectedIndex > 0) RfTraceA.Points.Clear();
+        if (RfScopeSource.SelectedIndex != 5) RfScopeValue.Text = "";
+        if (RfScopeSource.SelectedIndex is > 0 and <= 4) RfTraceA.Points.Clear();
         UpdateFieldButtons();
     }
 
@@ -296,9 +296,14 @@ public sealed partial class MainWindow
         RfTraceA.Points.Clear();
         RfTraceB.Points.Clear();
         RfScopeValue.Text = "";
-        RfLegendPanel.Visibility = mode == 0 ? Visibility.Visible : Visibility.Collapsed;
-        RfScaleHigh.Text = mode switch { 2 => "+120", 3 or 4 => "+1", _ => "+FS" };
-        RfScaleLow.Text = mode switch { 2 => "−120", 3 or 4 => "−1", _ => "−FS" };
+        RfLegendPanel.Visibility = mode == 0 && RfMeterB.Visibility == Visibility.Visible ? Visibility.Visible : Visibility.Collapsed;
+        bool fft = mode == 5;
+        RfHeading.Text = fft ? "RF FFT" : L("RfWaveform");
+        RfFftAxis.Visibility = RfFftGrid.Visibility = fft ? Visibility.Visible : Visibility.Collapsed;
+        RfScaleMiddle.Text = fft ? "−60" : "0";
+        if (fft && displayedRfMeasurement is { } reading) PaintRfSpectrum(reading);
+        RfScaleHigh.Text = mode switch { 5 => "0 dB", 2 => "+120", 3 or 4 => "+1", _ => "+FS" };
+        RfScaleLow.Text = mode switch { 5 => "−120", 2 => "−120", 3 or 4 => "−1", _ => "−FS" };
 #if REALTIME_RF
         if (heldPair is { } pair) PaintSignalScope(pair, force: true);
 #endif
@@ -315,7 +320,7 @@ public sealed partial class MainWindow
     private void PaintSignalScope(RfPreviewDecoder.FieldPair pair, bool force = false)
     {
         int mode = RfScopeSource.SelectedIndex;
-        if (mode <= 0 || !force && (RfStage.Visibility != Visibility.Visible || Environment.TickCount64 - lastSignalPaint < 70)) return;
+        if (mode is <= 0 or > 4 || !force && (RfStage.Visibility != Visibility.Visible || Environment.TickCount64 - lastSignalPaint < 70)) return;
         lastSignalPaint = Environment.TickCount64;
         var points = new PointCollection();
         if (mode is >= 2 and <= 4)
@@ -360,7 +365,7 @@ public sealed partial class MainWindow
     private static PointCollection RfAdcTrace(RfLevels levels, int fullScale)
     {
         var points = new PointCollection();
-        for (int i = 0; i < levels.Trace.Length; i++) points.Add(new Point(i, 50 - 49d * levels.Trace[i] / fullScale));
+        for (int i = 0; i < Math.Min(256, levels.Trace.Length); i++) points.Add(new Point(i, 50 - 49d * levels.Trace[i] / fullScale));
         return points;
     }
 
@@ -374,6 +379,8 @@ public sealed partial class MainWindow
         RfMeterB.Reset();
         var isIq = rfInspector.IsPlayback ? rfInspector.PlaybackFile?.IsIq == true : rfInspector.Selection?.Rtl is not null;
         RfMeterB.Visibility = isIq ? Visibility.Visible : Visibility.Collapsed;
+        RfLegendPanel.Visibility = isIq && RfScopeSource.SelectedIndex == 0 ? Visibility.Visible : Visibility.Collapsed;
+        RfFftLow.Text = RfFftCenter.Text = RfFftHigh.Text = "";
         RfLegendALabel.Text = isIq ? "I" : "ADC";
         RfLegendBPanel.Visibility = isIq ? Visibility.Visible : Visibility.Collapsed;
         RfReading.Text = RfFile.Text = "";
@@ -1008,8 +1015,9 @@ public sealed partial class MainWindow
         var trace = measurement.A.Trace;
         var q = measurement.B?.Trace;
         var rate = rfInspector.IsPlayback ? rfInspector.PlaybackFile?.Rate : rfInspector.Selection?.HardwareRate;
-        if (rate is null || trace.Length < 2) return;
-        var bins = new System.Numerics.Complex[trace.Length];
+        if (rate is null || trace.Length < 4) return;
+        int length = 1 << System.Numerics.BitOperations.Log2((uint)trace.Length);
+        var bins = new System.Numerics.Complex[length];
         double windowSum = 0;
         for (int i = 0; i < bins.Length; i++)
         {
@@ -1019,17 +1027,37 @@ public sealed partial class MainWindow
         }
         StereoMonitor.ForwardFft(bins);
         int half = bins.Length / 2;
-        var levels = new float[half + 1 + (q is null ? 0 : half)];
-        const double floor = -90;
-        for (int i = 0; i < levels.Length; i++)
+        int binCount = q is null ? half + 1 : bins.Length + 1;
+        const double floor = -120;
+        var levels = new float[Math.Min(512, binCount)];
+        Array.Fill(levels, (float)floor);
+        for (int i = 0; i < binCount; i++)
         {
             int bin = q is null ? i : (i + half) % bins.Length;
             double gain = q is null && i != 0 && i != half ? 2 : 1;
-            levels[i] = (float)Math.Max(floor, 20 * Math.Log10(bins[bin].Magnitude * gain / windowSum));
+            // Retain narrow carriers when multiple FFT bins share a display column.
+            int column = (int)Math.Round(i * (levels.Length - 1d) / (binCount - 1));
+            levels[column] = Math.Max(levels[column], (float)(20 * Math.Log10(bins[bin].Magnitude * gain / windowSum)));
         }
-        SpectrumMinFrequency.Text = q is null ? "0 Hz" : $"{-rate / 2e6:G4} MHz";
-        SpectrumMidFrequency.Text = q is null ? $"{rate / 4e6:G4} MHz" : "0 Hz";
-        SpectrumMaxFrequency.Text = $"{rate / 2e6:G4} MHz";
+        string low = q is null ? "0 Hz" : $"{-rate / 2e6:G4} MHz";
+        string middle = q is null ? $"{rate / 4e6:G4} MHz" : "0 Hz";
+        string high = $"{rate / 2e6:G4} MHz";
+        if (RfScopeSource.SelectedIndex == 5)
+        {
+            RfFftLow.Text = low;
+            RfFftCenter.Text = middle;
+            RfFftHigh.Text = high;
+            double divisionKhz = rate.Value / (q is null ? 16000d : 8000d);
+            RfScopeValue.Text = $"{divisionKhz:G4} kHz/div · dBFS";
+            var points = new PointCollection();
+            for (int x = 0; x < levels.Length; x++)
+                points.Add(new Point(x * 255d / (levels.Length - 1), Math.Clamp(100 * levels[x] / floor, 0, 100)));
+            RfTraceA.Points = points;
+        }
+        if (ShowRfPcmSpectrum || SpectrumBody.Visibility != Visibility.Visible || InstrumentsHost.Visibility != Visibility.Visible) return;
+        SpectrumMinFrequency.Text = low;
+        SpectrumMidFrequency.Text = middle;
+        SpectrumMaxFrequency.Text = high;
         SecondaryInstrumentSubtitle.Text = q is null ? "RF · ADC" : "RF · I/Q";
         if (SpectrumLevelAxis.Children.Count == 0) PaintSpectrumScale(floor);
         PaintSpectrum(levels, floor);
@@ -1041,7 +1069,8 @@ public sealed partial class MainWindow
         if (m is null) return;
         measuredSource = rfInspector.Selection;
         displayedRfMeasurement = m;
-        if (!ShowRfPcmSpectrum && SpectrumBody.Visibility == Visibility.Visible && InstrumentsHost.Visibility == Visibility.Visible)
+        if ((RfScopeSource.SelectedIndex == 5 && RfStage.Visibility == Visibility.Visible) ||
+            (!ShowRfPcmSpectrum && SpectrumBody.Visibility == Visibility.Visible && InstrumentsHost.Visibility == Visibility.Visible))
             PaintRfSpectrum(m);
         RenderCounts(null);
         RfMeterA.Show(m.B is null ? "ADC" : "I", m.A, m.FullScale);

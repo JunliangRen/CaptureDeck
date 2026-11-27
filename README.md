@@ -146,6 +146,8 @@ Windows x64 RF preview uses the upstream `VHSDecode.Preview.Realtime` package, v
 
 Preview supports NTSC/PAL VHS, S-VHS, CVBS and standard Betamax at 20 or 40 MSPS. SECAM VHS and MESECAM use 625/50 timing. NTSC Betamax also offers Hi-Fi, SuperBeta, SuperBeta Hi-Fi and ED Beta profiles. LaserDisc offers video alone, analog stereo or 44.1 kHz digital PCM in PAL and NTSC, plus DTS and AC-3 RF in NTSC. Separate VHS Hi-Fi audio accepts 8, 8.192, 10, 20 and 40 MSPS mono RF. Decoder options include the thread budget (1–64) and AC-3 RF presentation delay (128 ms by default). Decoder telemetry shows horizontal, vertical, color and selected audio lock. The RF oscilloscope can show Y (±120 IRE), U or V (±1 normalized unit) from the central scanline of the selected field and crop, before RGB clipping. Paused file playback retains frame/field inspection. ADC and tape head-switch traces use CaptureRack's input samples.
 
+In the RF preview toolbar, choose VHS, then the television system and tape format. NTSC and PAL offer VHS and S-VHS. SECAM and MESECAM offer VHS. In the RF oscilloscope source menu, select RF FFT to view the input spectrum with a linear frequency axis and a 0 to −120 dBFS scale. Mono RF spans DC to half the sample rate. Complex I/Q spans negative to positive half-rate relative to the tuned frequency.
+
 RTL-SDR uses a matching-architecture `rtlsdr.dll` or `librtlsdr.dll` beside the App or Probe executable, or an absolute path set in `CAPTURERACK_RTLSDR_LIBRARY`. Place its native dependencies next to the library and bind the receiver to WinUSB. This optional library is supplied separately.
 
 ```powershell

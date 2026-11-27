@@ -69,6 +69,7 @@ internal sealed record RfSettings
     public int RtlVgaIndex { get; init; } = 8;
     public int PreviewTypeIndex { get; init; }
     public bool PalPreview { get; init; }
+    public int? VhsStandardIndex { get; init; }
     public int VhsProfileIndex { get; init; }
     public int BetaProfileIndex { get; init; }
     public int PreviewDecodeThreads { get; init; } = Math.Min(4, Environment.ProcessorCount);

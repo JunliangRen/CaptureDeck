@@ -1908,4 +1908,8 @@
   <data name="ShortcutRfStepField" xml:space="preserve"><value>RF 上一場 / 下一場</value></data>
   <data name="ShortcutRfOpenFile" xml:space="preserve"><value>開啟 RF 檔案</value></data>
   <data name="FullscreenDisplayTooltip" xml:space="preserve"><value>切換全螢幕顯示器</value></data>
+  <data name="AudioOutputLabel" xml:space="preserve"><value>監聽輸出裝置</value></data>
+  <data name="AudioOutputDescription" xml:space="preserve"><value>WASAPI 共用模式</value></data>
+  <data name="AudioOutputDefault" xml:space="preserve"><value>跟隨系統預設輸出</value></data>
+  <data name="AudioOutputUnavailable" xml:space="preserve"><value>{0}（未連接）</value></data>
 </root>

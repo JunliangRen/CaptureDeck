@@ -248,6 +248,13 @@ public sealed partial class MainWindow : Window
         SettingsPage.PreviewDeinterlaceChanged += (_, tag) => SetPreviewDeinterlace(tag);
         SettingsPage.PreviewAspectChanged += (_, tag) => SetPreviewAspect(tag);
         SettingsPage.PreviewMatrixChanged += (_, tag) => SetPreviewMatrix(tag);
+        SettingsPage.AudioOutputsRequested += (_, _) => RefreshAudioOutputs();
+        SettingsPage.AudioOutputChanged += (_, device) =>
+        {
+            CaptureRack.Audio.PlaybackDevices.SelectedId = device.Id;
+            audioOutputDeviceName = device.Id.Length == 0 ? "" : device.Name;
+            SettingsChanged();
+        };
         SettingsPage.RefreshToolsRequested += (_, _) => RefreshToolchainDiagnostics();
         SettingsPage.OpenSettingsFolderRequested += async (_, _) => await OpenSettingsFolderAsync();
 
@@ -856,6 +863,7 @@ public sealed partial class MainWindow : Window
         {
             RefreshToolchainDiagnostics();
             RevealWorkspacePanel(SettingsPage);
+            RefreshAudioOutputs();
             SettingsPage.FocusBack();
         }
         else if (target == ActiveAppPage.QcCenter)

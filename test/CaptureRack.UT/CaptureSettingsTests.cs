@@ -10,6 +10,18 @@ namespace CaptureRack.UT;
 public sealed class CaptureSettingsTests
 {
     [Theory]
+    [InlineData("", "")]
+    [InlineData("endpoint-1", "Studio DAC")]
+    public void AudioOutputSelectionSurvivesRestart(string id, string name)
+    {
+        Assert.Equal("", Read("""{"DeckLink":{}}""").AudioOutputDeviceId);
+        var settings = new CaptureSettings { AudioOutputDeviceId = id, AudioOutputDeviceName = name };
+        var restored = Read(CaptureSettingsStore.Serialize(settings));
+        Assert.Equal(id, restored.AudioOutputDeviceId);
+        Assert.Equal(name, restored.AudioOutputDeviceName);
+    }
+
+    [Theory]
     [InlineData(null, "zh-HK", "zh-Hant")]
     [InlineData(null, "zh-MY", "zh-Hans")]
     [InlineData(null, "ja-JP", "ja")]

@@ -1908,4 +1908,8 @@
   <data name="ShortcutRfStepField" xml:space="preserve"><value>RF previous / next field</value></data>
   <data name="ShortcutRfOpenFile" xml:space="preserve"><value>Open RF file</value></data>
   <data name="FullscreenDisplayTooltip" xml:space="preserve"><value>Switch fullscreen display</value></data>
+  <data name="AudioOutputLabel" xml:space="preserve"><value>Monitor output</value></data>
+  <data name="AudioOutputDescription" xml:space="preserve"><value>WASAPI shared mode</value></data>
+  <data name="AudioOutputDefault" xml:space="preserve"><value>Follow system default</value></data>
+  <data name="AudioOutputUnavailable" xml:space="preserve"><value>{0} (disconnected)</value></data>
 </root>

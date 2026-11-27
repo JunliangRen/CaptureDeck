@@ -1908,4 +1908,8 @@
   <data name="ShortcutRfStepField" xml:space="preserve"><value>RF 前 / 次のフィールド</value></data>
   <data name="ShortcutRfOpenFile" xml:space="preserve"><value>RF ファイルを開く</value></data>
   <data name="FullscreenDisplayTooltip" xml:space="preserve"><value>フルスクリーン出力先を切替</value></data>
+  <data name="AudioOutputLabel" xml:space="preserve"><value>モニター出力デバイス</value></data>
+  <data name="AudioOutputDescription" xml:space="preserve"><value>WASAPI 共有モード</value></data>
+  <data name="AudioOutputDefault" xml:space="preserve"><value>システムの既定の出力に従う</value></data>
+  <data name="AudioOutputUnavailable" xml:space="preserve"><value>{0}（未接続）</value></data>
 </root>

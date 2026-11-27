@@ -1,3 +1,4 @@
+using CaptureRack.Audio;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Controls;
@@ -12,7 +13,7 @@ public sealed partial class SettingsView : UserControl
     public ScrollView Scroller => SettingsScroller;
 
     public bool HasOpenDropdown =>
-        ThemePicker.IsDropDownOpen || LanguagePicker.IsDropDownOpen || DefaultLayoutPicker.IsDropDownOpen ||
+        AudioOutputPicker.IsDropDownOpen || ThemePicker.IsDropDownOpen || LanguagePicker.IsDropDownOpen || DefaultLayoutPicker.IsDropDownOpen ||
         SettingsDeinterlacePicker.IsDropDownOpen || SettingsAspectPicker.IsDropDownOpen || SettingsMatrixPicker.IsDropDownOpen;
 
     public event EventHandler? BackRequested;
@@ -25,7 +26,43 @@ public sealed partial class SettingsView : UserControl
     public event EventHandler? RefreshToolsRequested;
     public event EventHandler? OpenSettingsFolderRequested;
 
-    public SettingsView() => InitializeComponent();
+    public event EventHandler? AudioOutputsRequested;
+    public event EventHandler<PlaybackDevice>? AudioOutputChanged;
+    private bool updatingOutputs;
+
+    public SettingsView()
+    {
+        InitializeComponent();
+        AudioOutputPicker.DropDownOpened += (_, _) => AudioOutputsRequested?.Invoke(this, EventArgs.Empty);
+    }
+
+    public void ShowAudioOutputs(IReadOnlyList<PlaybackDevice> devices, string selectedId, string storedName, Func<string,string> localize)
+    {
+        var choices = new List<PlaybackDevice> { new("", localize("AudioOutputDefault")) };
+        choices.AddRange(devices);
+        var selected = choices.Find(x => x.Id == selectedId);
+        if (selected is null)
+        {
+            selected = new(selectedId, string.Format(localize("AudioOutputUnavailable"),
+                string.IsNullOrEmpty(storedName) ? selectedId : storedName));
+            choices.Add(selected);
+        }
+        if (AudioOutputPicker.ItemsSource is List<PlaybackDevice> old && old.SequenceEqual(choices) &&
+            Equals(AudioOutputPicker.SelectedItem, selected)) return;
+        updatingOutputs = true;
+        try
+        {
+            AudioOutputPicker.ItemsSource = choices;
+            AudioOutputPicker.SelectedItem = selected;
+        }
+        finally { updatingOutputs = false; }
+    }
+
+    private void AudioOutputPicker_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (!updatingOutputs && AudioOutputPicker.SelectedItem is PlaybackDevice device)
+            AudioOutputChanged?.Invoke(this, device);
+    }
 
     public void FocusBack() => BackButton.Focus(FocusState.Programmatic);
 
@@ -72,6 +109,9 @@ public sealed partial class SettingsView : UserControl
         DefaultLayoutSplitItem.Content = localize("LayoutSplit");
         DefaultLayoutFocusItem.Content = localize("LayoutFocus");
 
+        AudioOutputCard.Header = localize("AudioOutputLabel");
+        AudioOutputCard.Description = localize("AudioOutputDescription");
+        AutomationProperties.SetName(AudioOutputPicker, localize("AudioOutputLabel"));
         PreviewDefaultsHeading.Text = localize("PreviewDefaultsHeading");
         PreviewDefaultsSubtitle.Text = localize("PreviewOnlyNotice");
         SettingsDeinterlaceCard.Header = localize("PreviewDeinterlaceLabel");

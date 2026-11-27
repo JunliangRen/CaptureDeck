@@ -31,6 +31,8 @@ internal sealed record CaptureSettings
     public string ScopeWaveformMode { get; init; } = "Luma";
     public string ScopeLumaScale { get; init; } = "Code";
     public bool AudioMonitorEnabled { get; init; }
+    public string AudioOutputDeviceId { get; init; } = "";
+    public string AudioOutputDeviceName { get; init; } = "";
     public double AudioMonitorVolume { get; init; } = 0.8;
 }
 

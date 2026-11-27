@@ -288,7 +288,7 @@ public sealed partial class MainWindow
 
     private void RefreshSignalScope()
     {
-        if (RfScopeValue is null) return;
+        if (RfScopeValue is null || RfTraceA is null || RfTraceB is null) return;
         int mode = RfScopeSource.SelectedIndex;
         RfTraceA.Points.Clear();
         RfTraceB.Points.Clear();

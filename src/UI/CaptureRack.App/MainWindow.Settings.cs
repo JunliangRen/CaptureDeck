@@ -42,6 +42,17 @@ public sealed partial class MainWindow
         UpdateConfigurationStatus();
     }
 
+    private string audioOutputDeviceName = "";
+    private int audioOutputRefresh;
+
+    private async void RefreshAudioOutputs()
+    {
+        int request = ++audioOutputRefresh;
+        var devices = await Task.Run(CaptureRack.Audio.PlaybackDevices.List);
+        if (closing || request != audioOutputRefresh) return;
+        SettingsPage.ShowAudioOutputs(devices, CaptureRack.Audio.PlaybackDevices.SelectedId, audioOutputDeviceName, L);
+    }
+
     private async Task RestoreSettingsAsync()
     {
         loading = true;
@@ -77,6 +88,8 @@ public sealed partial class MainWindow
             ? VideoScopeWaveformMode.RgbParade : VideoScopeWaveformMode.Luma;
         scopeLumaScale = string.Equals(settings.ScopeLumaScale, "Ire", StringComparison.OrdinalIgnoreCase)
             ? ScopeLumaScaleMode.Ire : ScopeLumaScaleMode.Code;
+        CaptureRack.Audio.PlaybackDevices.SelectedId = settings.AudioOutputDeviceId;
+        audioOutputDeviceName = settings.AudioOutputDeviceName;
         audioMonitorEnabled = settings.AudioMonitorEnabled;
         audioMonitorVolume = Math.Clamp(settings.AudioMonitorVolume, 0.0, 1.0);
         deckLinkInspector.RestoreAnalogSettings(
@@ -218,6 +231,8 @@ public sealed partial class MainWindow
             ScopeWaveformMode = scopeWaveformMode.ToString(),
             ScopeLumaScale = scopeLumaScale.ToString(),
             AudioMonitorEnabled = audioMonitorEnabled,
+            AudioOutputDeviceId = CaptureRack.Audio.PlaybackDevices.SelectedId,
+            AudioOutputDeviceName = audioOutputDeviceName,
             AudioMonitorVolume = audioMonitorVolume
         });
         UpdateConfigurationStatus();
@@ -338,6 +353,7 @@ public sealed partial class MainWindow
             previewAspectMode.ToString(),
             previewColorMatrix.ToString());
 
+        RefreshAudioOutputs();
         ApplySignalAndMonitorLanguage();
         ApplyWorkspaceLanguage();
         RefreshToolchainDiagnostics();

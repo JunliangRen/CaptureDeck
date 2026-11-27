@@ -47,13 +47,10 @@ public class RfInspectionTests
     }
 
     [Fact]
-    public void DeviceClockHandlesDriverUnitsAndCounterWrap()
+    public void SharedPlaybackClockAccountsForPartialPacketsAtSourceRate()
     {
-        const uint rate = 48_000;
-        Assert.Equal(24000L, LocalAudioMonitor.GetPlayedFrames(48000, rate, 1, 500));
-        Assert.Equal(24000L, LocalAudioMonitor.GetPlayedFrames(48000, rate, 2, 24000));
-        Assert.Equal(24000L, LocalAudioMonitor.GetPlayedFrames(48000, rate, 4, 96000));
-        Assert.Equal((1L << 32) - 1, LocalAudioMonitor.GetPlayedFrames((1L << 32) + 32, rate, 2, uint.MaxValue));
-        Assert.Null(LocalAudioMonitor.GetPlayedFrames(48000, rate, 8, 0));
+        Assert.Equal(9_000_000, CaptureRack.Audio.WasapiPlayback.MediaTicksAt(10_000_000, 4800, 48000));
+        Assert.Equal(9_000_000, CaptureRack.Audio.WasapiPlayback.MediaTicksAt(10_000_000, 4410, 44100));
+        Assert.Equal(10_000_000, CaptureRack.Audio.WasapiPlayback.MediaTicksAt(10_000_000, 0, 44100));
     }
 }

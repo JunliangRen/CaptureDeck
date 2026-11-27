@@ -129,6 +129,40 @@ public sealed class TestSignalTests
     }
 
     [Fact]
+    public async Task SwitchingUnavailableMonitorOutputPreservesRecording()
+    {
+        var directory = Directory.CreateTempSubdirectory();
+        var original = CaptureRack.Audio.PlaybackDevices.SelectedId;
+        try
+        {
+            CaptureRack.Audio.PlaybackDevices.SelectedId = "missing-endpoint";
+            using var monitor = new LocalAudioMonitor { Enabled = true, Volume = 0.001 };
+            var recorder = new PreviewRecorder();
+            using var source = new TestSignal.Session(TestSignalScenario.Normal, new PreviewFeed(), recorder, monitor);
+            source.Emit(0);
+            recorder.Start(Path.Combine(directory.FullName, "switch.mov"));
+            for (int frame = 1; frame <= 30; frame++)
+            {
+                if (frame == 5) CaptureRack.Audio.PlaybackDevices.SelectedId = "";
+                if (frame == 23) CaptureRack.Audio.PlaybackDevices.SelectedId = "disconnected-endpoint";
+                source.Emit(frame);
+                await Task.Delay(33);
+            }
+            var result = recorder.Finish();
+            var log = CaptureQcLog.Create(result, DateTimeOffset.UtcNow.AddSeconds(-1), DateTimeOffset.UtcNow,
+                "Test signal", "Built-in", "Normal", "Stereo");
+            Assert.Null(log.CaptureError);
+            Assert.Equal(30, log.Expected.VideoFrames);
+            Assert.Equal(48048, log.Expected.AudioSampleFrames);
+        }
+        finally
+        {
+            CaptureRack.Audio.PlaybackDevices.SelectedId = original;
+            directory.Delete(recursive: true);
+        }
+    }
+
+    [Fact]
     public async Task RealTimePreviewPublishesFramesAndStopsOnCancellation()
     {
         var feed = new PreviewFeed();

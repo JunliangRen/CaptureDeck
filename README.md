@@ -30,7 +30,7 @@ CaptureRack/
 |   |   |       |   `-- MsTape/         # D-VHS device discovery and MPEG-TS capture
 |   |   |       `-- Interop/            # Shared COM bindings, media types, and sample delivery
 |   |   |-- CaptureRack.SignalCapture    # Sampled-signal capture devices and diagnostics
-|   |   `-- CaptureRack.Audio            # Reserved for standalone audio capture
+|   |   `-- CaptureRack.Audio            # Shared WASAPI monitor output
 |   |-- Processing/
 |   |   |-- CaptureRack.Recording       # Shared recording, live encoding, and MKV recovery
 |   |   `-- CaptureRack.QualityControl  # Capture validation and reports
@@ -73,7 +73,7 @@ Capture and recording share the `CaptureSampleHandler` callback in `CaptureRack.
 - **General DirectShow capture** can support Windows cameras, video capture cards, and audio inputs that expose compatible filters.
 - **FireWire** can preview and record MSTape MPEG-TS in the desktop app and capture TS from the command line. Native DV is a separate format.
 - **Signal capture** can enumerate and probe Domesday Duplicator devices via WinUSB and inspect or configure RTL-SDR receivers via librtlsdr on Windows. MISRC support, raw sample recording, and live monitoring are future integrations.
-- **Audio** is reserved for standalone audio inputs such as ASIO and WASAPI.
+- **Audio** provides shared-mode WASAPI speaker monitoring for all Windows capture sources and RF file playback. In Settings, select the current Windows default output or a specific playback device. An unavailable selected device is retried while recording continues.
 - **Device control** is independent of the capture source. The transport contract is ready for future AV/C, JVC JLIP, and other RS-232 protocols. It distinguishes command acceptance from observed device state. Recording to the computer and recording to tape are separate operations.
 
 Run the unit tests from the repository root.

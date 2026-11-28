@@ -27,12 +27,13 @@ class ReleaseTests(unittest.TestCase):
             files[prefix + ".exe"] = exe
             files[prefix + ".dll"] = ("0.7.0+" + commit).encode()
             files[prefix + ".deps.json"] = deps
-            for name in ("CaptureRack.Audio", "NAudio.Wasapi", "CaptureRack.DeckLink"):
+            for name in ("CaptureRack.Audio", "NAudio.Wasapi", "CaptureRack.DeckLink", "rtlsdr"):
                 files[f"{app}/{name}.dll"] = b"dependency"
         with tempfile.TemporaryDirectory() as temp:
             lock = Path(temp) / "lock.json"
             digest = hashlib.sha256(b"dependency").hexdigest()
-            lock.write_text(json.dumps({"package": "realtime-test", "files": {}, "wasapi": {
+            lock.write_text(json.dumps({"package": "realtime-test", "files": {},
+                "rtl-sdr": {"win-arm64": {"rtlsdr.dll": digest}, "common": {}}, "wasapi": {
                 "package": "NAudio.Wasapi/2.3.0", "sha256": {"App": digest, "Probe": digest}}}))
             override = patch("release.LOCK", lock)
             override.start()
@@ -50,6 +51,7 @@ class ReleaseTests(unittest.TestCase):
             for entries in (files | {"App/debug.PdB": b""},
                             files | {"Probe/CaptureRack.Probe.exe": bytes(exe[:68]) + b"\x64\x86"},
                             files | {"App/NAudio.Wasapi.dll": b"replaced"},
+                            files | {"Probe/rtlsdr.dll": b"replaced"},
                             {k: v for k, v in files.items() if k != "App/NAudio.Wasapi.dll"}):
                 pack(entries)
                 with self.assertRaises((KeyError, ValueError)):

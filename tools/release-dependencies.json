@@ -9,10 +9,10 @@
     "App/vhsdecode_realtime_preview.dll": "51670b13b8f78bfa64f1e4d0f1d1bdb5fb9fb2ab0d0f918c71be4d7330c8567b"
   },
   "wasapi": {
-    "package": "NAudio.Wasapi/2.3.0",
+    "package": "NAudio.Wasapi/3.3.0",
     "sha256": {
-      "App": "00c1b1644ed3423f930507085752ebeb7977e0a01cdd4f3766f303396c033bf9",
-      "Probe": "a05e371abf96195770ac4f84653d987d63731fed528e98c7fe0d10ce66e37d7e"
+      "App": "a0d621f38e6098435b14b517c0c6ce0b7356d24f648ec399ce8d040ed59fa487",
+      "Probe": "a0d621f38e6098435b14b517c0c6ce0b7356d24f648ec399ce8d040ed59fa487"
     }
   },
   "rtl-sdr": {

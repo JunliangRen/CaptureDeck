@@ -2,6 +2,7 @@ using CaptureRack.Audio;
 using System.Diagnostics;
 using System.Globalization;
 using System.Runtime.InteropServices;
+using CaptureRack.DeckLink.Capture;
 
 namespace CaptureRack.DeckLink;
 

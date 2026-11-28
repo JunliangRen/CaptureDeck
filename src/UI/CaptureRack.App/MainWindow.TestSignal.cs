@@ -7,13 +7,6 @@ public sealed partial class MainWindow
 {
     private TestSignalScenario SelectedTestScenario => testSignalInspector.SelectedScenario;
 
-    private string TestSignalScenarioKey => SelectedTestScenario switch
-    {
-        TestSignalScenario.TimingFaults => "TestSignalFaults",
-        TestSignalScenario.MultiChannel => "TestSignalMultiChannel",
-        _ => "TestSignalNormal"
-    };
-
     private uint ActiveDeckLinkAudioChannels => IsTestSignalActive
         ? (SelectedTestScenario == TestSignalScenario.MultiChannel ? 8u : CaptureAudio.Channels)
         : deckLinkInspector.SelectedAudioChannels;

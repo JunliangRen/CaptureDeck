@@ -10,6 +10,7 @@
     <WindowsAppSDKSelfContained>true</WindowsAppSDKSelfContained>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
   <Import Project="../../../WindowsExecutables.props" />
   <Import Project="../../../RealtimePreview.props" Condition="'$(RuntimeIdentifier)' == 'win-x64'" />

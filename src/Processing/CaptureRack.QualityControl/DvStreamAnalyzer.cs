@@ -238,13 +238,18 @@ public sealed class DvStreamAnalyzer(DvEncoding? negotiatedEncoding = null, bool
 
 public sealed record DvFileReport(string InputPath, DvStatistics Analysis)
 {
+    private static readonly JsonSerializerOptions JsonOptions = new()
+    {
+        PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower,
+        WriteIndented = true
+    };
+
     public int SchemaVersion => 1;
     public string Type => "analysis_result";
     public bool Success => Analysis.Success;
     public int ExitCode => Success ? 0 : 4;
 
-    public string ToJson() => JsonSerializer.Serialize(this, new JsonSerializerOptions
-        { PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower, WriteIndented = true });
+    public string ToJson() => JsonSerializer.Serialize(this, JsonOptions);
 }
 
 public static class DvFile

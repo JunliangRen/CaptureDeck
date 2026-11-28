@@ -39,7 +39,7 @@ public sealed class LocalAudioMonitorTests
         })) { Enabled = true, Volume = 0.5 };
         try
         {
-            var session = await ready.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            var session = await ready.Task.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
             void Submit(short[] input, int channels, AudioMonitorRoute route,
                 AudioChannelLayout layout = AudioChannelLayout.Unknown)
             {

@@ -1,4 +1,3 @@
-using CaptureRack.QualityControl;
 using Xunit;
 
 namespace CaptureRack.QualityControl.UT;

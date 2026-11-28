@@ -58,7 +58,7 @@ internal static unsafe class MsTapeMediaTypes
         return GetLayout(type) is { } layout ? new FireWireMediaFormat(layout) : null;
     }
 
-    internal static TsLayout? GetLayout(in DirectShowMediaType type)
+    private static TsLayout? GetLayout(in DirectShowMediaType type)
     {
         if (type.Major != StreamType)
             return null;

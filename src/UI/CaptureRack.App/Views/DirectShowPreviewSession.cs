@@ -1,5 +1,4 @@
 using CaptureRack.Audio;
-using System.Runtime.InteropServices.WindowsRuntime;
 using System.Buffers;
 using System.Threading.Channels;
 using CaptureRack.Core;
@@ -11,7 +10,7 @@ using Windows.Graphics.Imaging;
 
 namespace CaptureRack.App.Views;
 
-internal sealed class DirectShowPreviewSession(PreviewFeed feed)
+internal sealed partial class DirectShowPreviewSession(PreviewFeed feed)
 {
     private readonly DirectShowSampleSession samples = new();
     internal long SkippedBeforeDecode => samples.SkippedBeforeDecode;
@@ -265,7 +264,7 @@ internal sealed class DirectShowPreviewSession(PreviewFeed feed)
         return new PreviewImage(pixels.DetachPixelData(), width, height, pooled: false);
     }
 
-    internal sealed class PreviewImage(byte[] buffer, int width, int height, bool pooled) : IDisposable
+    internal sealed partial class PreviewImage(byte[] buffer, int width, int height, bool pooled) : IDisposable
     {
         internal int Width { get; } = width;
         internal int Height { get; } = height;

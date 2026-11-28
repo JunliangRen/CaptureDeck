@@ -2,6 +2,8 @@ using CaptureRack.Audio;
 using System.Buffers.Binary;
 using System.Text;
 using CaptureRack.Core;
+using CaptureRack.DeckLink.Monitoring;
+using CaptureRack.DeckLink.Recording;
 
 namespace CaptureRack.DeckLink;
 

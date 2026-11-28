@@ -9,6 +9,6 @@
   </ItemGroup>
   <ItemGroup>
     <InternalsVisibleTo Include="CaptureRack.UT" />
-    <PackageReference Include="NAudio.Wasapi" Version="2.3.0" />
+    <PackageReference Include="NAudio.Wasapi" Version="3.3.0" />
   </ItemGroup>
 </Project>

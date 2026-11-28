@@ -1,7 +1,6 @@
 using CaptureRack.Audio;
 using CaptureRack.App.Controls;
 using CaptureRack.App.Views;
-using CaptureRack.DeckLink;
 using Microsoft.UI.Dispatching;
 using Microsoft.UI.Input;
 using Microsoft.UI.Windowing;

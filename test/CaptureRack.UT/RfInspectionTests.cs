@@ -1,5 +1,4 @@
 using CaptureRack.App;
-using CaptureRack.DeckLink;
 using Xunit;
 
 namespace CaptureRack.UT;
@@ -21,7 +20,7 @@ public class RfInspectionTests
                 position = first;
                 Assert.Equal(2, length);
                 Assert.Equal(64, buffer[0]);
-            }, default);
+            }, TestContext.Current.CancellationToken);
             Assert.Equal(1, position);
         }
         finally { File.Delete(file); }

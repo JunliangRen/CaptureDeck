@@ -82,7 +82,7 @@ public sealed class LiveEncodingTests
         writer.Finish();
 
         var recovery = new LiveMatroskaRecovery();
-        recovery.Scan(media, media.Length, verifyIntegrity: true);
+        recovery.Scan(media, media.Length, verifyIntegrity: true, cancellation: TestContext.Current.CancellationToken);
         Assert.Equal(1234.5, recovery.LastCompleteClusterTimestampMilliseconds);
     }
 
@@ -98,7 +98,7 @@ public sealed class LiveEncodingTests
             var jpeg = Path.Combine(folder.FullName, "input.jpg");
             await Run(ffmpeg, "-v", "error", "-f", "lavfi", "-i", "testsrc2=size=128x96:rate=25",
                 "-frames:v", "1", "-c:v", "mjpeg", "-f", "mjpeg", jpeg);
-            var frame = await File.ReadAllBytesAsync(jpeg);
+            var frame = await File.ReadAllBytesAsync(jpeg, TestContext.Current.CancellationToken);
             var bitmap = new byte[40];
             BinaryPrimitives.WriteInt32LittleEndian(bitmap, 40);
             BinaryPrimitives.WriteInt32LittleEndian(bitmap.AsSpan(4), 128);
@@ -165,7 +165,7 @@ public sealed class LiveEncodingTests
 
                 var end = Stopwatch.StartNew();
                 while (new FileInfo(partial).Length == 0 && end.Elapsed < TimeSpan.FromSeconds(10))
-                    await Task.Delay(50);
+                    await Task.Delay(50, TestContext.Current.CancellationToken);
                 Assert.True(new FileInfo(partial).Length > 0, "Expected encoded bytes before stop.");
                 recording.Finish();
             }
@@ -177,10 +177,10 @@ public sealed class LiveEncodingTests
                 Assert.Contains($"flac,{bits}", streams);
             Assert.True(File.Exists(path + ".encoding.json"));
 
-            var bytes = await File.ReadAllBytesAsync(path);
+            var bytes = await File.ReadAllBytesAsync(path, TestContext.Current.CancellationToken);
             var broken = Path.Combine(folder.FullName, "broken.mkv");
             var recovered = Path.Combine(folder.FullName, "recovered.mkv");
-            using var evidence = System.Text.Json.JsonDocument.Parse(await File.ReadAllTextAsync(path + ".encoding.json"));
+            using var evidence = System.Text.Json.JsonDocument.Parse(await File.ReadAllTextAsync(path + ".encoding.json", TestContext.Current.CancellationToken));
             var report = evidence.RootElement;
             Assert.Equal(80, report.GetProperty("videoFramesToEncoder").GetInt64());
             Assert.Equal(JsonValueKind.Null, report.GetProperty("decodedVideoFrames").ValueKind);
@@ -197,12 +197,12 @@ public sealed class LiveEncodingTests
             var truncation = report.GetProperty("completeClusterBytes").GetInt32() - 17;
             using var scan = new MemoryStream(bytes);
             var progress = new LiveMatroskaRecovery();
-            progress.Scan(scan, truncation);
+            progress.Scan(scan, truncation, cancellation: TestContext.Current.CancellationToken);
             Assert.True(progress.LastCompleteClusterTimestampMilliseconds < lastTimestamp);
-            progress.Scan(scan, bytes.Length);
+            progress.Scan(scan, bytes.Length, cancellation: TestContext.Current.CancellationToken);
             Assert.Equal(lastTimestamp, progress.LastCompleteClusterTimestampMilliseconds);
-            await File.WriteAllBytesAsync(broken, bytes[..truncation]);
-            var count = await LiveMatroskaRecovery.RecoverAsync(broken, recovered);
+            await File.WriteAllBytesAsync(broken, bytes[..truncation], TestContext.Current.CancellationToken);
+            var count = await LiveMatroskaRecovery.RecoverAsync(broken, recovered, TestContext.Current.CancellationToken);
             Assert.True(count > 0);
             Assert.True(count < truncation);
             Assert.Contains(expected, await Probe(ffprobe, recovered));
@@ -214,8 +214,8 @@ public sealed class LiveEncodingTests
                 var damaged = Path.Combine(folder.FullName, "bad-crc.mkv");
                 var crcRecovery = Path.Combine(folder.FullName, "without-bad-cluster.mkv");
                 bytes[truncation + 16] ^= 0x01;
-                await File.WriteAllBytesAsync(damaged, bytes);
-                Assert.Equal(count, await LiveMatroskaRecovery.RecoverAsync(damaged, crcRecovery));
+                await File.WriteAllBytesAsync(damaged, bytes, TestContext.Current.CancellationToken);
+                Assert.Equal(count, await LiveMatroskaRecovery.RecoverAsync(damaged, crcRecovery, TestContext.Current.CancellationToken));
 
                 var crash = Path.Combine(folder.FullName, "interrupted.mkv");
                 using var live = new LiveEncodedRecording(crash, new(output), video, audioTrack, ffmpeg);
@@ -228,16 +228,17 @@ public sealed class LiveEncodingTests
                 var journal = crash + ".partial.mkv.checkpoint.json";
                 var deadline = Stopwatch.StartNew();
                 while (!File.Exists(journal) && deadline.Elapsed < TimeSpan.FromSeconds(5))
-                    await Task.Delay(50);
+                    await Task.Delay(50, TestContext.Current.CancellationToken);
                 Assert.True(File.Exists(journal));
                 live.AbortEncoder();
                 Assert.Throws<IOException>(() => live.Finish());
                 Assert.False(File.Exists(crash));
-                using var checkpoint = System.Text.Json.JsonDocument.Parse(await File.ReadAllTextAsync(journal));
+                using var checkpoint = System.Text.Json.JsonDocument.Parse(await File.ReadAllTextAsync(journal, TestContext.Current.CancellationToken));
                 Assert.NotNull(checkpoint.RootElement.GetProperty("error").GetString());
                 var repaired = Path.Combine(folder.FullName, "repaired.mkv");
-                Assert.True(await LiveMatroskaRecovery.RecoverAsync(crash + ".partial.mkv", repaired) > 0);
-                using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+                Assert.True(await LiveMatroskaRecovery.RecoverAsync(crash + ".partial.mkv", repaired, TestContext.Current.CancellationToken) > 0);
+                using var timeout = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
+                timeout.CancelAfter(TimeSpan.FromSeconds(30));
                 var qc = await QcReports.RunAsync(repaired, cancellation: timeout.Token);
                 Assert.True(qc.Status == QcStatus.Passed, qc.Summary);
                 Assert.True(qc.DecodedVideoFrames > 0);
@@ -292,7 +293,7 @@ public sealed class LiveEncodingTests
                 Assert.Contains(fault, failure.Message, StringComparison.Ordinal);
             }
             Assert.False(File.Exists(path));
-            using var checkpoint = JsonDocument.Parse(await File.ReadAllTextAsync(partial + ".checkpoint.json"));
+            using var checkpoint = JsonDocument.Parse(await File.ReadAllTextAsync(partial + ".checkpoint.json", TestContext.Current.CancellationToken));
             var report = checkpoint.RootElement;
             Assert.Equal(fault, report.GetProperty("error").GetString());
             Assert.Equal(observed.CompletePrefix, report.GetProperty("completeClusterBytes").GetInt64());
@@ -300,7 +301,7 @@ public sealed class LiveEncodingTests
                 report.GetProperty("lastCompleteClusterTimestampMilliseconds").GetDouble());
 
             var recovered = Path.Combine(folder.FullName, "recovered.mkv");
-            Assert.Equal(observed.CompletePrefix, await LiveMatroskaRecovery.RecoverAsync(partial, recovered));
+            Assert.Equal(observed.CompletePrefix, await LiveMatroskaRecovery.RecoverAsync(partial, recovered, TestContext.Current.CancellationToken));
         }
         finally { folder.Delete(recursive: true); }
     }
@@ -321,7 +322,7 @@ public sealed class LiveEncodingTests
             recorder.Start(path, encoding: new(RecordingOutput.Ffv1));
             for (var frame = 1; frame <= 32; frame++)
             {
-                await Task.Delay(34);
+                await Task.Delay(34, TestContext.Current.CancellationToken);
                 input.Emit(frame);
             }
             const string error = "Simulated encoder overload";
@@ -329,7 +330,7 @@ public sealed class LiveEncodingTests
             Assert.False(File.Exists(path));
             var partial = path + ".partial.mkv";
             Assert.Contains("ffv1", await Probe(ffprobe, partial));
-            using var journal = System.Text.Json.JsonDocument.Parse(await File.ReadAllTextAsync(partial + ".checkpoint.json"));
+            using var journal = System.Text.Json.JsonDocument.Parse(await File.ReadAllTextAsync(partial + ".checkpoint.json", TestContext.Current.CancellationToken));
             Assert.Equal(error, journal.RootElement.GetProperty("error").GetString());
             Assert.Equal(31, journal.RootElement.GetProperty("captureVideoPackets").GetInt64());
             Assert.Equal(1, journal.RootElement.GetProperty("captureEstimatedMissingVideoFrames").GetInt64());
@@ -367,11 +368,11 @@ public sealed class LiveEncodingTests
             {
                 void Emit(int index) => recorder.SubmitVideo(pin.AddrOfPinnedObject(), 128, 96, 256, index, 1);
                 Emit(0);
-                Assert.True(entered.Wait(TimeSpan.FromSeconds(5)));
+                Assert.True(entered.Wait(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken));
                 for (var index = 1; index <= 16; index++)
                     Emit(index);
                 Assert.Contains("queue filled", Assert.Throws<IOException>(() => Emit(17)).Message);
-                await Task.Delay(300);
+                await Task.Delay(300, TestContext.Current.CancellationToken);
             }
             finally
             {
@@ -381,7 +382,7 @@ public sealed class LiveEncodingTests
 
             Assert.Throws<IOException>(() => recorder.Finish());
             Assert.False(File.Exists(path));
-            using var journal = JsonDocument.Parse(await File.ReadAllTextAsync(path + ".partial.mkv.checkpoint.json"));
+            using var journal = JsonDocument.Parse(await File.ReadAllTextAsync(path + ".partial.mkv.checkpoint.json", TestContext.Current.CancellationToken));
             var report = journal.RootElement;
             ValidationEvidence.Save("exhausted-queue", report);
             Assert.Equal(18, report.GetProperty("captureVideoPackets").GetInt64());
@@ -414,7 +415,7 @@ public sealed class LiveEncodingTests
             string? failure = null;
             for (var i = 1; i <= 50 && failure is null; i++)
             {
-                await Task.Delay(34);
+                await Task.Delay(34, TestContext.Current.CancellationToken);
                 input.Emit(i);
                 var stats = input.Snapshot();
                 Assert.Null(stats.Error);
@@ -452,7 +453,7 @@ public sealed class LiveEncodingTests
             var started = recorder.Start(path, encoding: new(output, Deinterlace: deinterlace));
             for (var i = 1; i <= 45; i++)
             {
-                await Task.Delay(34);
+                await Task.Delay(34, TestContext.Current.CancellationToken);
                 session.Emit(i);
             }
             var stats = recorder.Finish();
@@ -460,7 +461,8 @@ public sealed class LiveEncodingTests
             var streams = await Probe(ffprobe, path);
             Assert.Contains(expectedVideo, streams);
             Assert.Contains(output == RecordingOutput.Ffv1 ? "flac" : "pcm_s16le", streams);
-            using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(30));
+            using var timeout = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
+            timeout.CancelAfter(TimeSpan.FromSeconds(30));
             var log = CaptureQcLog.Create(stats, started, DateTimeOffset.UtcNow,
                 "CaptureRack test signal", "Built-in", "SD interlaced test pattern", "Stereo test tone");
             var qc = await QcReports.RunAsync(path, log, cancellation: timeout.Token, stageChanged: stage =>
@@ -475,7 +477,7 @@ public sealed class LiveEncodingTests
             Assert.Equal(45, qc.DecodedVideoFrames);
             Assert.Equal(72072, qc.DecodedAudioSampleFrames);
             var reportPath = path + ".encoding.json";
-            var originalReport = await File.ReadAllTextAsync(reportPath);
+            var originalReport = await File.ReadAllTextAsync(reportPath, TestContext.Current.CancellationToken);
             using var encodingReport = JsonDocument.Parse(originalReport);
             var report = encodingReport.RootElement;
             Assert.Equal("completed", report.GetProperty("decodeStatus").GetString());
@@ -489,13 +491,13 @@ public sealed class LiveEncodingTests
             using var cancelled = new CancellationTokenSource();
             cancelled.Cancel();
             Assert.Equal(QcStatus.Cancelled, (await QcReports.RunAsync(path, cancellation: cancelled.Token)).Status);
-            Assert.Equal(originalReport, await File.ReadAllTextAsync(reportPath));
+            Assert.Equal(originalReport, await File.ReadAllTextAsync(reportPath, TestContext.Current.CancellationToken));
             if (output == RecordingOutput.Ffv1)
             {
                 var rerun = await QcReports.RunAsync(path, log, cancellation: timeout.Token);
                 Assert.True(rerun.Status == QcStatus.Passed, rerun.Summary);
                 Assert.Equal(45, rerun.DecodedVideoFrames);
-                Assert.Equal(originalReport, await File.ReadAllTextAsync(reportPath));
+                Assert.Equal(originalReport, await File.ReadAllTextAsync(reportPath, TestContext.Current.CancellationToken));
             }
 
             if (output == RecordingOutput.Ffv1)
@@ -507,17 +509,17 @@ public sealed class LiveEncodingTests
                 nativeRecorder.Start(nativePath);
                 for (var i = 1; i <= 45; i++)
                 {
-                    await Task.Delay(34);
+                    await Task.Delay(34, TestContext.Current.CancellationToken);
                     native.Emit(i);
                 }
                 nativeRecorder.Finish();
                 Assert.Equal(await HashDecoded(ffmpeg, nativePath), await HashDecoded(ffmpeg, path));
 
-                await File.WriteAllBytesAsync(path, [0, 1, 2, 3]);
+                await File.WriteAllBytesAsync(path, [0, 1, 2, 3], TestContext.Current.CancellationToken);
                 var failedRerun = await QcReports.RunAsync(path, cancellation: timeout.Token);
                 Assert.Equal(QcStatus.Failed, failedRerun.Status);
                 Assert.Null(failedRerun.DecodedVideoFrames);
-                Assert.Equal(originalReport, await File.ReadAllTextAsync(reportPath));
+                Assert.Equal(originalReport, await File.ReadAllTextAsync(reportPath, TestContext.Current.CancellationToken));
             }
         }
         finally { folder.Delete(recursive: true); }

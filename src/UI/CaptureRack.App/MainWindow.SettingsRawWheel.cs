@@ -133,18 +133,18 @@ public sealed partial class MainWindow
         public uint ExtraInformation;
     }
 
-    [DllImport("user32.dll", ExactSpelling = true)]
+    [LibraryImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
-    private static extern bool RegisterRawInputDevices(ref RawInputDevice device, uint count, uint size);
+    private static partial bool RegisterRawInputDevices(ref RawInputDevice device, uint count, uint size);
 
-    [DllImport("user32.dll", ExactSpelling = true)]
-    private static extern uint GetRawInputData(nint handle, uint command, out RawMouseInput data,
+    [LibraryImport("user32.dll")]
+    private static partial uint GetRawInputData(nint handle, uint command, out RawMouseInput data,
         ref uint size, uint headerSize);
 
-    [DllImport("user32.dll", ExactSpelling = true)]
+    [LibraryImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
-    private static extern bool GetCursorPos(out WindowPoint point);
+    private static partial bool GetCursorPos(out WindowPoint point);
 
-    [DllImport("user32.dll", ExactSpelling = true)]
-    private static extern short GetKeyState(int virtualKey);
+    [LibraryImport("user32.dll")]
+    private static partial short GetKeyState(int virtualKey);
 }

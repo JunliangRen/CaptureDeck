@@ -1,0 +1,11 @@
+[
+  {
+    "Name": "CaptureRack.App",
+    "Projects": [
+      {
+        "Path": "src\\UI\\CaptureRack.App\\CaptureRack.App.csproj",
+        "Action": "Start"
+      }
+    ]
+  }
+]

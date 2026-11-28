@@ -41,7 +41,7 @@ public sealed class TestSignalTests
             for (var i = 1; i <= 80; i++)
             {
                 // Match realtime delivery so this content test does not depend on burst disk throughput.
-                await Task.Delay(frameInterval);
+                await Task.Delay(frameInterval, TestContext.Current.CancellationToken);
                 session.Emit(i);
                 if (i != 45)
                     continue;
@@ -98,7 +98,8 @@ public sealed class TestSignalTests
             // The CI integration step supplies FFmpeg. Unit tests also run on machines without it.
             if (Environment.GetEnvironmentVariable("CAPTURERACK_TEST_SIGNAL_QC") == "1")
             {
-                using var timeout = new CancellationTokenSource(TimeSpan.FromMinutes(2));
+                using var timeout = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
+                timeout.CancelAfter(TimeSpan.FromMinutes(2));
                 var result = await QcReports.RunAsync(path, log, cancellation: timeout.Token);
                 Assert.True(result.Status == QcStatus.Passed, result.Summary);
                 Assert.Equal(videoFrames, result.DecodedVideoFrames);
@@ -147,7 +148,7 @@ public sealed class TestSignalTests
                 if (frame == 5) CaptureRack.Audio.PlaybackDevices.SelectedId = "";
                 if (frame == 23) CaptureRack.Audio.PlaybackDevices.SelectedId = "disconnected-endpoint";
                 source.Emit(frame);
-                await Task.Delay(33);
+                await Task.Delay(33, TestContext.Current.CancellationToken);
             }
             var result = recorder.Finish();
             var log = CaptureQcLog.Create(result, DateTimeOffset.UtcNow.AddSeconds(-1), DateTimeOffset.UtcNow,
@@ -183,7 +184,7 @@ public sealed class TestSignalTests
         })) { Enabled = true };
         try
         {
-            var endpoint = await connected.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            var endpoint = await connected.Task.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
             var recorder = new PreviewRecorder();
             using var source = new TestSignal.Session(TestSignalScenario.Normal, new PreviewFeed(), recorder, monitor);
             source.Emit(0);
@@ -193,12 +194,12 @@ public sealed class TestSignalTests
             Assert.True(endpoint.Take(64, out var samples, out _, out _));
             Assert.Contains(samples, b => b != 0);
             disconnect.Set();
-            await reopening.Task.WaitAsync(TimeSpan.FromSeconds(5));
+            await reopening.Task.WaitAsync(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken);
             // Keep rendering blocked across more packets than fit in the speaker queue.
             for (int frame = 2; frame <= 15; frame++)
             {
                 source.Emit(frame);
-                await Task.Delay(33);
+                await Task.Delay(33, TestContext.Current.CancellationToken);
             }
             var log = CaptureQcLog.Create(recorder.Finish(), started, DateTimeOffset.UtcNow,
                 "Test signal", "Built-in", "Normal", "Stereo");
@@ -208,7 +209,8 @@ public sealed class TestSignalTests
             Assert.True(File.Exists(path));
             if (Environment.GetEnvironmentVariable("CAPTURERACK_TEST_SIGNAL_QC") == "1")
             {
-                using var timeout = new CancellationTokenSource(TimeSpan.FromMinutes(2));
+                using var timeout = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
+                timeout.CancelAfter(TimeSpan.FromMinutes(2));
                 var result = await QcReports.RunAsync(path, log, cancellation: timeout.Token);
                 Assert.Equal(QcStatus.Passed, result.Status);
                 Assert.Equal(15, result.DecodedVideoFrames);
@@ -230,13 +232,14 @@ public sealed class TestSignalTests
     {
         var feed = new PreviewFeed();
         var recorder = new PreviewRecorder();
-        using var stop = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        using var stop = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
+        stop.CancelAfter(TimeSpan.FromSeconds(10));
         var stats = await Task.Run(() => TestSignal.Run(TestSignalScenario.Normal, feed, recorder, null, update =>
         {
             Assert.Equal(TestSignal.Mode, update.Mode);
             if (update.Stats.VideoFrames >= 2)
                 stop.Cancel();
-        }, stop.Token));
+        }, stop.Token), stop.Token);
         PreviewFrame? frame = null;
         Assert.True(feed.TryTakeLatest(ref frame));
         Assert.True(stats.VideoFrames >= 2);

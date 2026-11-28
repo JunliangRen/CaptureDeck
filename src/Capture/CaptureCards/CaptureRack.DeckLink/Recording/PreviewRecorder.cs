@@ -1,5 +1,6 @@
 using CaptureRack.Audio;
 using System.Runtime.ExceptionServices;
+using CaptureRack.DeckLink.Capture;
 using CaptureRack.Recording;
 
 namespace CaptureRack.DeckLink;

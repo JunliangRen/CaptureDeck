@@ -37,6 +37,16 @@ This is the repository handoff for coding agents. Start with the current Git sta
 
 ## Development and verification
 
+The Windows solution maps its Any CPU configuration to x64 for App and Probe. The libraries and tests use Any CPU. MSBuild verified the Debug and Release mappings and built the Release solution. The shared CaptureRack.App launch profile starts the WinUI project.
+
+The native WinUI app enables unsafe compilation for generated WinRT and LibraryImport code. The disk-space query retains the UTF-16 Win32 entry point and is covered by a Unicode-directory test.
+
+When editing code, review compiler diagnostics for obsolete APIs and run both Roslyn and ReSharper inspections. For the Windows solution, run `dotnet format CaptureRack.slnx --verify-no-changes --severity info` and `jb inspectcode CaptureRack.slnx --swea --severity=SUGGESTION --output=<temporary-sarif-path>`. Use an existing JetBrains ReSharper Command Line Tools installation, or install `JetBrains.ReSharper.GlobalTools` with `dotnet tool install --tool-path` in a temporary directory and invoke `jb` from there. Keep reports outside tracked files. If either tool is unavailable or cannot load the solution, run the available checks and report the missing coverage.
+
+Review findings from both tools together. Merge duplicates and assess each relevant recommendation against actual callers, supported platforms, public contracts, implicit uses such as reflection or XAML, and interop or resource lifetime requirements. Apply and retain targeted changes when source review and verification show that they preserve behavior and compatibility. Recheck affected diagnostics and run relevant builds or tests. Leave risky or uncertain recommendations for separate work and explain why in the handoff.
+
+DeckLink COM and the Win32 window callbacks use runtime marshalling. Keep their declarations compatible with the current activation, casting, callback and release paths.
+
 Keep WinUI preview, speaker playback and recording queues independent. Preserve capture buffers before returning from borrowed sample callbacks. Treat preview skips, recording loss and unavailable telemetry as distinct observations. Report software recording failures and preserve interrupted media for QC.
 
 For supported raw DirectShow frame layouts with a legacy VIDEOINFOHEADER, use the progressive rendering default after checking matching extended media types and the Blackmagic AVStream exception. Keep conflicting flags and compressed streams unresolved when no stronger evidence exists. The original interlace flags remain available separately from fallback flags.
@@ -54,6 +64,8 @@ The RF oscilloscope offers an input FFT in both file and receiver sessions, incl
 WinUI checks verified stable RF toolbar positions when opening, selecting and closing all five Betamax profiles, five NTSC LaserDisc tracks and three NTSC VHS decode modes. RF audio meter visibility changes the monitor area below the toolbar. Keep saved VHS profile values compatible (0 video, 1 independent Hi-Fi audio, 2 S-VHS).
 
 Windows x64 WinUI replay has been checked with 40 MSPS PAL S-VHS, NTSC S-VHS-ET, SuperBeta, SuperBeta Hi-Fi and ED Beta captures. Picture and Y/U/V traces advanced in each mode. Both Hi-Fi modes cleared and reacquired the stereo meter across an inserted RF interruption. SuperBeta video-only used the Hi-Fi capture with audio disabled. Conventional NTSC S-VHS still lacks a real fixture. For the host regression, set `CAPTURERACK_TAPE_FIXTURES` to a directory containing `svhs-pal.s16`, `svhs-ntsc-et.s16`, `superbeta.s16` and `edbeta.s16`, and run `RfPackagedPreviewTests` with `TestRealtimeRf=true`.
+
+Both test projects use xUnit.net v3 through the `xunit.v3.mtp-off` package to keep VSTest working on .NET 11. The Windows and portable QC suites passed locally with the Visual Studio adapter 4.0.1. Both suites also passed with xUnit1051 treated as an error. Pass the xUnit test cancellation token to cancellable calls and link it to existing operation timeouts. Keep bounded waits for resource cleanup independent of test cancellation. The RF CI filter discovered the packaged preview tests. Fixture-backed cases were skipped without local fixture paths.
 
 Run both Windows and portable QC test projects for changes affecting capture. Enable FFmpeg integration with CAPTURERACK_TEST_SIGNAL_QC=1. Keep operator-triggered hardware runs out of CI. Keep the App, Probe and Uno display versions in sync and exclude PDBs from all release packages. Run the candidate workflow at the intended commit before publishing the three verified archives.
 

@@ -9,6 +9,23 @@ namespace CaptureRack.UT;
 
 public sealed class CaptureSettingsTests
 {
+    [Fact]
+    public void DiskSpaceReadsAnExistingUnicodeDirectory()
+    {
+        var directory = Directory.CreateTempSubdirectory("capturerack-\u78c1\u789f-");
+        try
+        {
+            var space = CaptureSettingsStore.DiskSpace(directory.FullName);
+            Assert.NotNull(space);
+            Assert.True(space.Value.TotalBytes > 0);
+            Assert.True(space.Value.AvailableBytes <= space.Value.TotalBytes);
+        }
+        finally
+        {
+            directory.Delete();
+        }
+    }
+
     [Theory]
     [InlineData("", "")]
     [InlineData("endpoint-1", "Studio DAC")]

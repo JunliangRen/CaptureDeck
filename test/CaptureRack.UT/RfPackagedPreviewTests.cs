@@ -1,10 +1,10 @@
 #if REALTIME_RF
+using System.Runtime.CompilerServices;
 using CaptureRack.App;
 using CaptureRack.DeckLink;
 using CaptureRack.SignalCapture;
 using VHSDecode.Preview;
 using Xunit;
-using Xunit.Abstractions;
 
 namespace CaptureRack.UT;
 
@@ -58,7 +58,11 @@ public sealed class RfPackagedPreviewTests(ITestOutputHelper output)
 
     private sealed class MediaTheoryAttribute : TheoryAttribute
     {
-        public MediaTheoryAttribute(string variable)
+        public MediaTheoryAttribute(
+            string variable,
+            [CallerFilePath] string? sourceFilePath = null,
+            [CallerLineNumber] int sourceLineNumber = -1)
+            : base(sourceFilePath, sourceLineNumber)
         {
             if (string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable(variable)))
                 Skip = $"Set {variable} to the capture fixture directory.";

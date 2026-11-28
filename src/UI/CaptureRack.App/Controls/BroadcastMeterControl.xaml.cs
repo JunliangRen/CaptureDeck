@@ -1,6 +1,5 @@
 using CaptureRack.Audio;
 using System.Globalization;
-using CaptureRack.DeckLink;
 using Microsoft.UI;
 using Microsoft.UI.Text;
 using Microsoft.UI.Xaml;

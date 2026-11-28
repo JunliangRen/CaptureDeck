@@ -38,7 +38,8 @@ public sealed class RfCaptureSessionTests
         public async Task<RfMeasurement> NextReading()
         {
             while (Meter.Reader.TryRead(out _)) { }
-            using var timeout = new CancellationTokenSource(Timeout);
+            using var timeout = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
+            timeout.CancelAfter(Timeout);
             return await Meter.Reader.ReadAsync(timeout.Token);
         }
     }
@@ -78,7 +79,7 @@ public sealed class RfCaptureSessionTests
         {
             var initial = await receiver.NextReading();
             var first = await Take("A");
-            await verifying.Task.WaitAsync(Timeout);
+            await verifying.Task.WaitAsync(Timeout, TestContext.Current.CancellationToken);
             var afterFirst = await receiver.NextReading();
             Assert.True(afterFirst.Frames > initial.Frames);
             var second = await Take("B");
@@ -94,7 +95,7 @@ public sealed class RfCaptureSessionTests
             Assert.False(jobs[0].Result.IsCompleted);
             Assert.False(jobs[1].Result.IsCompleted);
             releaseQc.SetResult();
-            await Task.WhenAll(jobs.Select(job => job.Result)).WaitAsync(Timeout);
+            await Task.WhenAll(jobs.Select(job => job.Result)).WaitAsync(Timeout, TestContext.Current.CancellationToken);
             var a = Verify(first);
             var b = Verify(second);
             Assert.Equal(a.Id, b.Id);
@@ -104,8 +105,9 @@ public sealed class RfCaptureSessionTests
         {
             releaseQc.TrySetResult();
             session.StopRecording();
-            await session.StopForCloseAsync().WaitAsync(Timeout);
-            await preview.WaitAsync(Timeout);
+            // Let capture release the temporary files before deleting the directory.
+            await session.StopForCloseAsync().WaitAsync(Timeout, CancellationToken.None);
+            await preview.WaitAsync(Timeout, CancellationToken.None);
             directory.Delete(true);
         }
         Assert.Equal(1, receiver.Releases);
@@ -125,7 +127,7 @@ public sealed class RfCaptureSessionTests
         await Assert.ThrowsAsync<InvalidOperationException>(() => Record(false));
         Assert.False(session.RecordingActive);
         session.StopPreview();
-        await playback.WaitAsync(Timeout);
+        await playback.WaitAsync(Timeout, TestContext.Current.CancellationToken);
         Assert.False(session.PreviewActive);
     }
 
@@ -143,10 +145,17 @@ public sealed class RfCaptureSessionTests
         });
         Task Record() => session.RecordAsync(false, Ramp, "unused", null, () => null, _ => { });
         var recording = Record();
-        await entered.Task.WaitAsync(Timeout);
-        await Assert.ThrowsAsync<InvalidOperationException>(Record);
-        var close = session.StopForCloseAsync();
-        await Task.WhenAll(recording, close, session.StopForCloseAsync()).WaitAsync(Timeout);
+        Task close;
+        try
+        {
+            await entered.Task.WaitAsync(Timeout, TestContext.Current.CancellationToken);
+            await Assert.ThrowsAsync<InvalidOperationException>(Record);
+        }
+        finally
+        {
+            close = session.StopForCloseAsync();
+        }
+        await Task.WhenAll(recording, close, session.StopForCloseAsync()).WaitAsync(Timeout, TestContext.Current.CancellationToken);
         Assert.False(session.RecordingActive);
         Assert.False(session.PreviewActive);
         Assert.Equal(1, releases);
@@ -173,7 +182,7 @@ public sealed class RfCaptureSessionTests
             await Assert.ThrowsAsync<InvalidOperationException>(() => session.RecordAsync(false,
                 Ramp with { Format = RfFileFormat.Flac }, "unused", null, () => null, _ => { }));
         }
-        finally { session.StopPreview(); await preview.WaitAsync(Timeout); }
+        finally { session.StopPreview(); await preview.WaitAsync(Timeout, CancellationToken.None); }
         await session.StartPreviewAsync(Ramp, async token =>
         {
             Assert.Throws<InvalidOperationException>(() => { _ = Read(old); });

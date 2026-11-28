@@ -4,7 +4,7 @@ using Windows.Foundation;
 
 namespace CaptureRack.App.Controls;
 
-public sealed class StudioWrapPanel : Panel
+public sealed partial class StudioWrapPanel : Panel
 {
     public static readonly DependencyProperty HorizontalSpacingProperty = DependencyProperty.Register(
         nameof(HorizontalSpacing), typeof(double), typeof(StudioWrapPanel),

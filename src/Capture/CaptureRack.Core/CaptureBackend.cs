@@ -12,7 +12,7 @@ public interface ICaptureBackend
 /// Discovers devices and runs a capture session. Each backend owns its native
 /// format negotiation, request options, progress payload and result.
 /// </summary>
-public interface ICaptureBackend<TDevice, in TRequest, out TProgress, out TResult> : ICaptureBackend
+public interface ICaptureBackend<out TDevice, in TRequest, out TProgress, out TResult> : ICaptureBackend
 {
     IReadOnlyList<TDevice> GetDevices(bool includeCapabilities = false);
 

@@ -8,6 +8,8 @@ namespace CaptureRack.App.Views;
 
 public sealed partial class DirectShowCapabilitiesView
 {
+    private static readonly JsonSerializerOptions DiagnosticJsonOptions = new() { WriteIndented = true };
+
     private DirectShowDiagnosticCheck? negotiationCheck;
     private DirectShowDiagnosticCheck? sampleCheck;
     private DirectShowDiagnosticFailure? formatDiscoveryFailure;
@@ -77,7 +79,7 @@ public sealed partial class DirectShowCapabilitiesView
                 Preview = currentPreview is null ? null : currentPreview with { Failure = Redact(currentPreview.Failure, device.Id) }
             };
             var clipboard = new DataPackage();
-            clipboard.SetText(JsonSerializer.Serialize(report, new JsonSerializerOptions { WriteIndented = true }));
+            clipboard.SetText(JsonSerializer.Serialize(report, DiagnosticJsonOptions));
             Clipboard.SetContent(clipboard);
             Controls.StudioFeedback.FlashCopied(CopyDiagnosticsIcon, "\uE8C8", CopyDiagnosticsLabel, L("CopiedFeedback"), () => L("DsCopyDiagnostics"), this);
             ShowNotice("DsDiagnosticsCopied", InfoBarSeverity.Success);

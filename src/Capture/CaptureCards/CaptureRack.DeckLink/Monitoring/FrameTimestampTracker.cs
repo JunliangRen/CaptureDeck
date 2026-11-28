@@ -1,4 +1,4 @@
-namespace CaptureRack.DeckLink;
+namespace CaptureRack.DeckLink.Monitoring;
 
 // Reuse the capture clock after an invalid interval without interpreting its first recovery step as a gap.
 internal sealed class FrameTimestampTracker(long nominalDuration)

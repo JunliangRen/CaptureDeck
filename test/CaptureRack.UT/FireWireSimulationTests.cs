@@ -32,7 +32,8 @@ public sealed class FireWireSimulationTests
         Assert.DoesNotContain(FireWireCapture.List(), candidate => candidate.Id == id);
         var directory = Directory.CreateTempSubdirectory("capturerack-simulated-ilink-");
         var path = Path.Combine(directory.FullName, $"Tape_CaptureRack_{format.FilePrefix}_20261125_120000_000{format.Extension}");
-        using var stop = new CancellationTokenSource(TimeSpan.FromSeconds(45));
+        using var stop = CancellationTokenSource.CreateLinkedTokenSource(TestContext.Current.CancellationToken);
+        stop.CancelAfter(TimeSpan.FromSeconds(45));
         using var expected = new MemoryStream();
         var session = new FireWireLiveSession();
         var decoder = new FireWirePreviewRecovery(device.IsDv);
@@ -63,7 +64,7 @@ public sealed class FireWireSimulationTests
                     stop.Cancel();
                 }
                 return true;
-            }, stop.Token, decoder.NotifyStreamChange, ffmpeg));
+            }, stop.Token, decoder.NotifyStreamChange, ffmpeg), stop.Token);
 
             Assert.Equal(format, session.Format);
             Assert.True(frameReady.Task.IsCompletedSuccessfully, $"Preview returned no frame for {id}.");
@@ -71,9 +72,9 @@ public sealed class FireWireSimulationTests
             Assert.Equal((width, height), (video.Width, video.Height));
             Assert.True(pcmBytes > 0);
             Assert.NotNull(writer);
-            var clip = await writer.Completion.WaitAsync(TimeSpan.FromSeconds(10));
+            var clip = await writer.Completion.WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken);
             Assert.Null(clip.Error);
-            Assert.Equal(expected.ToArray(), await File.ReadAllBytesAsync(path));
+            Assert.Equal(expected.ToArray(), await File.ReadAllBytesAsync(path, TestContext.Current.CancellationToken));
             Assert.Equal(0, clip.Bytes % unitBytes);
             if (device.IsDv)
             {
@@ -92,7 +93,7 @@ public sealed class FireWireSimulationTests
                 Assert.Equal(16, dv.LastFrame.AudioBits);
                 Assert.Equal(encoding switch { DvEncoding.DvcproHd => 8, DvEncoding.Dvcpro50 => 4, _ => 2 },
                     dv.LastFrame.AudioChannels);
-                var report = DvFile.Analyze(path);
+                var report = DvFile.Analyze(path, cancellation: TestContext.Current.CancellationToken);
                 Assert.True(report.Analysis.Success);
                 Assert.Equal(encoding, report.Analysis.LastFrame?.Encoding);
             }
@@ -101,7 +102,7 @@ public sealed class FireWireSimulationTests
                 Assert.Equal(height == 720 ? (bool?)null : true, video.TopFieldFirst);
                 Assert.Contains(ts!.Programs.SelectMany(program => program.Tracks), track => track.StreamType == 2);
                 Assert.Contains(ts.Programs.SelectMany(program => program.Tracks), track => track.StreamType is 3 or 4);
-                var report = TsFile.Analyze(path);
+                var report = TsFile.Analyze(path, cancellation: TestContext.Current.CancellationToken);
                 Assert.Equal($"ts{unitBytes}", report.Format);
                 Assert.True(report.Success);
             }
@@ -110,8 +111,9 @@ public sealed class FireWireSimulationTests
         {
             await stop.CancelAsync();
             await decoding;
+            // Let the writer release the recording before deleting its directory.
             if (writer is not null)
-                await writer.Completion.WaitAsync(TimeSpan.FromSeconds(10));
+                await writer.Completion.WaitAsync(TimeSpan.FromSeconds(10), CancellationToken.None);
             directory.Delete(recursive: true);
         }
     }

@@ -649,7 +649,7 @@ public sealed partial class DeckLinkInspectorView : UserControl
             return;
 
         var options = VancInput;
-        int ReadLine(NumberBox box, int previous) =>
+        static int ReadLine(NumberBox box, int previous) =>
             double.IsFinite(box.Value) ? (int)Math.Round(box.Value) : previous;
         RestoreVancSettings(options with
         {

@@ -335,7 +335,7 @@ public sealed class WorkspaceArchitectureTests
         Assert.True(module.Descriptor.Capabilities.SupportsVideoScopes);
         Assert.True(module.Descriptor.Capabilities.SupportsAudioMeters);
 
-        string Localize(string key) => key == "CaptureCounts" ? "{0}/{1}/{2}/{3}/{4}" : key;
+        static string Localize(string key) => key == "CaptureCounts" ? "{0}/{1}/{2}/{3}/{4}" : key;
 
         var idleMetrics = module.BuildIdleTelemetry(Localize);
         Assert.Equal(4, idleMetrics.Count);
@@ -386,7 +386,7 @@ public sealed class WorkspaceArchitectureTests
         var id3 = Guid.NewGuid();
         var id4 = Guid.NewGuid();
 
-        QcSessionHistoryEntry Entry(Guid id, string name, QcEntryKind kind = QcEntryKind.Mov) =>
+        static QcSessionHistoryEntry Entry(Guid id, string name, QcEntryKind kind = QcEntryKind.Mov) =>
             new(id, $@"C:\Captures\{name}", name, kind, DateTimeOffset.UtcNow, "QcPassed", "ok", TelemetrySeverity.Normal, []);
 
         history.Record(Entry(id1, "a.mov"));
@@ -689,7 +689,7 @@ public sealed class WorkspaceArchitectureTests
             VideoFramesWithoutFieldFlags = 3
         };
 
-        string Localize(string key) => key switch
+        static string Localize(string key) => key switch
         {
             "QcWarnCaptureEnded" => "ended:{0}",
             "QcWarnNoInput" => "noinput:{0}",
@@ -985,7 +985,7 @@ public sealed class WorkspaceArchitectureTests
         var tracker = new MultiChannelActivityTracker(attackFrames: 3, holdFrames: 4);
         var ballistics = new MultiChannelMeterBallistics();
 
-        StereoLevels MakeLevels(double p34, long clip56 = 0) =>
+        static StereoLevels MakeLevels(double p34, long clip56 = 0) =>
             new(0.2, 0.2, 0, 0, 1.0, null)
             {
                 ChannelCount = 8,

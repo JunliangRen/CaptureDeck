@@ -81,14 +81,14 @@ public sealed class WasapiPlaybackTests
         try
         {
             output.Enabled = true;
-            var old = await first.Task.WaitAsync(TimeSpan.FromSeconds(3));
+            var old = await first.Task.WaitAsync(TimeSpan.FromSeconds(3), TestContext.Current.CancellationToken);
             Volatile.Write(ref old.PlayedTicks, 100);
             Assert.Equal(TimeSpan.FromTicks(100), output.PlayedMediaTime);
             output.Enabled = false;
             output.Enabled = true;
             output.Submit([1, 2, 3, 4], null);
             releaseOld.Set();
-            Assert.Equal(new byte[] { 1, 2, 3, 4 }, await second.Task.WaitAsync(TimeSpan.FromSeconds(3)));
+            Assert.Equal(new byte[] { 1, 2, 3, 4 }, await second.Task.WaitAsync(TimeSpan.FromSeconds(3), TestContext.Current.CancellationToken));
             Assert.Null(output.PlayedMediaTime);
         }
         finally { output.Enabled = false; releaseOld.Set(); releaseNew.Set(); }
@@ -107,14 +107,20 @@ public sealed class WasapiPlaybackTests
             left.TrySetResult();
         });
         output.Enabled = true;
-        await entered.Task.WaitAsync(TimeSpan.FromSeconds(3));
         try
         {
-            await Task.Run(output.Dispose).WaitAsync(TimeSpan.FromSeconds(2));
+            var cancellation = TestContext.Current.CancellationToken;
+            await entered.Task.WaitAsync(TimeSpan.FromSeconds(3), cancellation);
+            await Task.Run(output.Dispose, cancellation).WaitAsync(TimeSpan.FromSeconds(2), cancellation);
             output.Enabled = true;
             Assert.False(output.Enabled);
             Assert.False(left.Task.IsCompleted);
         }
-        finally { release.Set(); await left.Task.WaitAsync(TimeSpan.FromSeconds(3)); }
+        finally
+        {
+            release.Set();
+            if (entered.Task.IsCompletedSuccessfully)
+                await left.Task.WaitAsync(TimeSpan.FromSeconds(3), CancellationToken.None);
+        }
     }
 }

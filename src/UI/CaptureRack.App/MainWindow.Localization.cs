@@ -321,7 +321,7 @@ public sealed partial class MainWindow
         QcResultsButton.BorderBrush = ThemeBrush(toneSolid);
     }
 
-    private sealed class TelemetryChipItem(string label, string value, string tooltip,
+    private sealed partial class TelemetryChipItem(string label, string value, string tooltip,
         Brush chipBackground, Brush chipBorder, Brush valueForeground) : INotifyPropertyChanged
     {
         public string Label { get; private set; } = label;

@@ -73,8 +73,6 @@ internal sealed partial class DomesdayCallbackTiming
         var end = Stopwatch.GetTimestamp();
         ticks[(int)phase] += end - boundary;
         long elapsed = end - start;
-        static double Ms(long value) => value * 1000d / Stopwatch.Frequency;
-        double Duration(CallbackStage stage) => Ms(ticks[(int)stage]);
         var sample = new CallbackSample(++count, slot, firstSample, endSample, Ms(elapsed),
             Duration(CallbackStage.Convert), Duration(CallbackStage.Rent), Duration(CallbackStage.Copy),
             Duration(CallbackStage.QueueLock), Duration(CallbackStage.Enqueue), Duration(CallbackStage.Other),
@@ -86,5 +84,7 @@ internal sealed partial class DomesdayCallbackTiming
         previousEnd = end;
         start = 0;
         return elapsed;
+        double Duration(CallbackStage stage) => Ms(ticks[(int)stage]);
+        static double Ms(long value) => value * 1000d / Stopwatch.Frequency;
     }
 }

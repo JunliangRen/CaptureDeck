@@ -3,7 +3,7 @@ using Microsoft.UI.Xaml.Controls;
 
 namespace CaptureRack.App.Controls;
 
-public sealed class SplitResizeHandle : Grid
+public sealed partial class SplitResizeHandle : Grid
 {
     public SplitResizeHandle()
     {

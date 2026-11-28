@@ -3,7 +3,6 @@ using VHSDecode.Preview;
 #endif
 using CaptureRack.Audio;
 using CaptureRack.Core;
-using CaptureRack.DeckLink;
 using CaptureRack.QualityControl;
 using CaptureRack.SignalCapture;
 using Microsoft.UI.Xaml;

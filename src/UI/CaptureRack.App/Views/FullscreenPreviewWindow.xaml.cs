@@ -550,6 +550,6 @@ internal sealed partial class FullscreenPreviewWindow : Window
         args.Handled = true;
     }
 
-    [DllImport("dwmapi.dll", ExactSpelling = true)]
-    private static extern int DwmSetWindowAttribute(nint hwnd, int attribute, ref int value, int size);
+    [LibraryImport("dwmapi.dll")]
+    private static partial int DwmSetWindowAttribute(nint hwnd, int attribute, ref int value, int size);
 }

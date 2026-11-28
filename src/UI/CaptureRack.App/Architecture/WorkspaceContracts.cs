@@ -658,11 +658,9 @@ public static class WrapLayoutCalculator
 
             if (hasItemOnLine && startX + w > maxWidth)
             {
-                x = 0;
                 y += lineHeight + vSpacing;
                 lineHeight = 0;
                 startX = 0;
-                hasItemOnLine = false;
             }
 
             rects[i] = new WrapItemRect(startX, y, w, h);

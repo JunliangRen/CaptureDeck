@@ -1,5 +1,4 @@
 using CaptureRack.Audio;
-using CaptureRack.DeckLink;
 using Microsoft.UI;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Automation;

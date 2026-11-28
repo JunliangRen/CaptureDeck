@@ -174,14 +174,14 @@ public sealed partial class MainWindow
     [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool RemoveWindowSubclass(nint window, SubclassProc procedure, nuint id);
 
-    [DllImport("comctl32.dll", ExactSpelling = true)]
-    private static extern nint DefSubclassProc(nint window, uint message, nuint wParam, nint lParam);
+    [LibraryImport("comctl32.dll")]
+    private static partial nint DefSubclassProc(nint window, uint message, nuint wParam, nint lParam);
 
     [DllImport("user32.dll", ExactSpelling = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool EnumChildWindows(nint parent, EnumWindowProc callback, nint data);
 
-    [DllImport("user32.dll", ExactSpelling = true)]
+    [LibraryImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
-    private static extern bool ScreenToClient(nint window, ref WindowPoint point);
+    private static partial bool ScreenToClient(nint window, ref WindowPoint point);
 }

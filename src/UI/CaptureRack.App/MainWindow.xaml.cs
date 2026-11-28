@@ -1,6 +1,5 @@
 using CaptureRack.Audio;
 using System.Diagnostics;
-using System.Globalization;
 using System.Numerics;
 using System.Runtime.InteropServices;
 using System.Runtime.InteropServices.WindowsRuntime;
@@ -324,8 +323,8 @@ public sealed partial class MainWindow : Window
         AppWindow.Resize(new Windows.Graphics.SizeInt32(width, height));
     }
 
-    [DllImport("user32.dll", ExactSpelling = true)]
-    private static extern uint GetDpiForWindow(nint hwnd);
+    [LibraryImport("user32.dll")]
+    private static partial uint GetDpiForWindow(nint hwnd);
 
     private void ConfigureWindowChrome()
     {

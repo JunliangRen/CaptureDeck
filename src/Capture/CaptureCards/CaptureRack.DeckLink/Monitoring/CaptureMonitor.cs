@@ -1,4 +1,5 @@
 using CaptureRack.Core;
+using CaptureRack.DeckLink.Monitoring;
 
 namespace CaptureRack.DeckLink;
 

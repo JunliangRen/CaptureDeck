@@ -2,6 +2,7 @@ using CaptureRack.Audio;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Text;
+using CaptureRack.DeckLink.Capture;
 
 namespace CaptureRack.DeckLink;
 
@@ -89,8 +90,8 @@ public static partial class DeckLinkCapture
             var activeAudioInput = routing?.Audio ?? info.ActiveAudioInputId;
             var effectiveChannels = CaptureAudio.NormalizeChannels(
                 audioChannels, info.MaxAudioChannels, activeAudioInput);
-            result = RunCapture(device, input, info, requestedMode, duration, progress, cancellation, preview,
-                pixelFormat, recordingPath, audioFormat, previewRecorder, localAudioMonitor, effectiveChannels);
+            result = RunCapture(device, input, info, requestedMode, duration, progress, preview,
+                pixelFormat, recordingPath, audioFormat, previewRecorder, localAudioMonitor, effectiveChannels, cancellation);
             return false;
         });
         return result ?? throw new InvalidOperationException($"DeckLink device {index} was not found.");
@@ -297,9 +298,9 @@ public static partial class DeckLinkCapture
     }
 
     private static CaptureStats RunCapture(IDeckLink device, IDeckLinkInput input, CaptureDevice info,
-        uint? requestedMode, TimeSpan? duration, Action<VideoMode, CaptureStats> progress, CancellationToken stop,
+        uint? requestedMode, TimeSpan? duration, Action<VideoMode, CaptureStats> progress,
         PreviewFeed? preview, CapturePixelFormat format, string? recordingPath, CaptureAudioFormat audioFormat,
-        PreviewRecorder? previewRecorder, LocalAudioMonitor? localAudioMonitor, uint audioChannels)
+        PreviewRecorder? previewRecorder, LocalAudioMonitor? localAudioMonitor, uint audioChannels, CancellationToken stop)
     {
         var modes = info.Modes;
         if (modes.Count == 0)
@@ -534,13 +535,13 @@ public static partial class DeckLinkCapture
         private readonly IDeckLinkConfiguration configuration;
         private readonly long originalVideo;
         private readonly long originalAudio;
-        private VancMappingScope? vancMappings;
+        private readonly VancMappingScope? vancMappings;
         private long originalAnalogFlags;
         private int originalConsumerAudio;
         private double originalGainLeft;
         private double originalGainRight;
-        private bool videoChanged;
-        private bool audioChanged;
+        private readonly bool videoChanged;
+        private readonly bool audioChanged;
         private bool analogFlagsChanged;
         private bool consumerAudioChanged;
         private bool gainLeftChanged;

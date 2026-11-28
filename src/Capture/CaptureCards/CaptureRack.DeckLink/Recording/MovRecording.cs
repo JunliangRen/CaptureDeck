@@ -30,20 +30,19 @@ internal sealed class MovRecording : IDisposable
     private readonly BlockingCollection<Packet> packets = new(16);
     private readonly Channel<Packet>? encodedPackets;
     private readonly Task<RecordingResult> writer;
-    private readonly bool software;
     private readonly LiveEncodedRecording? liveEncoder;
     private string? interruption;
     private bool finalized;
 
     public long VideoTimeScale => mode.TimeScale;
-    internal bool IsSoftware => software;
+    internal bool IsSoftware { get; }
 
     public MovRecording(string outputPath, VideoMode mode, CapturePixelFormat format, CaptureAudioFormat audioFormat,
         RecordingEncoding? encoding = null, Action? beforeEncoderWrite = null, uint audioChannels = CaptureAudio.Channels)
     {
         path = Path.GetFullPath(outputPath);
-        software = encoding?.IsSoftware == true;
-        var extension = software ? ".mkv" : ".mov";
+        IsSoftware = encoding?.IsSoftware == true;
+        var extension = IsSoftware ? ".mkv" : ".mov";
         if (!Path.GetExtension(path).Equals(extension, StringComparison.OrdinalIgnoreCase))
             throw new InvalidOperationException($"Recording output must end in {extension}.");
         if (File.Exists(path))
@@ -60,7 +59,7 @@ internal sealed class MovRecording : IDisposable
 
         try
         {
-            if (software)
+            if (IsSoftware)
             {
                 var video = EncodedInput(mode, format, rowBytes);
                 var audio = new NativePcmTrack(48000, (int)audioChannels, (int)audioFormat, audioFrameBytes);
@@ -151,10 +150,10 @@ internal sealed class MovRecording : IDisposable
             : liveEncoder.CaptureDiagnostics.TryEnqueue(encodedPackets!.Writer, packet, packet.Length, packet.AudioSamples == 0);
         if (!added)
         {
-            var message = software
+            var message = IsSoftware
                 ? "The software recording queue filled. The encoder or storage did not keep up with capture."
                 : "Storage did not keep up with the uncompressed capture. Recording stopped.";
-            if (software)
+            if (IsSoftware)
             {
                 Interlocked.CompareExchange(ref interruption, message, null);
                 CompleteQueue();
@@ -180,12 +179,12 @@ internal sealed class MovRecording : IDisposable
 
     public RecordingResult Finish(string? captureError = null)
     {
-        if (software && captureError is not null)
+        if (IsSoftware && captureError is not null)
             Interlocked.CompareExchange(ref interruption, captureError, null);
         CompleteQueue();
         var result = writer.GetAwaiter().GetResult();
         finalized = true;
-        if (software)
+        if (IsSoftware)
             return result;
         try
         {
@@ -309,7 +308,7 @@ internal sealed class MovRecording : IDisposable
     {
         if (!finalized)
         {
-            if (software)
+            if (IsSoftware)
                 Interlocked.CompareExchange(ref interruption, "Recording disposed before a clean stop.", null);
             CompleteQueue();
             try

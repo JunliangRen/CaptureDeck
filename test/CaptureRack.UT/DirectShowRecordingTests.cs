@@ -22,7 +22,7 @@ public sealed class DirectShowRecordingTests
         Assert.True(operation.IsStopping);
         Assert.Equal(1, stops);
         operation.Dispose();
-        await first.WaitAsync(TimeSpan.FromSeconds(2));
+        await first.WaitAsync(TimeSpan.FromSeconds(2), TestContext.Current.CancellationToken);
         await operation.StopAsync();
         Assert.Equal(1, stops);
     }
@@ -68,8 +68,8 @@ public sealed class DirectShowRecordingTests
                 }
                 graph.FinishRecording(writer);
                 CheckPreview((byte)(16 + clip * 3));
-                Assert.Equal(path, await writer.Completion.WaitAsync(TimeSpan.FromSeconds(10)));
-                using var report = JsonDocument.Parse(await File.ReadAllBytesAsync(NativeCaptureReport.PathFor(path)));
+                Assert.Equal(path, await writer.Completion.WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken));
+                using var report = JsonDocument.Parse(await File.ReadAllBytesAsync(NativeCaptureReport.PathFor(path), TestContext.Current.CancellationToken));
                 Assert.Equal(clip * 3, report.RootElement.GetProperty("expectedVideoFrames").GetInt64());
                 Assert.Equal(clip * 3, report.RootElement.GetProperty("pcmSampleFrames").GetInt64());
                 Assert.Equal(0, writer.RejectedPackets);
@@ -134,11 +134,11 @@ public sealed class DirectShowRecordingTests
             Array.Clear(audio);
             record.Complete();
             Assert.Equal(path, await record.Completion);
-            var data = await File.ReadAllBytesAsync(path);
+            var data = await File.ReadAllBytesAsync(path, TestContext.Current.CancellationToken);
             Assert.True(data.AsSpan().IndexOf(new byte[] { 0x10, 0x80, 0x42, 0x80, 0x7f, 0x80, 0xeb, 0x80 }) >= 0);
             Assert.True(data.AsSpan().IndexOf(new byte[] { 0x11, 0xBB, 0x70, 0xEF, 0x07, 0x81 }) >= 0);
             Assert.False(File.Exists(record.PartialPath));
-            using var report = JsonDocument.Parse(await File.ReadAllTextAsync(NativeCaptureReport.PathFor(path)));
+            using var report = JsonDocument.Parse(await File.ReadAllTextAsync(NativeCaptureReport.PathFor(path), TestContext.Current.CancellationToken));
             Assert.Equal(1, report.RootElement.GetProperty("expectedVideoFrames").GetInt64());
             Assert.Equal(1, report.RootElement.GetProperty("pcmSampleFrames").GetInt64());
             Assert.Equal("ToolsUnavailable", report.RootElement.GetProperty("containerAttempts")[0].GetProperty("status").GetString());
@@ -160,7 +160,7 @@ public sealed class DirectShowRecordingTests
             Assert.True(File.Exists(record.PartialPath));
             Assert.False(File.Exists(path));
             Assert.Equal(1, record.RejectedPackets);
-            using var report = JsonDocument.Parse(await File.ReadAllTextAsync(NativeCaptureReport.PathFor(record.PartialPath)));
+            using var report = JsonDocument.Parse(await File.ReadAllTextAsync(NativeCaptureReport.PathFor(record.PartialPath), TestContext.Current.CancellationToken));
             Assert.Equal(1, report.RootElement.GetProperty("writerRejectedPackets").GetInt64());
             Assert.Equal(JsonValueKind.Null, report.RootElement.GetProperty("driverDroppedVideoFrames").ValueKind);
             Assert.NotNull(report.RootElement.GetProperty("error").GetString());
@@ -192,11 +192,11 @@ public sealed class DirectShowRecordingTests
             }
             recording.Complete();
             Assert.Equal(path, await recording.Completion);
-            var result = await QcReports.RunAsync(path);
+            var result = await QcReports.RunAsync(path, cancellation: TestContext.Current.CancellationToken);
             Assert.True(result.Status == QcStatus.Passed, result.Summary);
             Assert.Equal(25, result.DecodedVideoFrames);
             Assert.Equal(48000, result.DecodedAudioSampleFrames);
-            using var sidecar = JsonDocument.Parse(await File.ReadAllTextAsync(path + ".encoding.json"));
+            using var sidecar = JsonDocument.Parse(await File.ReadAllTextAsync(path + ".encoding.json", TestContext.Current.CancellationToken));
             Assert.Equal(25, sidecar.RootElement.GetProperty("captureVideoPackets").GetInt64());
             Assert.Equal(1, sidecar.RootElement.GetProperty("captureEstimatedMissingVideoFrames").GetInt64());
             Assert.Equal(1, sidecar.RootElement.GetProperty("captureVideoDiscontinuities").GetInt64());
@@ -228,7 +228,7 @@ public sealed class DirectShowRecordingTests
             Assert.Contains("did not keep up", failure.Message);
             Assert.Equal(1, recording.RejectedPackets);
             Assert.False(File.Exists(path));
-            using var checkpoint = JsonDocument.Parse(await File.ReadAllTextAsync(recording.PartialPath + ".checkpoint.json"));
+            using var checkpoint = JsonDocument.Parse(await File.ReadAllTextAsync(recording.PartialPath + ".checkpoint.json", TestContext.Current.CancellationToken));
             Assert.Equal(35, checkpoint.RootElement.GetProperty("videoPacketsToEncoder").GetInt64());
             Assert.Equal(36, checkpoint.RootElement.GetProperty("captureVideoPackets").GetInt64());
             Assert.Equal(1, checkpoint.RootElement.GetProperty("queueRejectedVideoPackets").GetInt64());
@@ -236,8 +236,8 @@ public sealed class DirectShowRecordingTests
             Assert.True(checkpoint.RootElement.GetProperty("queuePeakBytes").GetInt64() > 0);
             Assert.Contains("did not keep up", checkpoint.RootElement.GetProperty("error").GetString());
             var recovered = Path.Combine(folder.FullName, "recovered.mkv");
-            Assert.True(await LiveMatroskaRecovery.RecoverAsync(recording.PartialPath, recovered) > 0);
-            var qc = await QcReports.RunAsync(recovered);
+            Assert.True(await LiveMatroskaRecovery.RecoverAsync(recording.PartialPath, recovered, TestContext.Current.CancellationToken) > 0);
+            var qc = await QcReports.RunAsync(recovered, cancellation: TestContext.Current.CancellationToken);
             Assert.True(qc.Status == QcStatus.Passed, qc.Summary);
             Assert.Equal(35, qc.DecodedVideoFrames);
         }
@@ -260,7 +260,7 @@ public sealed class DirectShowRecordingTests
             var bytes = new byte[128 * 96 * 2];
             for (var frame = 0; frame < 35; frame++)
                 recording.Accept(true, new(bytes, false, TimeSpan.FromMilliseconds(frame * 40)));
-            await Assert.ThrowsAsync<IOException>(() => recording.Completion.WaitAsync(TimeSpan.FromSeconds(10)));
+            await Assert.ThrowsAsync<IOException>(() => recording.Completion.WaitAsync(TimeSpan.FromSeconds(10), TestContext.Current.CancellationToken));
             Assert.False(File.Exists(path));
         }
         finally { folder.Delete(recursive: true); }
@@ -272,12 +272,12 @@ public sealed class DirectShowRecordingTests
         var path = TemporaryPath();
         try
         {
-            await File.WriteAllTextAsync(path, "existing");
+            await File.WriteAllTextAsync(path, "existing", TestContext.Current.CancellationToken);
             var record = DirectShowRecording.Start(path, Video(), null);
             record.Accept(true, new(new byte[8], false));
             record.Complete();
             await Assert.ThrowsAnyAsync<IOException>(async () => await record.Completion);
-            Assert.Equal("existing", await File.ReadAllTextAsync(path));
+            Assert.Equal("existing", await File.ReadAllTextAsync(path, TestContext.Current.CancellationToken));
             Assert.True(File.Exists(record.PartialPath));
         }
         finally { Cleanup(path); }
@@ -319,24 +319,24 @@ public sealed class DirectShowRecordingTests
             var path = await record.Completion;
             Assert.Equal(mov ? ".mov" : ".mkv", Path.GetExtension(path));
             Assert.Equal(NativeContainerStatus.Selected, progress[^1].Status);
-            var saved = await File.ReadAllBytesAsync(path);
-            var result = await QcReports.RunAsync(path);
+            var saved = await File.ReadAllBytesAsync(path, TestContext.Current.CancellationToken);
+            var result = await QcReports.RunAsync(path, cancellation: TestContext.Current.CancellationToken);
             Assert.True(result.Status == QcStatus.Passed, result.Summary);
             Assert.Equal(videoFrames, result.DecodedVideoFrames);
             Assert.Equal(withAudio ? videoFrames * samplesPerPacket : 0, result.DecodedAudioSampleFrames);
             Assert.DoesNotContain(result.Warnings, warning => warning.Contains("no audio track", StringComparison.OrdinalIgnoreCase));
             Assert.True(File.Exists(result.FrameMd5));
             Assert.True(File.Exists(result.QcToolsReport));
-            using (var report = JsonDocument.Parse(await File.ReadAllTextAsync(result.CaptureLog)))
+            using (var report = JsonDocument.Parse(await File.ReadAllTextAsync(result.CaptureLog, TestContext.Current.CancellationToken)))
                 Assert.Equal("Synthetic DirectShow", report.RootElement.GetProperty("nativeRecording").GetProperty("device").GetString());
-            Assert.Equal(saved, await File.ReadAllBytesAsync(path));
+            Assert.Equal(saved, await File.ReadAllBytesAsync(path, TestContext.Current.CancellationToken));
 
             var truncated = saved[..(saved.Length / 2)];
-            await File.WriteAllBytesAsync(path, truncated);
-            var damaged = await QcReports.RunAsync(path);
+            await File.WriteAllBytesAsync(path, truncated, TestContext.Current.CancellationToken);
+            var damaged = await QcReports.RunAsync(path, cancellation: TestContext.Current.CancellationToken);
             Assert.Equal(QcStatus.Failed, damaged.Status);
             Assert.Contains("Recorded file bytes", damaged.Summary);
-            Assert.Equal(truncated, await File.ReadAllBytesAsync(path));
+            Assert.Equal(truncated, await File.ReadAllBytesAsync(path, TestContext.Current.CancellationToken));
         }
         finally { folder.Delete(recursive: true); }
     }

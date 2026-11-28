@@ -12,9 +12,8 @@ public sealed class DirectShowSampleSession
 {
     private readonly Channel<RawFrame> frames;
     private DirectShowFormat? videoFormat, audioFormat;
-    private readonly object recordingGate = new();
+    private readonly Lock recordingGate = new();
     private DirectShowRecording? recording;
-    private string? encoding;
     private bool ended;
     private long received, unreadable, skippedBeforeDecode;
     public long SkippedBeforeDecode => Interlocked.Read(ref skippedBeforeDecode);
@@ -29,13 +28,13 @@ public sealed class DirectShowSampleSession
     public ChannelReader<RawFrame> Frames => frames.Reader;
 
     public DirectShowRecording StartRecording(string path, (string?, string?) tools = default, string? device = null,
-        Action<NativeContainerAttempt>? progress = null, RecordingEncoding? encoding = null)
+        Action<NativeContainerAttempt>? progress = null, RecordingEncoding? recordingEncoding = null)
     {
         lock (recordingGate)
         {
             if (ended || videoFormat is null || recording is not null)
                 throw new InvalidOperationException("The DirectShow recording cannot start in the current preview state.");
-            recording = DirectShowRecording.Start(path, videoFormat, audioFormat, tools, device, progress, encoding);
+            recording = DirectShowRecording.Start(path, videoFormat, audioFormat, tools, device, progress, recordingEncoding);
             return recording;
         }
     }
@@ -61,7 +60,8 @@ public sealed class DirectShowSampleSession
         }
     }
 
-    public string? Encoding => encoding;
+    public string? Encoding { get; private set; }
+
     public long Unreadable => Interlocked.Read(ref unreadable);
     public DirectShowFormat? NegotiatedVideo => Volatile.Read(ref videoFormat);
     public DirectShowFormat? NegotiatedAudio => Volatile.Read(ref audioFormat);
@@ -69,8 +69,8 @@ public sealed class DirectShowSampleSession
     public long Received => Interlocked.Read(ref received);
     public void SetFormats(DirectShowFormat video, DirectShowFormat? audio)
     {
-        encoding = DirectShowPreviewVideo.Encoding(video);
-        if (encoding is null && !video.IsMpeg2Video)
+        Encoding = DirectShowPreviewVideo.Encoding(video);
+        if (Encoding is null && !video.IsMpeg2Video)
             throw new NotSupportedException(video.Description);
         lock (recordingGate)
         {
@@ -84,7 +84,7 @@ public sealed class DirectShowSampleSession
         lock (recordingGate)
             recording?.Accept(true, sample);
         Interlocked.Increment(ref received);
-        if (encoding is null)
+        if (Encoding is null)
             return true;
         if (sample.Bytes.IsEmpty || sample.Bytes.Length > 256 * 1024 * 1024)
         {

@@ -62,7 +62,7 @@ public sealed class WasapiPlayback : IDisposable
         }
     }
 
-    private readonly object lifecycle = new();
+    private readonly Lock lifecycle = new();
     private readonly AutoResetEvent changed = new(false);
     private readonly Thread worker;
     private readonly int rate;
@@ -144,7 +144,7 @@ public sealed class WasapiPlayback : IDisposable
     private void Render(MMDeviceEnumerator enumerator, MMDevice device, string id, Session session)
     {
         using var ready = new AutoResetEvent(false);
-        using var client = device.AudioClient;
+        using var client = device.CreateAudioClient();
         client.Initialize(AudioClientShareMode.Shared, AudioClientStreamFlags.EventCallback |
             AudioClientStreamFlags.AutoConvertPcm | AudioClientStreamFlags.SrcDefaultQuality,
             TimeSpan.FromMilliseconds(40).Ticks, 0, new WaveFormat(rate, 16, 2), Guid.Empty);

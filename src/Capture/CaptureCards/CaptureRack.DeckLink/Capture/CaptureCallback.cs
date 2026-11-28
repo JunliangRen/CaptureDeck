@@ -1,10 +1,9 @@
 using CaptureRack.Audio;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
-using CaptureRack.Core;
 using CaptureRack.Recording;
 
-namespace CaptureRack.DeckLink;
+namespace CaptureRack.DeckLink.Capture;
 
 [ComVisible(true)]
 [ClassInterface(ClassInterfaceType.None)]
@@ -17,7 +16,7 @@ internal sealed class CaptureCallback(PreviewFeed? preview, CapturePixelFormat p
     private const uint BufferRead = 1;
     private const long Timescale = 48000;
 
-    private readonly object gate = new();
+    private readonly Lock gate = new();
     private readonly CaptureStats stats = new() { AudioChannels = audioChannels };
     private readonly long started = Stopwatch.GetTimestamp();
     private TimeSpan Elapsed => signalClock?.Invoke() ?? Stopwatch.GetElapsedTime(started);
@@ -56,8 +55,7 @@ internal sealed class CaptureCallback(PreviewFeed? preview, CapturePixelFormat p
         lock (gate)
         {
             monitorRoute = clamped;
-            if (audioMonitor is not null)
-                audioMonitor.Route = clamped;
+            audioMonitor?.Route = clamped;
         }
     }
 
@@ -516,51 +514,4 @@ internal sealed class CaptureCallback(PreviewFeed? preview, CapturePixelFormat p
 
     private static bool IsRecordingIoError(Exception error) =>
         error is IOException or InvalidOperationException or UnauthorizedAccessException or InvalidDataException;
-}
-
-public sealed class CaptureStats
-{
-    public VideoSignal Signal { get; internal set; }
-    public bool CanStartRecording { get; internal set; }
-    public CaptureAudioFormat? InputAudioFormat { get; internal set; }
-    public uint AudioChannels { get; internal set; } = CaptureAudio.Channels;
-    public CaptureAudioInfo? AudioInfo => AudioPackets > 0 && InputAudioFormat is { } format
-        ? new("PCM", (int)format, (int)CaptureAudio.SampleRate, (int)AudioChannels,
-            (long)CaptureAudio.BytesPerFrame(format, AudioChannels) * CaptureAudio.SampleRate * 8)
-        : null;
-    public bool RecordingModeChanged { get; internal set; }
-    public string? RecordingError { get; internal set; }
-    public long VideoFrames { get; internal set; }
-    public long NoInputFrames { get; internal set; }
-    public long UnreadableNoInputFrames { get; internal set; }
-    public long AudioPackets { get; internal set; }
-    public long AudioSampleFrames { get; internal set; }
-    public long AudioPeak { get; internal set; }
-    public StereoLevels? AudioLevels { get; internal set; }
-    public long MissingVideoFrames { get; internal set; }
-    public IReadOnlyList<CaptureEvent> Events { get; internal set; } = [];
-    public long VideoSignalLossCount { get; internal set; }
-    public TimeSpan VideoSignalLossDuration { get; internal set; }
-    public IReadOnlyList<VideoSignalLoss> VideoSignalLosses { get; internal set; } = [];
-    internal long? FirstVideoTime;
-    internal long? FirstAudioTime;
-    public long? VideoTime { get; internal set; }
-    public long? AudioTime { get; internal set; }
-    public long TimestampRegressions { get; internal set; }
-    internal uint DetectedMode;
-    internal uint? NextMode;
-    public string? VideoPayload { get; internal set; }
-    public string? NoInputVideoPayload { get; internal set; }
-    public string? AudioPayload { get; internal set; }
-    public string? Error { get; internal set; }
-    public RecordingResult? Recording { get; internal set; }
-
-    public bool SupportsRecordingAudioFormat(CaptureAudioFormat output) =>
-        InputAudioFormat is { } input && CaptureAudio.SupportsRecordingFormat(input, output);
-
-    public bool Verified => Error is null && TimestampRegressions == 0 &&
-        VideoPayload is not null && AudioPayload is not null &&
-        VideoTime > FirstVideoTime && AudioTime > FirstAudioTime;
-
-    internal CaptureStats Clone() => (CaptureStats)MemberwiseClone();
 }

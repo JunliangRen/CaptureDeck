@@ -152,7 +152,7 @@ public sealed class FireWirePreviewDecoder(bool dv = false)
                 throw new IOException("FFmpeg preview decoder could not start.");
 
             var token = lifetime.Token;
-            using var terminate = token.Register(() => Kill(process));
+            await using var terminate = token.Register(() => Kill(process));
             var fields = Channel.CreateBounded<FireWireFrameInfo>(new BoundedChannelOptions(512)
             {
                 SingleReader = true, SingleWriter = true
@@ -182,7 +182,11 @@ public sealed class FireWirePreviewDecoder(bool dv = false)
             // Stop either side even if the other failed while blocked on a pipe.
             Kill(process);
             try { await Task.WhenAll(input, output).ConfigureAwait(false); }
-            catch (Exception) { }
+            catch (Exception)
+            {
+                // ignored
+            }
+
             if (errors is not null)
                 await errors.ConfigureAwait(false);
             while (queue.Reader.TryRead(out var block))
@@ -192,7 +196,7 @@ public sealed class FireWirePreviewDecoder(bool dv = false)
 
     private async Task WriteInput(Stream destination, CancellationToken stop)
     {
-        using (destination)
+        await using (destination)
         {
             await foreach (var block in queue.Reader.ReadAllAsync(stop).ConfigureAwait(false))
             {
@@ -249,73 +253,76 @@ public sealed class FireWirePreviewDecoder(bool dv = false)
                     throw new IOException("Invalid AVI list in the preview stream.");
                 size -= 4;
             }
-            else if (!inMovie && header.AsSpan(0, 4).SequenceEqual("strh"u8) && size >= 4 && size <= scratch.Length)
+            else switch (inMovie)
             {
-                var padded = size + (size & 1);
-                await source.ReadExactlyAsync(scratch.AsMemory(0, (int)padded), stop).ConfigureAwait(false);
-                currentStreamIsAudio = scratch.AsSpan(0, 4).SequenceEqual("auds"u8);
-                continue;
-            }
-            else if (!inMovie && currentStreamIsAudio && header.AsSpan(0, 4).SequenceEqual("strf"u8) && size >= 16 && size <= scratch.Length)
-            {
-                var padded = size + (size & 1);
-                await source.ReadExactlyAsync(scratch.AsMemory(0, (int)padded), stop).ConfigureAwait(false);
-                var ch = BinaryPrimitives.ReadUInt16LittleEndian(scratch.AsSpan(2, 2));
-                if (ch is >= 1 and <= 16 && currentStreamIndex >= 0)
-                    audioStreams[currentStreamIndex] = ch;
-                continue;
-            }
-            else if (inMovie && (header.AsSpan(0, 4).SequenceEqual("00dc"u8) ||
-                header.AsSpan(0, 4).SequenceEqual("00db"u8)))
-            {
-                if (size == 0) // AVI can mark a repeated frame with an empty chunk.
+                case false when header.AsSpan(0, 4).SequenceEqual("strh"u8) && size >= 4 && size <= scratch.Length:
+                {
+                    var padded = size + (size & 1);
+                    await source.ReadExactlyAsync(scratch.AsMemory(0, (int)padded), stop).ConfigureAwait(false);
+                    currentStreamIsAudio = scratch.AsSpan(0, 4).SequenceEqual("auds"u8);
                     continue;
-                if (size != FrameBytes)
-                    throw new IOException("Unexpected FFmpeg preview frame size.");
-                var buffer = ArrayPool<byte>.Shared.Rent(FrameBytes);
-                try
-                {
-                    await source.ReadExactlyAsync(buffer.AsMemory(0, FrameBytes), stop).ConfigureAwait(false);
-                    var frame = await fields.ReadAsync(stop).ConfigureAwait(false);
-                    var stride = frame.PixelWidth * 4;
-                    if (stride != PipeStride)
-                        for (var row = 1; row < frame.PixelHeight; row++)
-                            buffer.AsSpan(row * PipeStride, stride).CopyTo(buffer.AsSpan(row * stride, stride));
-                    video(buffer.AsMemory(0, stride * frame.PixelHeight), frame);
-                    Interlocked.Increment(ref decodedFrames);
                 }
-                finally
+                case false when currentStreamIsAudio && header.AsSpan(0, 4).SequenceEqual("strf"u8) && size >= 16 && size <= scratch.Length:
                 {
-                    ArrayPool<byte>.Shared.Return(buffer);
+                    var padded = size + (size & 1);
+                    await source.ReadExactlyAsync(scratch.AsMemory(0, (int)padded), stop).ConfigureAwait(false);
+                    var ch = BinaryPrimitives.ReadUInt16LittleEndian(scratch.AsSpan(2, 2));
+                    if (ch is >= 1 and <= 16 && currentStreamIndex >= 0)
+                        audioStreams[currentStreamIndex] = ch;
+                    continue;
                 }
-                continue;
-            }
-            else if (inMovie && TryParseAudioChunkStream(header.AsSpan(0, 4), out var audioStreamIdx))
-            {
-                var streamChannels = audioStreams.TryGetValue(audioStreamIdx, out var ch) ? ch : 2;
-                var frameBytes = streamChannels * 2;
-                if (size % frameBytes != 0)
-                    throw new IOException("Unaligned PCM in the FFmpeg preview stream.");
-                var maxRead = (scratch.Length / frameBytes) * frameBytes;
-                var remaining = size;
-                while (remaining > 0)
+                case true when (header.AsSpan(0, 4).SequenceEqual("00dc"u8) ||
+                                header.AsSpan(0, 4).SequenceEqual("00db"u8)):
                 {
-                    var length = (int)Math.Min(remaining, maxRead);
-                    await source.ReadExactlyAsync(scratch.AsMemory(0, length), stop).ConfigureAwait(false);
-                    if (multiStreamInterleaver is not null)
+                    if (size == 0) // AVI can mark a repeated frame with an empty chunk.
+                        continue;
+                    if (size != FrameBytes)
+                        throw new IOException("Unexpected FFmpeg preview frame size.");
+                    var buffer = ArrayPool<byte>.Shared.Rent(FrameBytes);
+                    try
                     {
-                        multiStreamInterleaver.Push(audioStreamIdx, scratch.AsSpan(0, length),
-                            (merged, totalChannels) => audio(merged, totalChannels, null));
+                        await source.ReadExactlyAsync(buffer.AsMemory(0, FrameBytes), stop).ConfigureAwait(false);
+                        var frame = await fields.ReadAsync(stop).ConfigureAwait(false);
+                        var stride = frame.PixelWidth * 4;
+                        if (stride != PipeStride)
+                            for (var row = 1; row < frame.PixelHeight; row++)
+                                buffer.AsSpan(row * PipeStride, stride).CopyTo(buffer.AsSpan(row * stride, stride));
+                        video(buffer.AsMemory(0, stride * frame.PixelHeight), frame);
+                        Interlocked.Increment(ref decodedFrames);
                     }
-                    else
+                    finally
                     {
-                        audio(scratch.AsMemory(0, length), streamChannels, AudioChannelLayout);
+                        ArrayPool<byte>.Shared.Return(buffer);
                     }
-                    remaining -= (uint)length;
+                    continue;
                 }
-                if ((size & 1) != 0)
-                    await source.ReadExactlyAsync(scratch.AsMemory(0, 1), stop).ConfigureAwait(false);
-                continue;
+                case true when TryParseAudioChunkStream(header.AsSpan(0, 4), out var audioStreamIdx):
+                {
+                    var streamChannels = audioStreams.TryGetValue(audioStreamIdx, out var ch) ? ch : 2;
+                    var frameBytes = streamChannels * 2;
+                    if (size % frameBytes != 0)
+                        throw new IOException("Unaligned PCM in the FFmpeg preview stream.");
+                    var maxRead = (scratch.Length / frameBytes) * frameBytes;
+                    var remaining = size;
+                    while (remaining > 0)
+                    {
+                        var length = (int)Math.Min(remaining, maxRead);
+                        await source.ReadExactlyAsync(scratch.AsMemory(0, length), stop).ConfigureAwait(false);
+                        if (multiStreamInterleaver is not null)
+                        {
+                            multiStreamInterleaver.Push(audioStreamIdx, scratch.AsSpan(0, length),
+                                (merged, totalChannels) => audio(merged, totalChannels, null));
+                        }
+                        else
+                        {
+                            audio(scratch.AsMemory(0, length), streamChannels, AudioChannelLayout);
+                        }
+                        remaining -= (uint)length;
+                    }
+                    if ((size & 1) != 0)
+                        await source.ReadExactlyAsync(scratch.AsMemory(0, 1), stop).ConfigureAwait(false);
+                    continue;
+                }
             }
 
             if (size > MaxQueuedBytes)
@@ -388,8 +395,9 @@ public sealed class FireWirePreviewDecoder(bool dv = false)
             var samples = System.Runtime.InteropServices.MemoryMarshal.Cast<byte, short>(pcmBytes);
             var q = queues[slot];
             var maxSamples = MaxBufferedFrames * streamChannels[slot];
-            for (var i = 0; i < samples.Length; i++)
-                q.Enqueue(samples[i]);
+            foreach (var t in samples)
+                q.Enqueue(t);
+
             while (q.Count > maxSamples)
             {
                 for (var c = 0; c < streamChannels[slot] && q.Count > 0; c++)
@@ -417,7 +425,7 @@ public sealed class FireWirePreviewDecoder(bool dv = false)
                 : maxQueuedFrames >= SilentStreamFlushFrames && minNonEmptyFrames < int.MaxValue
                     ? minNonEmptyFrames
                     : 0;
-            if (readyFrames <= 0 || readyFrames == int.MaxValue)
+            if (readyFrames is <= 0 or int.MaxValue)
                 return;
 
             var neededBytes = readyFrames * totalChannels * 2;
@@ -571,7 +579,7 @@ public sealed class FireWirePreviewDecoder(bool dv = false)
             if (reported > 0 && reported <= long.MaxValue / multiplier)
                 bitRate = (long)(reported * multiplier);
         }
-        return new(label, depth, sampleRate, channels, bitRate, BitRateEstimated: depth is null && bitRate is not null);
+        return new CaptureAudioInfo(label, depth, sampleRate, channels, bitRate, BitRateEstimated: depth is null && bitRate is not null);
     }
 
     private static int? ReadChannelCount(string layout)

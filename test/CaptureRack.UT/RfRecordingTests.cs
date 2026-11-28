@@ -26,7 +26,7 @@ public class RfRecordingTests
         lock (queue)
         {
             worker.Start();
-            Assert.True(started.Wait(TimeSpan.FromSeconds(5)));
+            Assert.True(started.Wait(TimeSpan.FromSeconds(5), TestContext.Current.CancellationToken));
             Assert.True(SpinWait.SpinUntil(() => (worker.ThreadState & System.Threading.ThreadState.WaitSleepJoin) != 0,
                 TimeSpan.FromSeconds(5)));
             Thread.Sleep(102);
@@ -222,7 +222,7 @@ public class RfRecordingTests
             var decoder = new DomesdayStream(false, diagnostics: diagnostics);
             string path = prefix + capture.Suffix + ".fifo.json";
             Assert.Throws<InvalidDataException>(() => diagnostics.WithReport(path, () => capture.RecordSamples(
-                prefix, null, _ => {}, default, (enqueue, _) =>
+                prefix, null, _ => {}, TestContext.Current.CancellationToken, (enqueue, _) =>
                 {
                     byte[] fifo = new byte[23];
                     fifo[0] = 0xbd;
@@ -308,13 +308,13 @@ public class RfRecordingTests
             string prefix = Path.Combine(dir.FullName, "capture");
             string final = prefix + request.Suffix;
             var damaged = new byte[] { 0, 128, 65, 128 }; // Expected second PCM word is 0x8040.
-            request.RecordSamples(prefix, null, _ => {}, default,
+            request.RecordSamples(prefix, null, _ => {}, TestContext.Current.CancellationToken,
                 (enqueue, _) => enqueue(damaged, damaged.Length), deferPublish: true);
             var qc = new RfRampQc(final, false, null, new(2, 0, 1021));
 
             string nextPrefix = Path.Combine(dir.FullName, "next");
             byte[] next = [0, 128, 64, 128];
-            request.RecordSamples(nextPrefix, null, _ => {}, default,
+            request.RecordSamples(nextPrefix, null, _ => {}, TestContext.Current.CancellationToken,
                 (enqueue, _) => enqueue(next, next.Length), deferPublish: true);
             Assert.Throws<InvalidDataException>(qc.VerifyAndPublish);
             Assert.False(File.Exists(final + ".ramp.json"));
@@ -390,7 +390,7 @@ public class RfRecordingTests
             var ramp = new DomesdayRamp(true);
             var decoder = new DomesdayStream(false, ramp);
             string prefix = Path.Combine(dir.FullName, "slow-fifo");
-            request.RecordSamples(prefix, null, _ => {}, default, (enqueue, _) =>
+            request.RecordSamples(prefix, null, _ => {}, TestContext.Current.CancellationToken, (enqueue, _) =>
             {
                 // Simulated completion clock. Between control completions the same
                 // bulk path keeps validating, converting and queuing ADC samples.
@@ -513,7 +513,7 @@ public class RfRecordingTests
                 emit(block[50..], block.Length - 50);
             }
             RfMeasurement? meter = null;
-            request.RecordSamples(prefix, null, m => meter = m, default, Supply);
+            request.RecordSamples(prefix, null, m => meter = m, TestContext.Current.CancellationToken, Supply);
             var raw = File.ReadAllBytes(prefix + request.Suffix);
             Assert.Equal(1_024_000, request.RtlSampleRate);
             long expectedFrames = hifi ? (block.Length / 2 * 8_000_000L + 1_023_999) / 1_024_000 : block.Length / 2;
@@ -522,7 +522,7 @@ public class RfRecordingTests
             Assert.True(meter.A.Min < 0 && meter.A.Max > 0 && meter.A.Rms > 0);
             if (!hifi) Assert.Equal(block, raw);
             request = request with { Format = ldf ? RfFileFormat.Ldf : RfFileFormat.Flac };
-            request.RecordSamples(prefix, ffmpeg, _ => {}, default, Supply);
+            request.RecordSamples(prefix, ffmpeg, _ => {}, TestContext.Current.CancellationToken, Supply);
             if (ldf)
             {
                 Assert.EndsWith(".ldf", request.Suffix);

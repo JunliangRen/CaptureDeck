@@ -2,6 +2,7 @@ using CaptureRack.Audio;
 using System.Runtime.InteropServices;
 using CaptureRack.Core;
 using CaptureRack.DeckLink;
+using CaptureRack.DeckLink.Capture;
 using Xunit;
 
 namespace CaptureRack.UT;

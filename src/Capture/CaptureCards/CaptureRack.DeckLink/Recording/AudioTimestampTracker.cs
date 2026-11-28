@@ -1,6 +1,6 @@
 using CaptureRack.Core;
 
-namespace CaptureRack.DeckLink;
+namespace CaptureRack.DeckLink.Recording;
 
 internal sealed class AudioTimestampTracker
 {

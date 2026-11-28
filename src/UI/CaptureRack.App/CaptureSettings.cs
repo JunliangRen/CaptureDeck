@@ -102,7 +102,7 @@ internal sealed record DeckLinkSettings
     public VancInputOptions VancInput { get; init; } = new();
 }
 
-internal static class CaptureSettingsStore
+internal static partial class CaptureSettingsStore
 {
     private static readonly JsonSerializerOptions JsonOptions = new() { WriteIndented = true };
 
@@ -158,9 +158,9 @@ internal static class CaptureSettingsStore
         }
     }
 
-    [DllImport("kernel32.dll", EntryPoint = "GetDiskFreeSpaceExW", CharSet = CharSet.Unicode, ExactSpelling = true)]
+    [LibraryImport("kernel32.dll", EntryPoint = "GetDiskFreeSpaceExW", StringMarshalling = StringMarshalling.Utf16)]
     [return: MarshalAs(UnmanagedType.Bool)]
-    private static extern bool GetDiskFreeSpaceEx(string directory, out ulong availableBytes,
+    private static partial bool GetDiskFreeSpaceEx(string directory, out ulong availableBytes,
         out ulong totalBytes, out ulong freeBytes);
 
     public static ulong? AvailableBytes(string directory) =>

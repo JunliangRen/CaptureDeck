@@ -1,5 +1,4 @@
 using System.Text.Json;
-using CaptureRack.QualityControl;
 using Xunit;
 
 namespace CaptureRack.QualityControl.UT;
@@ -19,7 +18,7 @@ public sealed class TsFileTests
         {
             var path = Path.Combine(directory.FullName, "sample" + extension);
             File.WriteAllBytes(path, packets);
-            var report = TsFile.Analyze(path);
+            var report = TsFile.Analyze(path, cancellation: TestContext.Current.CancellationToken);
             Assert.Equal($"ts{stride}", report.Format);
             Assert.True(report.Success);
             Assert.Equal(8192, report.Analysis.Packets);
@@ -51,7 +50,7 @@ public sealed class TsFileTests
         {
             var path = Path.Combine(directory.FullName, "truncated.ts");
             File.WriteAllBytes(path, packets[..^1]);
-            var report = TsFile.Analyze(path);
+            var report = TsFile.Analyze(path, cancellation: TestContext.Current.CancellationToken);
             Assert.False(report.Success);
             Assert.Equal(4, report.ExitCode);
             Assert.Equal(1, report.Analysis.SyncErrors);

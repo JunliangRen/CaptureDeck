@@ -1,4 +1,3 @@
-using System.Runtime.InteropServices;
 using CaptureRack.Core;
 using CaptureRack.DirectShow.Windows.FireWire.MsTape;
 using CaptureRack.DirectShow.Windows.Interop;

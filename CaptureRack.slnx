@@ -1,5 +1,7 @@
 <Solution>
-  <Project Path="src/CaptureRack.Probe/CaptureRack.Probe.csproj" />
+  <Project Path="src/CaptureRack.Probe/CaptureRack.Probe.csproj">
+    <Platform Solution="*|Any CPU" Project="x64" />
+  </Project>
   <Project Path="src/CaptureRack.DeviceControl/CaptureRack.DeviceControl.csproj" />
   <Project Path="test/CaptureRack.UT/CaptureRack.UT.csproj" />
   <Project Path="test/CaptureRack.QualityControl.UT/CaptureRack.QualityControl.UT.csproj" />
@@ -10,7 +12,9 @@
     <Project Path="src/Capture/CaptureRack.Audio/CaptureRack.Audio.csproj" />
   </Folder>
   <Folder Name="/UI/">
-    <Project Path="src/UI/CaptureRack.App/CaptureRack.App.csproj" />
+    <Project Path="src/UI/CaptureRack.App/CaptureRack.App.csproj">
+      <Platform Solution="*|Any CPU" Project="x64" />
+    </Project>
   </Folder>
   <Folder Name="/Capture/CaptureCards/">
     <Project Path="src/Capture/CaptureCards/CaptureRack.DeckLink/CaptureRack.DeckLink.csproj" />

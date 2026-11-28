@@ -120,7 +120,7 @@ public sealed partial class MainWindow
                 monitorOptionsBar.ApplyCapabilities(ActiveWorkspaceCapabilities, !IsRfHifiFile, false, reserveRfControls: true);
                 ApplyPreviewOptionsToUi();
             }
-            if (supported) rfAudioTimer.Start();
+            if (supported && rfSession.PreviewActive) rfAudioTimer.Start();
             else rfAudioTimer.Stop();
         }
         if (rfAudio is null) StereoMeter.SetPreviewTrackStatus(null);
@@ -426,6 +426,13 @@ public sealed partial class MainWindow
         RfPlaybackName.Text = file is null ? L("RfPlaybackDropHint") : Path.GetFileName(file.Path);
         RfPlaybackName.Foreground = ThemeBrush(file is null ? "StudioTextSecondaryBrush" : "StudioTextPrimaryBrush");
         Microsoft.UI.Xaml.Automation.AutomationProperties.SetName(RfSeek, L("RfPlayback"));
+        UpdateRfPlaybackPosition(file);
+        if (previewFullscreen)
+            SyncFullscreenPreviewWindow();
+    }
+
+    private void UpdateRfPlaybackPosition(RfPlaybackFile? file)
+    {
         updatingSeek = true;
         try
         {
@@ -434,8 +441,8 @@ public sealed partial class MainWindow
         }
         finally { updatingSeek = false; }
         RfPlaybackTime.Text = file is null ? "—" : $"{PlaybackTime(RfSeek.Value)} / {PlaybackTime(RfSeek.Maximum)}";
-        if (previewFullscreen)
-            SyncFullscreenPreviewWindow();
+        if (previewFullscreen && !recordingClock.IsRunning)
+            fullscreenWindow?.UpdateClockText(RfPlaybackTime.Text);
     }
 
     private void RfPlaybackBar_DragOver(object sender, DragEventArgs e)
@@ -663,7 +670,7 @@ public sealed partial class MainWindow
                 if (file is not null && displayedRfMeasurement is { } reading && playbackPosition != reading.Frames)
                 {
                     playbackPosition = reading.Frames;
-                    UpdateRfPlaybackBar(true);
+                    UpdateRfPlaybackPosition(file);
                 }
             }
             if (!rfPreviewReady && displayedRfMeasurement is not null)
@@ -798,8 +805,8 @@ public sealed partial class MainWindow
             bool hold = false;
 #endif
             if (!hold) { ResetPreview(null); rfGuide = null; }
-            if (hold) rfAudioTimer.Stop();
             if (!hold) ConfigureRfAudioMeter(newSession: true);
+            rfAudioTimer.Stop();
         }
     }
 
@@ -1065,8 +1072,11 @@ public sealed partial class MainWindow
         RenderCounts(null);
         RfMeterA.Show(m.B is null ? "ADC" : "I", m.A, m.FullScale);
         if (m.B is not null) RfMeterB.Show("Q", m.B, m.FullScale);
-        if (RfScopeSource.SelectedIndex == 0) RfTraceA.Points = RfAdcTrace(m.A, m.FullScale);
-        if (m.B is not null && RfScopeSource.SelectedIndex == 0) RfTraceB.Points = RfAdcTrace(m.B, m.FullScale);
+        if (RfStage.Visibility == Visibility.Visible && RfScopeSource.SelectedIndex == 0)
+        {
+            RfTraceA.Points = RfAdcTrace(m.A, m.FullScale);
+            if (m.B is not null) RfTraceB.Points = RfAdcTrace(m.B, m.FullScale);
+        }
         var telemetry = new List<string>();
         double? fifoUsedPct = null;
         if (m.Fifo is { } f)

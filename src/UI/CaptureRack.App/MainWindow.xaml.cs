@@ -600,17 +600,23 @@ public sealed partial class MainWindow : Window
 
     private void Viewport_SizeChanged(object sender, SizeChangedEventArgs e)
     {
-        lastWindowWidth = e.NewSize.Width;
+        double previous = e.PreviousSize.Width;
+        double width = lastWindowWidth = e.NewSize.Width;
+        if (previous == width) return;
+
         UpdateTitleBarInsets();
-        UpdateInspectorLayout();
-        UpdateResponsiveFooter(e.NewSize.Width);
-        UpdateMonitorLayout();
+        if (previous == 0 || (previous >= 1180) != (width >= 1180))
+            UpdateInspectorLayout();
+        if (previous == 0 || FooterLayoutFor(previous) != FooterLayoutFor(width))
+            UpdateResponsiveFooter(width);
     }
+
+    private (bool Compact, bool Narrow, bool Summary, bool AudioMeter) FooterLayoutFor(double width) =>
+        (width < (IsRfActive ? 1280 : 1040), width < 760, width >= 820, width >= 680);
 
     private void UpdateResponsiveFooter(double width)
     {
-        var compact = width < (IsRfActive ? 1280 : 1040);
-        var narrow = width < 760;
+        var (compact, narrow, summary, _) = FooterLayoutFor(width);
         FooterCenterColumn.Width = compact ? new GridLength(0) : new GridLength(1, GridUnitType.Star);
         FooterLayout.RowSpacing = compact ? 6 : 0;
         Grid.SetRow(FooterTelemetry, compact ? 1 : 0);
@@ -618,7 +624,7 @@ public sealed partial class MainWindow : Window
         Grid.SetColumnSpan(FooterTelemetry, compact ? 3 : 1);
         FooterTelemetry.HorizontalAlignment = compact ? HorizontalAlignment.Left : HorizontalAlignment.Center;
         FooterStorageButton.Visibility = narrow ? Visibility.Collapsed : Visibility.Visible;
-        ConfigurationSummary.Visibility = width < 820 ? Visibility.Collapsed : Visibility.Visible;
+        ConfigurationSummary.Visibility = summary ? Visibility.Visible : Visibility.Collapsed;
         UpdateAudioMeterVisibility(width);
     }
 
@@ -944,7 +950,9 @@ public sealed partial class MainWindow : Window
         RfMeterRack.Visibility = IsRfActive ? Visibility.Visible : Visibility.Collapsed;
         var showRfOscilloscope = IsRfActive && layout is WorkspaceLayoutMode.Split or WorkspaceLayoutMode.Spectrum or WorkspaceLayoutMode.Scopes;
         RfAdcRow.Height = showRfOscilloscope ? new GridLength(1, GridUnitType.Star) : new GridLength(0);
+        bool revealScope = showRfOscilloscope && RfStage.Visibility != Visibility.Visible;
         RfStage.Visibility = showRfOscilloscope ? Visibility.Visible : Visibility.Collapsed;
+        if (revealScope) RefreshSignalScope();
         var showPreview = (layout is WorkspaceLayoutMode.Focus or WorkspaceLayoutMode.Split) && !(rfNoVideo && layout == WorkspaceLayoutMode.Split);
         var showInstruments = layout != WorkspaceLayoutMode.Focus;
         var showSplitDivider = layout == WorkspaceLayoutMode.Split && showPreview;
@@ -2648,6 +2656,7 @@ public sealed partial class MainWindow : Window
         CancelQcButton.Visibility = qcStop is not null ? Visibility.Visible : Visibility.Collapsed;
         QcCenterPage.IsCancelEnabled = CancelQcButton.IsEnabled;
         var anyQcActive = qcStop is not null || rfQcPendingCount > 0;
+        FooterQcActiveSpinner.IsActive = anyQcActive;
         FooterQcActivePill.Visibility = anyQcActive ? Visibility.Visible : Visibility.Collapsed;
         if (qcStop is null && rfQcPendingCount > 0)
             FooterQcStageText.Text = LocalFormat("RfQcQueueRunning", rfQcPendingCount);

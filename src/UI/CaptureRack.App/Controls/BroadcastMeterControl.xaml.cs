@@ -112,6 +112,7 @@ public sealed partial class BroadcastMeterControl : UserControl
 
     public void UpdateLevels(StereoLevels audio, CultureInfo currentCulture, AudioMonitorRoute? authoritativeRoute = null)
     {
+        var previousHeader = (culture, totalChannels, channelLayout, monitorRoute, visibleChannels);
         culture = currentCulture;
         totalChannels = Math.Clamp(audio.ChannelCount, 1, AudioMonitorRoute.MaxSupportedChannels);
         channelLayout = audio.ChannelLayout;
@@ -127,8 +128,9 @@ public sealed partial class BroadcastMeterControl : UserControl
         AutomationProperties.SetName(RightLevel, string.Format(culture, localize("PeakValue"), localize("RightChannel"), RightLevel.Text));
         displayedPhase = audio.PhaseCorrelation;
         PhaseLevel.Text = audio.PhaseCorrelation?.ToString("+0.00;-0.00;0.00", culture) ?? "—";
-        RefreshHeaderAndRouteControls();
-        RefreshClipBadges();
+        bool headerChanged = previousHeader != (culture, totalChannels, channelLayout, monitorRoute, visibleChannels);
+        if (headerChanged) RefreshHeaderAndRouteControls();
+        RefreshClipBadges(force: headerChanged);
         UpdatePhaseBar(audio.PhaseCorrelation);
     }
 
@@ -443,7 +445,7 @@ public sealed partial class BroadcastMeterControl : UserControl
         RefreshClipBadges();
     }
 
-    private void RefreshClipBadges()
+    private void RefreshClipBadges(bool force = true)
     {
         var dangerBrush = StudioBrushes.Resolve(this, "StudioDangerBrush");
         var trackBrush = StudioBrushes.Resolve(this, "StudioMeterTrackBrush");
@@ -453,6 +455,9 @@ public sealed partial class BroadcastMeterControl : UserControl
 
         foreach (var strip in strips)
         {
+            var clips = ballistics.VisibleClips(strip.ChannelIndex);
+            if (!force && strip.DisplayedClips == clips) continue;
+            strip.DisplayedClips = clips;
             strip.TrackBorder.Background = trackBrush;
             strip.TrackBorder.BorderBrush = hairlineBrush;
             strip.PeakHoldBar.Background = peakBrush;
@@ -461,7 +466,6 @@ public sealed partial class BroadcastMeterControl : UserControl
             var channelName = totalChannels <= 2
                 ? localize(strip.ChannelIndex == 0 ? "LeftChannel" : "RightChannel")
                 : string.Format(culture, localize("AudioChannelNumber"), strip.ChannelIndex + 1, code);
-            var clips = ballistics.VisibleClips(strip.ChannelIndex);
             if (clips > 0)
             {
                 strip.ClipButton.Background = dangerBrush;
@@ -536,7 +540,10 @@ public sealed partial class BroadcastMeterControl : UserControl
         Border TrackBorder,
         ScaleTransform MeterFill,
         Border PeakHoldBar,
-        TranslateTransform PeakHoldOffset);
+        TranslateTransform PeakHoldOffset)
+    {
+        public long DisplayedClips { get; set; } = -1;
+    }
 
     private sealed record PairRouteButton(int PairIndex, Button Button, TextBlock Label);
 }

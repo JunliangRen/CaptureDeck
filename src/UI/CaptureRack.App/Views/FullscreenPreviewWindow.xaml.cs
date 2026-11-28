@@ -159,6 +159,12 @@ internal sealed partial class FullscreenPreviewWindow : Window
         UpdateOverlayVisibility();
     }
 
+    public void UpdateClockText(string clockText)
+    {
+        if (ClockText.Text != clockText)
+            ClockText.Text = clockText;
+    }
+
     public void UpdateChrome(
         string previewAccessibleName,
         string statusText,
@@ -191,8 +197,7 @@ internal sealed partial class FullscreenPreviewWindow : Window
             lastSignalDotBrushKey = signalDotBrushKey;
             SignalDot.Fill = StudioBrushes.Resolve(RootCanvas, signalDotBrushKey);
         }
-        if (ClockText.Text != clockText)
-            ClockText.Text = clockText;
+        UpdateClockText(clockText);
         ClockText.Visibility = showClock ? Visibility.Visible : Visibility.Collapsed;
 
         PlaybackButton.Visibility = showPlaybackButton ? Visibility.Visible : Visibility.Collapsed;

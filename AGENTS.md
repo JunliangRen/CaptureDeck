@@ -49,6 +49,8 @@ Review findings from both tools together. Merge duplicates and assess each relev
 
 DeckLink COM and the Win32 window callbacks use runtime marshalling. Keep their declarations compatible with the current activation, casting, callback and release paths.
 
+The main window enables raw wheel fallback over its scroll views. RF file progress and fullscreen clock updates are independent of transport control refreshes. Window-move probes on Windows x64 still showed higher latency than an equally sized empty WinUI window; these message timings do not measure compositor frame delivery.
+
 Keep WinUI preview, speaker playback and recording queues independent. Preserve capture buffers before returning from borrowed sample callbacks. Treat preview skips, recording loss and unavailable telemetry as distinct observations. Report software recording failures and preserve interrupted media for QC.
 
 For supported raw DirectShow frame layouts with a legacy VIDEOINFOHEADER, use the progressive rendering default after checking matching extended media types and the Blackmagic AVStream exception. Keep conflicting flags and compressed streams unresolved when no stronger evidence exists. The original interlace flags remain available separately from fallback flags.

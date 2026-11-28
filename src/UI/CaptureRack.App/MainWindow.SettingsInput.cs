@@ -12,9 +12,26 @@ public sealed partial class MainWindow
     private SubclassProc? settingsWindowProc;
     private readonly List<nint> settingsInputWindows = [];
 
+    private ScrollView? hoveredWheelScroller;
+
     private void InitializeSettingsInput()
     {
         SettingsPage.AddHandler(UIElement.PointerPressedEvent, new PointerEventHandler(SettingsPointerPressed), true);
+
+        foreach (var scroller in new[] { SettingsPage.Scroller, QcCenterPage.Scroller, InspectorScroller })
+        {
+            scroller.PointerEntered += (_, _) =>
+            {
+                hoveredWheelScroller = scroller;
+                UpdateWheelFallbackState();
+            };
+            scroller.PointerExited += (_, _) =>
+            {
+                if (hoveredWheelScroller != scroller) return;
+                hoveredWheelScroller = null;
+                UpdateWheelFallbackState();
+            };
+        }
 
         // Mouse drivers can send the browser-back app command instead of a XAML pointer event.
         var window = WinRT.Interop.WindowNative.GetWindowHandle(this);
@@ -34,9 +51,10 @@ public sealed partial class MainWindow
 
     private void UpdateWheelFallbackState()
     {
-        var needsWheel = SettingsPage.Visibility == Visibility.Visible ||
-            QcCenterPage.Visibility == Visibility.Visible ||
-            (WorkspacePage.Visibility == Visibility.Visible && InspectorPanel.Visibility == Visibility.Visible);
+        var needsWheel = (hoveredWheelScroller == SettingsPage.Scroller && SettingsPage.Visibility == Visibility.Visible) ||
+            (hoveredWheelScroller == QcCenterPage.Scroller && QcCenterPage.Visibility == Visibility.Visible) ||
+            (hoveredWheelScroller == InspectorScroller && WorkspacePage.Visibility == Visibility.Visible &&
+                InspectorPanel.Visibility == Visibility.Visible);
         if (needsWheel)
             StartSettingsWheelFallback();
         else

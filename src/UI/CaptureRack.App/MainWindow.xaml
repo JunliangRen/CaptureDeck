@@ -1195,7 +1195,7 @@
                             Background="{ThemeResource StudioInfoSoftBrush}"
                             BorderBrush="{ThemeResource StudioInfoBrush}" BorderThickness="1">
                         <StackPanel Orientation="Horizontal" Spacing="6" VerticalAlignment="Center">
-                            <ProgressRing Width="13" Height="13" IsActive="True" />
+                            <ProgressRing x:Name="FooterQcActiveSpinner" Width="13" Height="13" IsActive="False" />
                             <Button Style="{StaticResource SubtleButtonStyle}" Padding="2,0" Height="22"
                                     Click="QcModeButton_Click">
                                 <TextBlock x:Name="FooterQcStageText" FontSize="11" FontWeight="SemiBold"

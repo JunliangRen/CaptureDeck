@@ -1,4 +1,5 @@
 using CaptureRack.DirectShow.Windows.Capture;
+using CaptureRack.Monitoring.Session;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Controls;

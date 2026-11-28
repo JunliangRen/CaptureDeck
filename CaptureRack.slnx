@@ -20,6 +20,7 @@
     <Project Path="src/Capture/CaptureCards/CaptureRack.DeckLink/CaptureRack.DeckLink.csproj" />
   </Folder>
   <Folder Name="/Processing/">
+    <Project Path="src/Processing/CaptureRack.Monitoring/CaptureRack.Monitoring.csproj" />
     <Project Path="src/Processing/CaptureRack.QualityControl/CaptureRack.QualityControl.csproj" />
     <Project Path="src/Processing/CaptureRack.Recording/CaptureRack.Recording.csproj" />
   </Folder>

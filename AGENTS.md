@@ -19,7 +19,8 @@ This is the repository handoff for coding agents. Start with the current Git sta
 | CaptureRack.DeckLink | `src/Capture/CaptureCards/CaptureRack.DeckLink` | Blackmagic COM interop, capture, monitoring, and current MOV writer |
 | CaptureRack.DirectShow | `src/Capture/CaptureRack.DirectShow` | Windows generic DirectShow diagnostics and FireWire / MSTape source |
 | CaptureRack.SignalCapture | `src/Capture/CaptureRack.SignalCapture` | Sampled signal sources and diagnostics for Domesday Duplicator and RTL-SDR |
-| CaptureRack.Audio | `src/Capture/CaptureRack.Audio` | Shared-mode WASAPI speaker monitoring, PCM meters and gain, channel-pair routing and surround downmix |
+| CaptureRack.Audio | `src/Capture/CaptureRack.Audio` | Shared-mode WASAPI speaker output and device selection |
+| CaptureRack.Monitoring | `src/Processing/CaptureRack.Monitoring` | Portable preview buffers, scopes, PCM meters, channel routing and live session contract |
 | CaptureRack.Recording | `src/Processing/CaptureRack.Recording` | Windows TS writer and file finalization |
 | CaptureRack.QualityControl | `src/Processing/CaptureRack.QualityControl` | Portable MOV QC orchestration, TS parsing, and offline analysis |
 | CaptureRack.DeviceControl | `src/CaptureRack.DeviceControl` | Independent tape transport contracts |
@@ -33,6 +34,7 @@ This is the repository handoff for coding agents. Start with the current Git sta
 - `ICaptureBackend` and `CaptureBackendRegistry` provide backend identity and lookup. The generic backend contract has typed requests, progress, and results. The native app currently resolves DeckLink directly and the FireWire CLI calls its MSTape implementation directly.
 - `CaptureSampleHandler` delivers a `CaptureSample` synchronously. Its span borrows bytes from the source for the duration of that callback. Copy into owned storage before queueing or returning. The current contract carries optional stream-relative start and end timestamps and a discontinuity flag. The stream format is negotiated separately. False rejects delivery.
 - `DirectShowSink` uses this contract. `TsRecording` copies accepted samples into pooled storage under a 64 MiB queue budget. Keep recording byte-preserving and report overrun explicitly. For future monitoring, bound its queue independently and signal sample gaps to a stateful decoder.
+- Portable presentation consumers can reference `CaptureRack.Monitoring` for `ILiveMediaSource`, preview frames, scopes and audio meters. Keep capture-device I/O and speaker output in platform backends. The moved public types retain their namespaces and are forwarded by their original assemblies.
 - `ITransportController` in `TransportControl.cs` models supported commands and observed state separately from host capture. An accepted command and an observed state change are distinct outcomes. Device control providers for AV/C, JLIP, and other RS-232 protocols are planned.
 
 ## Development and verification

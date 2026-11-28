@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net11.0</TargetFramework>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../Capture/CaptureRack.Core/CaptureRack.Core.csproj" />
+    <InternalsVisibleTo Include="CaptureRack.DeckLink" />
+    <InternalsVisibleTo Include="CaptureRack.UT" />
+  </ItemGroup>
+</Project>

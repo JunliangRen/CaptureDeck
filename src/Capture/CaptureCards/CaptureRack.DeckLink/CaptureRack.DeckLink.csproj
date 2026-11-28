@@ -6,6 +6,7 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
   <ItemGroup>
+    <ProjectReference Include="../../../Processing/CaptureRack.Monitoring/CaptureRack.Monitoring.csproj" />
     <ProjectReference Include="../../CaptureRack.Audio/CaptureRack.Audio.csproj" />
     <ProjectReference Include="../../CaptureRack.Core/CaptureRack.Core.csproj" />
     <ProjectReference Include="../../../Processing/CaptureRack.Recording/CaptureRack.Recording.csproj" />

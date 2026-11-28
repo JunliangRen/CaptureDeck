@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using CaptureRack.DeckLink;
+using CaptureRack.Monitoring.Session;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 

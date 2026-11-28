@@ -1,10 +1,11 @@
+using CaptureRack.App;
 using CaptureRack.Audio;
 using CaptureRack.Core;
 using CaptureRack.DeckLink;
 
-namespace CaptureRack.App;
+namespace CaptureRack.Monitoring.Session;
 
-internal interface ILiveMediaSource
+public interface ILiveMediaSource
 {
     event EventHandler? StateChanged;
     bool CanStart { get; }
@@ -35,11 +36,4 @@ internal interface ILiveMediaSource
     void SetAudioMonitor(bool enabled, double volume);
     void SetAudioMonitorRoute(AudioMonitorRoute route);
     StereoLevels? ReadAudioLevels();
-}
-
-internal interface ILiveMediaInspector
-{
-    bool HasOpenDropdown { get; }
-    string? BuildFilenamePreview(string label);
-    void NotifyOutputFolderChanged();
 }

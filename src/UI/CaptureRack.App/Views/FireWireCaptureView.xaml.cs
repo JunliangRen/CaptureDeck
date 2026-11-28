@@ -3,6 +3,7 @@ using System.Runtime.InteropServices;
 using CaptureRack.Core;
 using CaptureRack.DeckLink;
 using CaptureRack.DirectShow.Windows.FireWire.MsTape;
+using CaptureRack.Monitoring.Session;
 using CaptureRack.QualityControl;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Automation;

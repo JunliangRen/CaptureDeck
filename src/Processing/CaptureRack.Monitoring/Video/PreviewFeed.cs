@@ -9,9 +9,9 @@ public enum PreviewScanMode { Unknown, Progressive, TopFirst, BottomFirst, Progr
 
 public enum PreviewColorMatrix { Auto, Bt601, Bt709 }
 
-// The SDK callback copies a borrowed frame into a single pending slot. The capture
+// The capture callback copies a borrowed frame into a single pending slot. The capture
 // worker converts the latest frame and the UI consumes the latest completed bitmap.
-// Preview-only processing (deinterlacing, matrix override) never alters recorded MOV frames.
+// Preview-only processing (deinterlacing, matrix override) never alters recorded frames.
 public sealed class PreviewFeed
 {
     private const uint UpperFieldFirst = 0x75707072; // uppr
@@ -79,7 +79,8 @@ public sealed class PreviewFeed
         }
     }
 
-    internal void WaitForInput(TimeSpan timeout) => incoming.WaitForFrame(timeout);
+    /// <summary>Waits for a raw frame or until the specified timeout elapses.</summary>
+    public void WaitForInput(TimeSpan timeout) => incoming.WaitForFrame(timeout);
 
     public void SetScopeDisplaySize(double waveformWidth, double waveformHeight, double vectorSide, double scale)
     {
@@ -107,7 +108,9 @@ public sealed class PreviewFeed
         set => Volatile.Write(ref scopeWaveformMode, (int)value);
     }
 
-    internal void Offer(IntPtr bytes, int width, int height, int stride, ulong size, bool noInput,
+    /// <summary>Copies a borrowed raw frame into the pending preview slot before returning.</summary>
+    /// <remarks>The caller must keep the source address and its declared extent valid during this call.</remarks>
+    public void Offer(IntPtr bytes, int width, int height, int stride, ulong size, bool noInput,
         CapturePixelFormat format, uint fieldDominance = 0)
     {
         var minimumStride = format == CapturePixelFormat.V210 ? ((width + 5L) / 6) * 16 : ((width + 1L) / 2) * 4;
@@ -136,7 +139,8 @@ public sealed class PreviewFeed
     internal static bool IsInterlaced(uint fieldDominance) =>
         fieldDominance is UpperFieldFirst or LowerFieldFirst;
 
-    internal void ConvertLatest(int lumaScaleBits, long fieldInterval = 0,
+    /// <summary>Converts the newest pending raw frame on the session's single preview worker.</summary>
+    public void ConvertLatest(int lumaScaleBits, long fieldInterval = 0,
         int signalWidth = 0, int signalHeight = 0, double displayAspectRatio = 0, string? signalFormat = null,
         PreviewScanMode? signalScanMode = null, object? sourceTag = null)
     {

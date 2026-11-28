@@ -1,12 +1,12 @@
 {
-  "package": "VHSDecode.Preview.Realtime/2.35.0-preview.ci.27",
+  "package": "VHSDecode.Preview.Realtime/2.36.0-preview.ci.30",
   "files": {
     "App/licenses/VHSDecode.Preview.Realtime/LICENSE": "bfde1fd94c3b17b89fbbfa6321660c8284f631bf126db1e0a32c897944a842db",
     "App/licenses/VHSDecode.Preview.Realtime/THIRD-PARTY-NOTICES.md": "b81b9781902eeeec6fd4bf9eb71d55454939874f92b927f5710062ab8779bfc0",
-    "App/VHSDecode.Preview.Realtime.dll": "bb7bbfd6595ad31ac36dc6eb9a05fe40b05a99c770366bb43c1ca9d7c8fdd1ee",
+    "App/VHSDecode.Preview.Realtime.dll": "74a5a4a265803e98e5353fb17d844bfee75ea31cde93c78bfe3b429d47ee81bb",
     "App/licenses/VHSDecode.Preview.Realtime/FFmpeg/licenses/COPYING.LGPLv2.1": "92a759ec0febde4750821736bbde642a3b835c0604fc81bee62f9e428f86981f",
     "App/licenses/VHSDecode.Preview.Realtime/liba52/COPYING": "b15f41248f0957edfd2d91202ee810a6ef2d92c0256d330585d806677306a706",
-    "App/vhsdecode_realtime_preview.dll": "af41071100981787e2b1a9a3b299959c1d5b6915d77fe4dcc1e6e836c5719b34"
+    "App/vhsdecode_realtime_preview.dll": "51670b13b8f78bfa64f1e4d0f1d1bdb5fb9fb2ab0d0f918c71be4d7330c8567b"
   },
   "wasapi": {
     "package": "NAudio.Wasapi/2.3.0",
